@@ -183,7 +183,7 @@ end
 to-report word-wrap [ str len ]
   let line ""
   let wrapped ""
-  foreach (string:split str " ") [ w ->
+  foreach (string:split-on str " ") [ w ->
     if length line + length w > len [
       set wrapped (word wrapped "\n" line)
       set line ""
