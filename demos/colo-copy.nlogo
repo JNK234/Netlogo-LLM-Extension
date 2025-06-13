@@ -3,6 +3,7 @@ extensions [ llm string table ]
 globals [
   colors
   response-counter
+  show-debug  ; Debug flag - set to true to see detailed output
 ]
 
 turtles-own [
@@ -39,6 +40,7 @@ to setup
 
   set colors ["red" "blue" "green" "orange" "purple" "yellow"]
   set response-counter 0
+  set show-debug false  ; Set to true to see detailed debug output
 
   create-turtles num-agents [
     fd 10
