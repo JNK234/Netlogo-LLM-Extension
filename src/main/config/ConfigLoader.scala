@@ -12,18 +12,30 @@ object ConfigLoader {
   /**
    * Load configuration from a file with key=value format
    * 
+   * The file is searched in the following order:
+   * 1. Same directory as the NetLogo model file (if available)
+   * 2. Current working directory
+   * 3. Exact path as specified
+   * 
    * @param filename Path to the configuration file
    * @return Try containing Map of configuration key-value pairs
    */
   def loadFromFile(filename: String): Try[Map[String, String]] = {
-    val file = new File(filename)
+    val possiblePaths = Seq(
+      new File(filename),                                    // Exact path as given
+      new File(System.getProperty("user.dir"), filename)    // Current working directory
+    )
     
-    if (!file.exists()) {
-      return Failure(new IllegalArgumentException(s"Configuration file not found: $filename"))
+    val file = possiblePaths.find(_.exists()) match {
+      case Some(f) => f
+      case None => 
+        return Failure(new IllegalArgumentException(
+          s"Configuration file not found: $filename. Place the file in the same directory as your NetLogo model or in the current working directory."
+        ))
     }
     
     if (!file.canRead()) {
-      return Failure(new IllegalArgumentException(s"Cannot read configuration file: $filename"))
+      return Failure(new IllegalArgumentException(s"Cannot read configuration file: ${file.getAbsolutePath}"))
     }
     
     Try {
