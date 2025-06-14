@@ -7,10 +7,10 @@ provider=openai
 
 # API key for the selected provider
 # Replace with your actual API key
-api_key=your-openai-api-key-here
+api_key=your-openai-key-here
 
 # Model to use
-model=gpt-3.5-turbo
+model=gpt-4o
 
 # Base URL for API requests (optional)
 base_url=https://api.openai.com/v1

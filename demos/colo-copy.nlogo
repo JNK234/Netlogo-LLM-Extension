@@ -10,9 +10,7 @@ turtles-own [
   name
   favorite-color
   last-message
-  response-reporter
   message
-  response-pending
 ]
 
 undirected-link-breed [ connections connection ]
@@ -22,7 +20,7 @@ to setup
   clear-all
 
   ; Load configuration from file - make sure config.txt has your OpenAI API key
-  llm:load-config "config.txt"
+  llm:load-config "/Users/jnk789/Developer/CCL/Extensions/NetLogoLLMExtension/demos/config.txt"
 
   ; Alternative: Set configuration manually
   ; llm:set-provider "openai"
@@ -38,19 +36,25 @@ to setup
     "Samuel" "Tracy" "Ursula" "Vanessa" "William" "Xander"
     "Yvette" "Zack"]
 
-  set colors ["red" "blue" "green" "orange" "purple" "yellow"]
+  set colors ["red" "blue" "green" "orange" "violet" "yellow"]
   set response-counter 0
-  set show-debug false  ; Set to true to see detailed debug output
+  set show-debug true  ; Set to true to see detailed debug output
 
   create-turtles num-agents [
     fd 10
     set size 2
     set name item who names
     set favorite-color one-of colors
-    set color runresult favorite-color
+
+    ; Set turtle color based on favorite color name
+    if favorite-color = "red" [ set color red ]
+    if favorite-color = "blue" [ set color blue ]
+    if favorite-color = "green" [ set color green ]
+    if favorite-color = "orange" [ set color orange ]
+    if favorite-color = "violet" [ set color violet ]
+    if favorite-color = "yellow" [ set color yellow ]
     set last-message ""
     set message ""
-    set response-pending false
   ]
 
   ; Create network connections
@@ -75,18 +79,9 @@ to setup
 end
 
 to go
-  ; Start async conversations for all agents
-  ask turtles [
-    if not response-pending [
-      start-conversation
-    ]
-  ]
-
-  ; Process completed responses
-  ask turtles [
-    if response-pending [
-      process-response
-    ]
+  ; Have agents communicate synchronously (one at a time to avoid rate limits)
+  ask one-of turtles [
+    have-conversation
   ]
 
   ; Clean up old facts
@@ -95,72 +90,89 @@ to go
   tick
 end
 
-to start-conversation
+to have-conversation
   ; Collect messages from neighbors
-  let neighbor-messages (sentence [(word name ": " last-message "\n")] of link-neighbors with [ last-message != "" ])
+  let neighbor-messages ""
+  ask link-neighbors with [ last-message != "" ] [
+    set neighbor-messages (word neighbor-messages name ": " last-message "\n")
+  ]
 
   let conversation-prompt (word
     neighbor-messages
     " What would you like to say to your neighbors?"
-    " Your response must be a raw JSON object with the keys `message`, `knowledge`, and `reasoning`."
-    " `message` is what you want to say to your neighbors (one short sentence)"
-    " `knowledge` is an object with agent names as keys and their favorite colors as values, or \"unknown\" if you haven't learned their color yet."
-    " `reasoning` is a brief explanation of what you're trying to learn or share."
-    " Your response should contain ONLY the JSON object, no other text."
+    " IMPORTANT: Your response must be ONLY a valid JSON object with exactly these keys: message, knowledge, reasoning."
+    " Example format: {\"message\": \"Hi! What's your favorite color?\", \"knowledge\": {}, \"reasoning\": \"I want to learn about my neighbors\"}"
+    " - message: what you want to say (one short sentence)"
+    " - knowledge: object with agent names as keys and their colors as values"
+    " - reasoning: brief explanation of what you're trying to learn"
+    " DO NOT include any text before or after the JSON object."
   )
 
-  ; Start async LLM call
-  set response-reporter llm:chat-async conversation-prompt
-  set response-pending true
-  set response-counter response-counter + 1
-end
-
-to process-response
-  ; Check if response is ready (this is synchronous in our current implementation)
+  ; Make synchronous LLM call
   carefully [
-    let raw-response runresult response-reporter
+    let raw-response llm:chat conversation-prompt
+    set response-counter response-counter + 1
 
-    ; Parse JSON response
-    let response-data table:from-json raw-response
-    set message table:get response-data "message"
+    ; Debug output - show raw response
+    if show-debug [
+      print (word name " received raw response: " raw-response)
+    ]
 
-    ; Update knowledge about other agents
-    let knowledge table:get response-data "knowledge"
-    foreach table:to-list knowledge [ pair ->
-      let agent-name first pair
-      let agent-color last pair
+    ; Try to parse JSON response
+    carefully [
+      let response-data table:from-json raw-response
+      set message table:get response-data "message"
 
-      ; Create visual fact links to show learned knowledge
-      create-facts-to other turtles with [ name = agent-name ] [
-        if member? agent-color colors [
-          set color runresult agent-color
-          set label (word "knows: " agent-name " likes " agent-color)
+      ; Update knowledge about other agents
+      if table:has-key? response-data "knowledge" [
+        let knowledge table:get response-data "knowledge"
+        foreach table:to-list knowledge [ pair ->
+          let agent-name first pair
+          let agent-color last pair
+
+          ; Create visual fact links to show learned knowledge
+          create-facts-to other turtles with [ name = agent-name ] [
+            if member? agent-color colors [
+              ; Set link color based on agent color name
+              if agent-color = "red" [ set color red ]
+              if agent-color = "blue" [ set color blue ]
+              if agent-color = "green" [ set color green ]
+              if agent-color = "orange" [ set color orange ]
+              if agent-color = "violet" [ set color violet ]
+              if agent-color = "yellow" [ set color yellow ]
+              set label (word "knows: " agent-name " likes " agent-color)
+            ]
+          ]
         ]
       ]
+
+      ; Debug output
+      if show-debug [
+        print (word name " said: " message)
+        if table:has-key? response-data "reasoning" [
+          print (word "  Reasoning: " table:get response-data "reasoning")
+        ]
+      ]
+
+    ] [
+      ; JSON parsing failed - use raw response as message
+      if show-debug [
+        print (word name " - JSON parsing failed, using raw response as message")
+      ]
+      set message raw-response
     ]
 
     ; Update display
     set label word-wrap (word name ": " message) 30
     set last-message message
-    set response-pending false
-
-    ; Debug output
-    if show-debug [
-      print (word name " said: " message)
-      if table:has-key? response-data "reasoning" [
-        print (word "  Reasoning: " table:get response-data "reasoning")
-      ]
-    ]
 
   ] [
-    ; Handle errors gracefully
+    ; Handle LLM call errors gracefully
     if show-debug [
-      print (word name " had an error: " error-message)
-      print (word "Raw response: " runresult response-reporter)
+      print (word name " had an LLM error: " error-message)
     ]
     set message "..."
     set last-message message
-    set response-pending false
   ]
 end
 
@@ -183,7 +195,7 @@ end
 to-report word-wrap [ str len ]
   let line ""
   let wrapped ""
-  foreach (string:split str " ") [ w ->
+  foreach (string:split-on str " ") [ w ->
     if length line + length w > len [
       set wrapped (word wrapped "\n" line)
       set line ""
@@ -202,7 +214,6 @@ to reset-conversations
     )
     set last-message ""
     set message ""
-    set response-pending false
   ]
 
   ask facts [ die ]
