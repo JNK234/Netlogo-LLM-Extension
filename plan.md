@@ -14,9 +14,21 @@ This plan follows test-driven development principles with incremental, iterative
 
 **Implementation Notes**:
 - ⚠️ **Java Version Requirement**: Must use Java 11 for compilation (Java 17+ causes SBT compatibility issues)
+- **Java Version Management**: SDKMAN with project-specific .sdkmanrc file configured for automatic Java 11 switching
 - All build files configured correctly using proven NetLogo extension plugin setup
 - Project structure established with proper directories
 - Dependencies added: sttp.client3, upickle for JSON handling
+
+**Java Version Setup** (Long-term Solution):
+```bash
+# One-time SDKMAN setup
+curl -s "https://get.sdkman.io" | bash
+sdk install java 11.0.12-open
+echo "sdkman_auto_env=true" >> ~/.sdkman/etc/config
+
+# Project automatically switches to Java 11 via .sdkmanrc file
+# No manual version switching required for development
+```
 
 **Prompt**:
 ```
@@ -254,7 +266,7 @@ Success criteria: Demo model works, can chat with OpenAI, configuration loads pr
 
 **Objective**: Final integration, testing, and preparation for Phase 1 completion.
 
-**Status**: ✅ **COMPLETED** - Phase 1 fully functional with working demo
+**Status**: ✅ **COMPLETED** - True async chat with AwaitableReporter pattern, constrained choice functionality working, configurable timeouts implemented, both primitives tested and functional
 
 **Implementation Notes**:
 
@@ -320,110 +332,268 @@ Success criteria: All Phase 1 requirements met, extension ready for real use, do
 - Error handling could be more granular with specific error codes
 - Only OpenAI provider implemented
 
-## Phase 2: Enhanced Functionality (Next Priority)
+## Phase 2: Essential Multi-LLM Support - Balanced Approach
 
-### Priority 1: True Async Chat Implementation
+### Design Philosophy: Best of Both Worlds
 
-**Current Issue:** The `llm:chat-async` primitive currently returns an AnonymousReporter that still blocks when called
+**Keep Existing Strengths:**
+- ✅ Strategy + Factory pattern architecture (extensibility)
+- ✅ Modular package structure (maintainability)
+- ✅ Configuration system with file loading (flexibility)
+- ✅ Multi-provider support foundation
 
-**Objective:** Implement proper non-blocking async chat functionality
+**Add NetLogoGptExtension Proven Patterns:**
+- ✅ AwaitableReporter for true async
+- ✅ Constrained choice functionality (`llm:choose`)
+- ✅ Simple, direct error handling
+- ✅ Essential features without over-engineering
 
-**Tasks:**
+### Step 11: Fix Async + Add Constrained Choice ✅ COMPLETED
 
-- Redesign async architecture to avoid blocking NetLogo's main thread
-- Consider task ID-based approach where `llm:chat-async` returns immediately
-- Add `llm:check-response <task-id>` primitive to poll for completion
-- Implement background thread management for concurrent requests
-- Test with multiple agents making simultaneous requests
+**Objective**: Fix broken async using AwaitableReporter + add missing killer feature from GPT extension
 
-### Priority 2: Advanced Error Handling & Resilience  
+**NetLogoGptExtension Key Feature Missing**: `gpt:choose` with logit bias for constrained multiple choice - this is crucial for ABM applications where you need agents to pick from specific options.
 
-**Current Issue:** Direct error printing to console as specified in Phase 1
+**Current Issues**:
+- `llm:chat-async` blocks when called (not truly async)
+- Missing constrained choice capability that makes LLMs much more useful for agent-based modeling
 
-**Objective:** Production-ready error handling and reliability
+**Prompt**:
+```
+Fix async and add constrained choice following NetLogoGptExtension patterns:
+1. Create AwaitableReporter case class that wraps Future and defers execution until runresult
+2. Replace current ChatAsyncReporter with AwaitableReporter implementation  
+3. Add llm:choose primitive with logit bias for multiple choice (key GPT extension feature)
+4. Add configurable timeout from config (timeout_seconds, default 30 like GPT extension)
+5. Ensure Future starts immediately but execution defers until runresult is called
+6. Add proper error handling for timeouts and Future failures following GPT patterns
+7. Test constrained choice with list of options (essential for ABM scenarios)
+8. Test async behavior with multiple concurrent agents
 
-**Tasks:**
+Files to modify:
+- src/main/LLMExtension.scala (add AwaitableReporter + ChooseReporter)
+- src/main/config/ConfigStore.scala (add timeout configuration)
+- Unit tests for async and constrained choice functionality
 
-- Implement automatic retry logic with exponential backoff for transient failures
-- Add rate limiting and queue management to respect API rate limits
-- Create unified error code system with user-friendly messages
-- Add configurable request timeouts per provider
-- Implement circuit breaker pattern for repeated API failures
+**Status**: ✅ **COMPLETED** - True async chat with AwaitableReporter pattern works correctly with runresult, constrained choice functionality (llm:choose) working with predefined options, configurable timeouts implemented (default 30 seconds), both primitives tested and functional in test-basic.nlogo
 
-### Priority 3: Enhanced Configuration & Validation
+Success criteria: ✅ llm:chat-async works like GPT extension, ✅ llm:choose enables constrained agent choices, ✅ configurable timeouts, ✅ conversation history correct, ✅ tests pass
+```
 
-**Current Issue:** Basic configuration validation
+### Step 12: Multi-Provider Implementation ✅ READY
 
-**Objective:** Robust configuration management
+**Objective**: Add Claude, Gemini, and Ollama providers using existing extensible architecture
 
-**Tasks:**
+**Keep What Works**: Use existing Strategy+Factory patterns, enhance rather than rebuild
 
-- Add provider-specific configuration validation
-- Implement configuration file watching for runtime updates
-- Add configuration validation at extension load time
-- Create configuration templates for different providers
-- Add secure API key handling and masking in logs
+**Prompt**:
+```
+Implement multi-provider support using existing architecture:
+1. Create ClaudeProvider implementing existing LLMProvider trait
+2. Create GeminiProvider implementing existing LLMProvider trait  
+3. Create OllamaProvider implementing existing LLMProvider trait
+4. Enhance existing ProviderFactory to support all providers
+5. Add provider-specific configuration validation to existing ConfigStore
+6. Add llm:providers primitive to list available providers
+7. Add llm:models primitive to list models for current provider
+8. Test provider switching using existing llm:set-provider primitive
 
-## Phase 3: Multi-Provider Support (As Originally Planned)
+Files to create:
+- src/main/providers/ClaudeProvider.scala (Anthropic API integration)
+- src/main/providers/GeminiProvider.scala (Google API integration) 
+- src/main/providers/OllamaProvider.scala (local Ollama integration)
 
-### Provider Architecture Enhancement
+Files to modify:
+- src/main/providers/ProviderFactory.scala (add new providers)
+- src/main/LLMExtension.scala (add provider info primitives)
+- src/main/config/ConfigStore.scala (provider-specific validation)
 
-**Objective:** Extend architecture for multiple LLM providers per original spec
+Success criteria: All providers work with existing primitives, provider switching seamless,
+configuration validation works, new info primitives functional, tests pass
+```
 
-**Tasks:**
+### Step 13: Essential Resilience Features ✅ READY
 
-- Enhance LLMProvider trait for provider-specific features
-- Add provider capabilities discovery and negotiation
-- Implement provider-specific configuration validation
-- Create provider health checks and availability monitoring
+**Objective**: Add basic reliability without over-engineering
 
-### Additional Provider Implementations (Per Original Spec)
+**Keep It Simple**: Basic retry logic and rate limiting, no complex circuit breakers
 
-**Anthropic Claude Provider:**
+**Prompt**:
+```
+Add essential resilience features following GPT extension simplicity:
+1. Add simple retry logic: max 3 attempts with basic exponential backoff
+2. Add basic rate limiting: configurable requests_per_minute (default 60)
+3. Enhance error messages to be more user-friendly like GPT extension
+4. Add configurable timeouts (replace hard-coded 30 seconds)
+5. Integrate retry and rate limiting into existing LLMProvider trait
+6. Distinguish retryable (network, 5xx) vs non-retryable (auth, 4xx) errors
+7. Test retry and rate limiting with all providers
+8. Ensure all resilience features work with both sync and async chat
 
-- Implement Anthropic API client with proper message format handling
-- Add Claude-specific configuration (model versions, max tokens, system prompts)
-- Handle Claude's message format and conversation structure
-- Test with Claude's content filtering and safety features
+Files to modify:
+- src/main/providers/LLMProvider.scala (add retry and rate limiting methods)
+- src/main/providers/OpenAIProvider.scala (integrate resilience features)
+- src/main/providers/ClaudeProvider.scala (integrate resilience features)
+- src/main/providers/GeminiProvider.scala (integrate resilience features)
+- src/main/providers/OllamaProvider.scala (integrate resilience features)
+- src/main/config/ConfigStore.scala (add resilience configuration)
 
-**Google Gemini Provider:**
+Success criteria: Basic retry works for transient failures, rate limiting prevents overuse,
+better error messages, configurable timeouts, works for all providers, tests pass
+```
 
-- Implement Gemini API integration with proper authentication  
-- Add support for Gemini-specific response formats
-- Handle Gemini's safety settings and content policies
-- Configure model-specific parameters
+### Step 14: Multi-Provider Demo and Documentation ✅ READY
 
-**Ollama Local Provider:**
+**Objective**: Create comprehensive demo and documentation for NetLogo users
 
-- Implement local Ollama server integration
-- Add model management and switching capabilities
-- Handle local server connectivity and offline operation
-- Support local model discovery and loading
+**User Focus**: Make it easy for NetLogo users to get started with any provider
 
-## Phase 4: Advanced Features (Future Considerations from Spec)
+**Prompt**:
+```
+Create multi-provider demo and user-ready documentation:
+1. Create multi-provider NetLogo demo showcasing provider switching
+2. Include constrained choice examples using llm:choose with all providers
+3. Add configuration examples for each provider (OpenAI, Claude, Gemini, Ollama)
+4. Update README with clear setup instructions for each provider
+5. Add troubleshooting guide for common configuration issues
+6. Test complete user workflow: config → load → chat → choose → switch provider
+7. Document all primitives with examples
+8. Verify extension ready for real NetLogo users
 
-### Stream-based Responses
+Files to create:
+- demos/multi-provider-demo.nlogo (comprehensive demo with all providers)
+- demos/configs/openai-config.txt (OpenAI configuration example)
+- demos/configs/claude-config.txt (Claude configuration example)
+- demos/configs/gemini-config.txt (Gemini configuration example)
+- demos/configs/ollama-config.txt (Ollama configuration example)
 
-- Implement streaming support for long completions
-- Add real-time response display in NetLogo interface
-- Handle partial response processing
+Files to modify:
+- README.md (comprehensive setup guide for all providers)
+- docs/troubleshooting.md (common issues and solutions)
+- docs/primitives.md (complete primitive reference)
 
-### Function Calling Support
+Success criteria: Demo works with all providers, documentation clear and complete,
+setup instructions work for new users, troubleshooting guide helpful, ready for distribution
+```
 
-- Add function calling capabilities for compatible models
-- Create NetLogo-specific function definitions
-- Implement tool use orchestration
+## Phase 2 Success Criteria (Balanced Approach)
 
-### Multi-modal Support
+**Phase 2 Complete When:**
+- ✅ **True async chat** with AwaitableReporter pattern works like NetLogoGptExtension
+- ✅ **Constrained choice** (`llm:choose`) enables agents to pick from specific options
+- ✅ **Multi-provider support** - OpenAI, Claude, Gemini, Ollama all working
+- ✅ **Provider switching** seamless via configuration and primitives
+- ✅ **Essential resilience** - basic retry logic and rate limiting
+- ✅ **Better error handling** - user-friendly messages like GPT extension
+- ✅ **Configurable timeouts** - replace hard-coded values
+- ✅ **Multi-provider demo** showcases all capabilities and constrained choice
+- ✅ **Clear documentation** for NetLogo users with setup guides
+- ✅ **Ready for real users** - config-based workflow fully functional
 
-- Add text + image capabilities for compatible providers
-- Implement image input/output handling in NetLogo context
+**Key Deliverables:**
+- Working async chat using proven AwaitableReporter pattern
+- Constrained choice functionality crucial for agent-based modeling
+- Four LLM providers accessible through unified interface
+- Essential reliability without over-engineering
+- Complete user documentation and working demos
 
-### Usage Analytics
+## Phase 3: Advanced Features (Future Extensions)
 
-- Add cost tracking and usage monitoring
-- Implement conversation analytics and metrics
-- Create performance benchmarking tools
+**Note**: Phase 3 is **optional** and focuses on advanced features for specialized use cases. The extension is fully functional after Phase 2.
+
+### Overview: Extension Points
+
+**Architecture Ready**: The existing Strategy+Factory pattern architecture makes these features easy to add as extensions when needed.
+
+### Step 15: Streaming Response Support (Optional) 📋 FUTURE
+
+**When Needed**: For long completions that benefit from real-time updates
+
+**Reference**: Not implemented in NetLogoGptExtension - this would be a novel addition
+
+**High-Level Approach**:
+- Add streaming support to LLMProvider trait
+- Implement server-sent events (SSE) handling for compatible providers  
+- Add `llm:chat-stream` primitive for streaming responses
+- Handle partial response updates in NetLogo interface
+
+### Step 16: Function Calling Support (Optional) 📋 FUTURE
+
+**When Needed**: For advanced LLM integration where models can call NetLogo procedures
+
+**High-Level Approach**:
+- Add function calling support to LLMProvider trait
+- Create NetLogo-specific function definition system
+- Add `llm:register-function` primitive for function registration
+- Implement function call orchestration and execution
+
+### Step 17: Multi-modal Support (Optional) 📋 FUTURE
+
+**When Needed**: For text + image capabilities with compatible providers
+
+**High-Level Approach**:
+- Add multi-modal support to LLMProvider trait
+- Implement image input handling (file paths, base64)
+- Add `llm:chat-with-image` primitive for image + text requests
+- Create image processing utilities for NetLogo compatibility
+
+### Step 18: Usage Analytics (Optional) 📋 FUTURE
+
+**When Needed**: For cost tracking and usage monitoring in production deployments
+
+**High-Level Approach**:
+- Create analytics system for usage tracking
+- Add cost calculation for all providers (tokens, requests)
+- Add `llm:get-usage-stats` primitive for usage reporting
+- Implement usage history and trend analysis
+
+## Phase 3 Implementation Notes
+
+**Extension-Friendly Design**: Each of these features can be added independently thanks to the existing architecture:
+- **Strategy Pattern**: LLMProvider trait easily extended with new capabilities
+- **Factory Pattern**: ProviderFactory can handle new provider features
+- **Configuration System**: ConfigStore ready for new configuration options
+- **Primitive System**: Extension class ready for new primitives
+
+**When to Implement**: Add these features when specific use cases require them, not proactively.
+
+## Extension Complete After Phase 2 
+
+**Primary Goal Achieved**: A working, extensible multi-LLM NetLogo extension ready for real users
+
+### Final Success Criteria
+
+**Core Functionality Complete When:**
+- ✅ **Multi-provider support** - OpenAI, Claude, Gemini, Ollama all working
+- ✅ **True async chat** using proven AwaitableReporter pattern
+- ✅ **Constrained choice** (`llm:choose`) for agent-based modeling scenarios
+- ✅ **Config-based workflow** - users can easily switch providers via configuration
+- ✅ **Essential reliability** - retry logic, rate limiting, proper error handling
+- ✅ **NetLogo-ready documentation** - clear setup guides and working demos
+- ✅ **Extensible architecture** - ready for future advanced features
+
+### Architecture Achievements
+
+**Strategy + Factory Success**: The existing extensible architecture allows for:
+- Easy addition of new LLM providers
+- Provider-specific configuration and features
+- Consistent interface regardless of underlying provider
+- Future extension with advanced features (streaming, function calling, etc.)
+
+**NetLogo Integration Success**: Following proven patterns from NetLogoGptExtension:
+- Per-agent conversation history with proper memory management
+- True async support compatible with NetLogo's execution model
+- Simple, direct error handling suitable for research/educational use
+- Constrained choice functionality essential for agent-based modeling
+
+### Extension Ready For
+
+**✅ Research Applications**: Agent-based models with LLM-powered agents
+**✅ Educational Use**: Teaching AI concepts in NetLogo environment  
+**✅ Prototyping**: Quick experimentation with different LLM providers
+**✅ Production Simulations**: Reliable operation with proper error handling
+
+**Future Extensions Available**: The architecture is ready for advanced features when specific use cases require them, including streaming, function calling, multi-modal support, and usage analytics.
 
 ## Success Criteria for Each Step
 

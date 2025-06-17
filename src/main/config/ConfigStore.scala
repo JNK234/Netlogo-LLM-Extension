@@ -178,6 +178,7 @@ object ConfigStore {
   val BASE_URL = "base_url"
   val TEMPERATURE = "temperature"
   val MAX_TOKENS = "max_tokens"
+  val TIMEOUT_SECONDS = "timeout_seconds"
   
   // Default values
   val DEFAULT_PROVIDER = "openai"
@@ -185,6 +186,7 @@ object ConfigStore {
   val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
   val DEFAULT_TEMPERATURE = "0.7"
   val DEFAULT_MAX_TOKENS = "1000"
+  val DEFAULT_TIMEOUT_SECONDS = "30"
   
   /**
    * Create a new ConfigStore with default values
@@ -196,6 +198,7 @@ object ConfigStore {
     store.set(BASE_URL, DEFAULT_OPENAI_BASE_URL)
     store.set(TEMPERATURE, DEFAULT_TEMPERATURE)
     store.set(MAX_TOKENS, DEFAULT_MAX_TOKENS)
+    store.set(TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
     store
   }
 }

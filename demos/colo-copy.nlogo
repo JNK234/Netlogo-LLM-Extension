@@ -3,7 +3,6 @@ extensions [ llm string table ]
 globals [
   colors
   response-counter
-  show-debug  ; Debug flag - set to true to see detailed output
 ]
 
 turtles-own [
@@ -79,9 +78,9 @@ to setup
 end
 
 to go
-  ; Have agents communicate synchronously (one at a time to avoid rate limits)
+  ; Have agents communicate using both chat and choose
   ask one-of turtles [
-    have-conversation
+    have-conversation-with-choice
   ]
 
   ; Clean up old facts
@@ -176,6 +175,107 @@ to have-conversation
   ]
 end
 
+to have-conversation-with-choice
+  ; Collect messages from neighbors
+  let neighbor-messages ""
+  ask link-neighbors with [ last-message != "" ] [
+    set neighbor-messages (word neighbor-messages name ": " last-message "\n")
+  ]
+
+  if neighbor-messages = "" [
+    ; No neighbor messages yet - use choose to pick a conversation starter
+    let starter-options [
+      "Hi! What's your favorite color?"
+      "Hello! I'm curious about your color preferences."
+      "Greetings! Want to share what colors you like?"
+      "Hey there! Tell me about your favorite color."
+    ]
+    
+    set message llm:choose "Pick a friendly way to start a conversation about colors" starter-options
+    set last-message message
+    set label word-wrap (word name ": " message) 30
+    
+    if show-debug [
+      print (word name " chose starter: " message)
+    ]
+    
+  ] [
+    ; Have neighbor messages - use regular chat for more natural conversation
+    let conversation-prompt (word
+      neighbor-messages
+      " What would you like to say to your neighbors?"
+      " IMPORTANT: Your response must be ONLY a valid JSON object with exactly these keys: message, knowledge, reasoning."
+      " Example format: {\"message\": \"Hi! What's your favorite color?\", \"knowledge\": {}, \"reasoning\": \"I want to learn about my neighbors\"}"
+      " - message: what you want to say (one short sentence)"
+      " - knowledge: object with agent names as keys and their colors as values"
+      " - reasoning: brief explanation of what you're trying to learn"
+      " DO NOT include any text before or after the JSON object."
+    )
+
+    ; Make LLM call
+    carefully [
+      let raw-response llm:chat conversation-prompt
+      set response-counter response-counter + 1
+
+      if show-debug [
+        print (word name " received raw response: " raw-response)
+      ]
+
+      ; Try to parse JSON response
+      carefully [
+        let response-data table:from-json raw-response
+        set message table:get response-data "message"
+
+        ; Update knowledge about other agents
+        if table:has-key? response-data "knowledge" [
+          let knowledge table:get response-data "knowledge"
+          foreach table:to-list knowledge [ pair ->
+            let agent-name first pair
+            let agent-color last pair
+
+            ; Create visual fact links to show learned knowledge
+            create-facts-to other turtles with [ name = agent-name ] [
+              if member? agent-color colors [
+                ; Set link color based on agent color name
+                if agent-color = "red" [ set color red ]
+                if agent-color = "blue" [ set color blue ]
+                if agent-color = "green" [ set color green ]
+                if agent-color = "orange" [ set color orange ]
+                if agent-color = "violet" [ set color violet ]
+                if agent-color = "yellow" [ set color yellow ]
+                set label (word "knows: " agent-name " likes " agent-color)
+              ]
+            ]
+          ]
+        ]
+
+        if show-debug [
+          print (word name " said: " message)
+        ]
+
+      ] [
+        ; JSON parsing failed - use raw response as message
+        if show-debug [
+          print (word name " - JSON parsing failed, using raw response as message")
+        ]
+        set message raw-response
+      ]
+
+      ; Update display
+      set label word-wrap (word name ": " message) 30
+      set last-message message
+
+    ] [
+      ; Handle LLM call errors gracefully
+      if show-debug [
+        print (word name " had an LLM error: " error-message)
+      ]
+      set message "..."
+      set last-message message
+    ]
+  ]
+end
+
 to-report get-system-prompt
   let neighbor-names reduce [ [s w] -> (word s ", " w) ] [name] of link-neighbors
 
@@ -238,26 +338,131 @@ to show-network-stats
     ]
   ]
 end
+          foreach table:to-list knowledge [ pair ->
+            let agent-name first pair
+            let agent-color last pair
 
-to test-single-agent
-  ; Test LLM functionality with just one agent
-  ask turtle 0 [
-    print (word "Testing LLM with agent: " name)
+            ; Create visual fact links to show learned knowledge
+            create-facts-to other turtles with [ name = agent-name ] [
+              if member? agent-color colors [
+                ; Set link color based on agent color name
+                if agent-color = "red" [ set color red ]
+                if agent-color = "blue" [ set color blue ]
+                if agent-color = "green" [ set color green ]
+                if agent-color = "orange" [ set color orange ]
+                if agent-color = "violet" [ set color violet ]
+                if agent-color = "yellow" [ set color yellow ]
+                set label (word "knows: " agent-name " likes " agent-color)
+              ]
+            ]
+          ]
+        ]
 
-    let test-prompt "Hello! Can you respond with a JSON object containing your name and favorite color? Use the format: {\"name\": \"your-name\", \"color\": \"your-color\"}"
+        ; Debug output
+        if show-debug [
+          print (word name " said: " message)
+          if table:has-key? response-data "reasoning" [
+            print (word "  Reasoning: " table:get response-data "reasoning")
+          ]
+        ]
 
-    let response llm:chat test-prompt
-    print (word "Response: " response)
+      ] [
+        ; JSON parsing failed - use raw response as message
+        if show-debug [
+          print (word name " - JSON parsing failed, using raw response as message")
+        ]
+        set message result
+      ]
 
-    carefully [
-      let parsed table:from-json response
-      print (word "Parsed name: " table:get parsed "name")
-      print (word "Parsed color: " table:get parsed "color")
-    ] [
-      print (word "Failed to parse JSON: " error-message)
+      ; Update display
+      set label word-wrap (word name ": " message) 30
+      set last-message message
+    ]
+
+    ; Clear the async request
+    set async-request 0
+    set request-type ""
+    set choice-options []
+
+  ] [
+    ; Handle async completion errors gracefully
+    if show-debug [
+      print (word name " had an async completion error: " error-message)
+    ]
+    set message "..."
+    set last-message message
+    set async-request 0
+    set request-type ""
+    set choice-options []
+  ]
+end
+
+to-report get-system-prompt
+  let neighbor-names reduce [ [s w] -> (word s ", " w) ] [name] of link-neighbors
+
+  report (word
+    "You are an agent in a social network simulation. "
+    "Your name is " name ". "
+    "Your favorite color is " favorite-color ". "
+    "Your direct neighbors are: " neighbor-names ". "
+    "Your goal is to learn the favorite colors of all other agents in the network by talking to your neighbors. "
+    "Be social and ask questions to discover information. "
+    "Share what you know to help others. "
+    "Keep your messages short and friendly. "
+    "Always respond in the exact JSON format requested."
+  )
+end
+
+to-report word-wrap [ str len ]
+  let line ""
+  let wrapped ""
+  foreach (string:split-on str " ") [ w ->
+    if length line + length w > len [
+      set wrapped (word wrapped "\n" line)
+      set line ""
+    ]
+    set line string:trim (word line " " w)
+  ]
+  report string:trim (word wrapped "\n" line)
+end
+
+to reset-conversations
+  ; Clear all conversation histories
+  ask turtles [
+    llm:clear-history
+    llm:set-history (list
+      (list "system" get-system-prompt)
+    )
+    set last-message ""
+    set message ""
+    set async-request 0
+    set request-type ""
+    set choice-options []
+  ]
+
+  ask facts [ die ]
+  set response-counter 0
+
+  print "All conversations reset!"
+end
+
+to show-network-stats
+  print "=== Network Statistics ==="
+  print (word "Total agents: " count turtles)
+  print (word "Total connections: " count connections)
+  print (word "LLM responses generated: " response-counter)
+
+  let agents-with-knowledge count turtles with [ any? out-fact-neighbors ]
+  print (word "Agents with learned knowledge: " agents-with-knowledge)
+
+  ask turtles [
+    let known-colors count out-fact-neighbors
+    if known-colors > 0 [
+      print (word name " knows " known-colors " other agents' favorite colors")
     ]
   ]
 end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 383
@@ -345,6 +550,17 @@ num-agents
 1
 NIL
 HORIZONTAL
+
+SWITCH
+210
+15
+342
+48
+show-debug
+show-debug
+0
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
