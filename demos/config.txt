@@ -7,7 +7,7 @@ provider=openai
 
 # API key for the selected provider
 # Replace with your actual API key
-api_key=your-openai-key-here
+api_key=your-openai-api-key-here
 
 # Model to use
 model=gpt-4o

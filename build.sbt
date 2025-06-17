@@ -21,7 +21,19 @@ scalacOptions        ++= Seq("-deprecation", "-unchecked", "-Xfatal-warnings", "
 
 libraryDependencies ++= Seq(
   "com.lihaoyi" %% "upickle" % "3.1.0",
+  "com.lihaoyi" %% "ujson" % "3.1.0",
   "com.softwaremill.sttp.client3" %% "core" % "3.8.15"
 )
 
 ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
+
+// Assembly configuration for fat JAR with all dependencies
+assembly / assemblyMergeStrategy := {
+  case "module-info.class" => MergeStrategy.discard
+  case x if x.endsWith("/module-info.class") => MergeStrategy.discard
+  case PathList("META-INF", "versions", "9", "module-info.class") => MergeStrategy.discard
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case _ => MergeStrategy.first
+}
+
+assembly / assemblyJarName := s"${name.value}.jar"
