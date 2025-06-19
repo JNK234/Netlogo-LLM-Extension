@@ -172,12 +172,14 @@ object ProviderFactory {
     }
     
     // Validate model if specified
-    config.get(ConfigStore.MODEL).foreach { model =>
-      if (!isValidOpenAIModel(model)) {
-        return Failure(new IllegalArgumentException(
-          s"Unsupported OpenAI model: '$model'. Supported models: ${getOpenAISupportedModels.mkString(", ")}"
-        ))
-      }
+    config.get(ConfigStore.MODEL) match {
+      case Some(model) =>
+        if (!isValidOpenAIModel(model)) {
+          return Failure(new IllegalArgumentException(
+            s"Unsupported OpenAI model: '$model'. Supported models: ${getOpenAISupportedModels.mkString(", ")}"
+          ))
+        }
+      case None => // Model is optional, will use default
     }
     
     Success(())
