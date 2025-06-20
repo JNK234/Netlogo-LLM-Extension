@@ -1,0 +1,35 @@
+[error] -- [E007] Type Mismatch Error: /Users/jnk789/Developer/CCL/NetLogo/extensions/llm/src/main/LLMExtension.scala:373:26 
+[error] 373 |        LogoList.fromJava(supportedProviders)
+[error]     |                          ^^^^^^^^^^^^^^^^^^
+[error]     |Found:    (supportedProviders : List[String])
+[error]     |Required: Iterable[? <: AnyRef]
+[error]     |
+[error]     |One of the following imports might fix the problem:
+[error]     |
+[error]     |  import scala.collection.convert.ImplicitConversions.seq AsJavaList
+[error]     |  import scala.collection.convert.ImplicitConversions.iterable asJava
+[error]     |  import scala.collection.convert.ImplicitConversionsToJava.seq AsJavaList
+[error]     |  import scala.collection.convert.ImplicitConversionsToJava.iterable asJava
+[error]     |  import scala.collection.convert.ImplicitConversions.collection asJava
+[error]     |  import scala.collection.convert.ImplicitConversionsToJava.collection asJava
+[error]     |
+[error]     |
+[error]     | longer explanation available when compiling with `-explain`
+[error] -- [E007] Type Mismatch Error: /Users/jnk789/Developer/CCL/NetLogo/extensions/llm/src/main/LLMExtension.scala:414:26 
+[error] 414 |        LogoList.fromJava(modelList)
+[error]     |                          ^^^^^^^^^
+[error]     |Found:    (modelList : List[String])
+[error]     |Required: Iterable[? <: AnyRef]
+[error]     |
+[error]     |One of the following imports might fix the problem:
+[error]     |
+[error]     |  import scala.collection.convert.ImplicitConversions.seq AsJavaList
+[error]     |  import scala.collection.convert.ImplicitConversions.iterable asJava
+[error]     |  import scala.collection.convert.ImplicitConversionsToJava.seq AsJavaList
+[error]     |  import scala.collection.convert.ImplicitConversionsToJava.iterable asJava
+[error]     |  import scala.collection.convert.ImplicitConversions.collection asJava
+[error]     |  import scala.collection.convert.ImplicitConversionsToJava.collection asJava
+[error]     |
+[error]     |
+[error]     | longer explanation available when compiling with `-explain`
+[error] two errors found

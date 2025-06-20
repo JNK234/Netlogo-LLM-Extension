@@ -1,0 +1,19 @@
+# Build artifacts
+target/
+*.jar
+
+# Test files with API keys
+demos/test-basic.nlogo
+demos/simple-demo.nlogo
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

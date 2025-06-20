@@ -1,0 +1,5 @@
+LLMTest1
+  extensions [llm]
+  0> let config_path "/Users/jnk789/Developer/CCL/Extensions/NetLogoLLMExtension/demos/config.txt"
+  0> llm:load-config config_path
+  llm:chat "Say hello in one word" => "hello"
