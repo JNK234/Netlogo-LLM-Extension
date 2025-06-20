@@ -17,8 +17,7 @@ provider=openai
 model=gpt-4o-mini
 
 # API Key (required for openai, anthropic, gemini - not needed for ollama)
-# api_key=your-anthropic-key-here
-api_key=your-openai-key-here
+api_key=your-api-key-here
 
 # Generation settings
 temperature=0.7

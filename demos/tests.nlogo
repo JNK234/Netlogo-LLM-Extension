@@ -23,7 +23,7 @@ to test-sync-chat
   ] [
     print "Config loading failed, setting manually..."
     llm:set-provider "openai"
-    llm:set-api-key "your-openai-key-here"
+    llm:set-api-key "your-openai-api-key-here"
   ]
 
   let result llm:chat "Say hello in one word"
@@ -40,7 +40,7 @@ to test-async-chat
   ] [
     print "Config loading failed, setting manually..."
     llm:set-provider "openai"
-    llm:set-api-key "your-openai-key-here"
+    llm:set-api-key "your-openai-api-key-here"
   ]
 
   let async-reporter llm:chat-async "Say hello in one word"
@@ -60,7 +60,7 @@ to test-choose
   ] [
     print "Config loading failed, setting manually..."
     llm:set-provider "openai"
-    llm:set-api-key "your-openai-key-here"
+    llm:set-api-key "your-openai-api-key-here"
   ]
 
   let choices ["red" "blue" "green"]
