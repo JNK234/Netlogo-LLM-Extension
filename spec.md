@@ -134,11 +134,16 @@ NetLogoLLMExtension/
 
 ## Dependencies
 
-- Scala 2.12.17 (NetLogo compatibility)
-- NetLogo 6.3.0 extension framework
-- sttp.client3 for HTTP requests
-- upickle for JSON serialization
+- Scala 3.7.0 (latest stable version)
+- NetLogo 7.0.0-beta1-c8d671e extension framework
+- sttp.client3 for HTTP requests (Scala 3 compatible)
+- upickle 3.1.0 for JSON serialization (Scala 3 compatible)
 - Provider-specific dependencies as needed
+
+### Scala 3 Migration Notes
+- All dependencies verified compatible with Scala 3.7.0
+- Build configuration updated for Scala 3 syntax and features
+- Extension framework compatible with NetLogo 7.0.0-beta1
 
 ## Error Handling Strategy
 
@@ -147,8 +152,11 @@ NetLogoLLMExtension/
 
 ## Testing Strategy
 
-**Phase 1**: Manual testing with NetLogo models
-**Later phases**: Automated unit and integration tests
+**Comprehensive Testing Framework**:
+- **Unit Tests**: Scala-based unit tests using ScalaTest framework
+- **Integration Tests**: NetLogo `.txt` test files using TestLanguage framework
+- **Manual Testing**: Interactive NetLogo models for validation
+- **Compatibility Testing**: Scala 3.7.0 and NetLogo 7.0.0-beta1 specific tests
 
 ## Success Criteria
 

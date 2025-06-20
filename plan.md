@@ -1,805 +1,107 @@
-# NetLogo Multi-LLM Extension - TDD Implementation Plan
+# NetLogo Multi-LLM Extension - Implementation Plan
 
-## Overall Strategy
+## Current Status: Multi-Provider Extension Complete
 
-This plan follows test-driven development principles with incremental, iterative implementation. Each step builds upon the previous one, ensuring continuous integration and no orphaned code. We'll start with the most basic functionality and gradually add complexity.
+**Latest Updates:**
+- ✅ **Phase 1-2 COMPLETED**: Complete NetLogo extension with all 4 providers (OpenAI, Claude, Gemini, Ollama)
+- ✅ **Platform Upgraded**: Successfully upgraded to Scala 3.7.0 and NetLogo 7.0.0-beta1-c8d671e
+- ✅ **Multi-Provider Support**: All providers working through unified interface with seamless switching
 
-## Phase 1: Foundation and Basic OpenAI Integration
-
-### Step 1: Project Structure and Build Setup ✅ COMPLETED
-
-**Objective**: Establish the basic project structure with proper SBT configuration and dependencies.
-
-**Status**: ✅ **COMPLETED** - All files created, project compiles successfully with Java 11
-
-**Implementation Notes**:
-- ⚠️ **Java Version Requirement**: Must use Java 11 for compilation (Java 17+ causes SBT compatibility issues)
-- **Java Version Management**: SDKMAN with project-specific .sdkmanrc file configured for automatic Java 11 switching
-- All build files configured correctly using proven NetLogo extension plugin setup
-- Project structure established with proper directories
-- Dependencies added: sttp.client3, upickle for JSON handling
-
-**Java Version Setup** (Long-term Solution):
-```bash
-# One-time SDKMAN setup
-curl -s "https://get.sdkman.io" | bash
-sdk install java 11.0.12-open
-echo "sdkman_auto_env=true" >> ~/.sdkman/etc/config
-
-# Project automatically switches to Java 11 via .sdkmanrc file
-# No manual version switching required for development
-```
-
-**Prompt**:
-```
-Set up a NetLogo extension project with the following requirements:
-1. Create build.sbt with NetLogoExtension plugin configuration
-2. Set up proper Scala 2.12.17 configuration for NetLogo 6.3.0 compatibility
-3. Add dependencies: sttp.client3, upickle for JSON handling
-4. Create the basic directory structure: src/main/, project/, demos/
-5. Create placeholder files with basic structure (no implementation)
-6. Ensure the project compiles successfully with sbt compile
-7. Create a basic test that verifies the project structure is correct
-
-Files to create:
-- build.sbt
-- project/build.properties  
-- project/plugins.sbt
-- src/main/LLMExtension.scala (empty extension class)
-- Basic compilation test
-
-Success criteria: sbt compile runs without errors
-```
-
-### Step 2: Data Models and Core Abstractions ✅ COMPLETED
-
-**Objective**: Create the foundational data structures and provider abstraction.
-
-**Status**: ✅ **COMPLETED** - All data models and provider trait implemented, compiles successfully
-
-**Prompt**:
-```
-Implement the core data models and provider abstraction with the following requirements:
-1. Create ChatMessage case class with role and content fields
-2. Create ChatRequest and ChatResponse case classes for OpenAI API
-3. Create LLMProvider trait with basic method signatures
-4. Add proper JSON serialization using upickle
-5. Write unit tests for all data models
-6. Ensure all models serialize/deserialize correctly to/from JSON
-7. Test that the provider trait compiles and can be extended
-
-Files to create/modify:
-- src/main/models/ChatMessage.scala
-- src/main/models/ChatRequest.scala  
-- src/main/models/ChatResponse.scala
-- src/main/providers/LLMProvider.scala
-- Basic unit tests for JSON serialization
-
-Success criteria: All models serialize properly, trait compiles, tests pass
-```
-
-### Step 3: Configuration Management ✅ COMPLETED
-
-**Objective**: Implement configuration loading from key=value files and in-memory storage.
-
-**Status**: ✅ **COMPLETED** - Config loader, store, and demo files created
-
-**Prompt**:
-```
-Implement configuration management with the following requirements:
-1. Create ConfigLoader utility that parses key=value format files
-2. Handle common configuration keys: provider, api_key, model, base_url
-3. Implement error handling for malformed files and missing keys
-4. Create ConfigStore for in-memory configuration management
-5. Write comprehensive tests for file parsing edge cases
-6. Test with various file formats and error conditions
-7. Ensure configuration can be loaded, stored, and retrieved reliably
-
-Files to create:
-- src/main/config/ConfigLoader.scala
-- src/main/config/ConfigStore.scala
-- Test files with various configuration scenarios
-- Unit tests for all configuration functionality
-
-Success criteria: Can load config from files, handle errors gracefully, all tests pass
-```
-
-### Step 4: Basic OpenAI Provider Implementation
-
-**Objective**: Implement a minimal OpenAI provider that can send HTTP requests.
-
-**Prompt**:
-```
-Create a basic OpenAI provider implementation with the following requirements:
-1. Implement OpenAIProvider that extends LLMProvider trait
-2. Add HTTP client using sttp.client3 for API requests
-3. Implement basic chat method that sends requests to OpenAI API
-4. Handle API responses and parse JSON into ChatMessage objects
-5. Add proper error handling for network issues and API errors
-6. Create mock tests that don't require real API calls
-7. Add integration test that can be run with real API key (optional)
-
-Files to create:
-- src/main/providers/OpenAIProvider.scala
-- Mock tests for HTTP requests/responses
-- Integration test (can be disabled by default)
-
-Success criteria: Provider can send HTTP requests, parse responses, handle errors, tests pass
-```
-
-### Step 5: Provider Factory Implementation ✅ COMPLETED
-
-**Objective**: Create factory pattern for provider instantiation and management.
-
-**Status**: ✅ **COMPLETED** - Factory with validation and extensibility implemented
-
-**Prompt**:
-```
-Implement provider factory with the following requirements:
-1. Create ProviderFactory object that can instantiate providers by name
-2. Support "openai" provider type initially
-3. Pass configuration to providers during creation
-4. Handle unknown provider names gracefully
-5. Add validation for provider configuration requirements
-6. Write tests for factory creation and error cases
-7. Ensure factory integrates properly with configuration system
-
-Files to create:
-- src/main/providers/ProviderFactory.scala
-- Unit tests for factory creation and validation
-- Integration tests with configuration system
-
-Success criteria: Factory creates providers correctly, validates config, handles errors, tests pass
-```
-
-### Step 6: Main Extension Class with Basic Primitives ✅ COMPLETED
-
-**Objective**: Implement the main extension class with configuration primitives.
-
-**Status**: ✅ **COMPLETED** - All primitives implemented and working
-
-**Prompt**:
-```
-Implement the main LLMExtension class with basic primitives:
-1. Create LLMExtension extending DefaultClassManager
-2. Implement llm:set-provider primitive
-3. Implement llm:set-api-key primitive  
-4. Implement llm:set-model primitive
-5. Implement llm:load-config primitive
-6. Add proper primitive registration in load() method
-7. Include basic error handling and validation
-8. Write tests for each primitive's functionality
-
-Files to create/modify:
-- src/main/LLMExtension.scala (complete implementation)
-- Unit tests for each primitive
-- Integration tests with NetLogo context mocking
-
-Success criteria: Extension registers primitives, config primitives work, tests pass, compiles as NetLogo extension
-```
-
-### Step 7: Agent History Management ✅ COMPLETED
-
-**Objective**: Implement per-agent conversation history using WeakHashMap.
-
-**Status**: ✅ **COMPLETED** - History management implemented with WeakHashMap
-
-**Prompt**:
-```
-Add conversation history management with the following requirements:
-1. Use WeakHashMap to store per-agent conversation history
-2. Implement history storage and retrieval for each NetLogo agent
-3. Handle agent cleanup when agents are removed from simulation
-4. Add methods to get, set, and clear agent history
-5. Ensure thread safety for concurrent access
-6. Write tests for history management across multiple agents
-7. Test memory management and cleanup behavior
-
-Files to modify:
-- src/main/LLMExtension.scala (add history management)
-- Unit tests for history operations
-- Tests for multi-agent scenarios
-
-Success criteria: History stored per-agent, memory managed properly, thread-safe, tests pass
-```
-
-### Step 8: Basic Chat Primitive Implementation ✅ COMPLETED
-
-**Objective**: Implement the core llm:chat primitive that ties everything together.
-
-**Status**: ✅ **COMPLETED** - Chat primitive working with full integration
-
-**Prompt**:
-```
-Implement the llm:chat primitive with full integration:
-1. Create ChatReporter that implements the llm:chat primitive
-2. Integrate with provider factory and current provider
-3. Add messages to agent history before sending
-4. Store responses in agent history after receiving
-5. Handle provider initialization and configuration validation
-6. Add comprehensive error handling with user-friendly messages
-7. Write integration tests that exercise the complete flow
-8. Test with mock providers and real OpenAI (optional)
-
-Files to modify:
-- src/main/LLMExtension.scala (add ChatReporter)
-- Integration tests for complete chat flow
-- End-to-end tests with mock and real providers
-
-Success criteria: llm:chat works end-to-end, history managed, errors handled, tests pass
-```
-
-### Step 9: Demo NetLogo Model and Manual Testing ✅ COMPLETED
-
-**Objective**: Create a working NetLogo model to demonstrate and test the extension.
-
-**Status**: ✅ **COMPLETED** - Color-sharing demo created and functional
-
-**Implementation Notes**:
-- ⚠️ **Async Implementation Deferred**: The `llm:chat-async` primitive was not fully implemented, so demo uses synchronous `llm:chat`
-- Demo includes robust error handling for JSON parsing failures
-- Configuration loading improved to search multiple file paths
-- All NetLogo-specific bugs fixed (undefined variables, color assignments, string functions)
-
-**Prompt**:
-```
-Create a demo NetLogo model for manual testing:
-1. Create basic-chat.nlogo model in demos/ directory
-2. Include setup procedure that loads configuration
-3. Add simple chat interface for testing
-4. Create sample config.txt with placeholder values
-5. Add instructions for setting up API keys
-6. Include examples of different chat scenarios
-7. Test the complete extension workflow manually
-8. Document any issues or improvements needed
-
-Files to create:
-- demos/basic-chat.nlogo
-- demos/config.txt (sample configuration)
-- demos/README.md (usage instructions)
-- Manual testing checklist
-
-Success criteria: Demo model works, can chat with OpenAI, configuration loads properly
-```
-
-### Step 10: Integration and Polish ✅ COMPLETED
-
-**Objective**: Final integration, testing, and preparation for Phase 1 completion.
-
-**Status**: ✅ **COMPLETED** - True async chat with AwaitableReporter pattern, constrained choice functionality working, configurable timeouts implemented, both primitives tested and functional
-
-**Implementation Notes**:
-
-- Fixed all NetLogo compatibility issues (color assignments, undefined variables)
-- Improved JSON parsing with graceful error handling and fallback to raw responses
-- Enhanced configuration loading with multi-path search capability
-- Created robust error handling throughout the extension
-- Validated end-to-end functionality with color-sharing social simulation demo
-
-**Prompt**:
-```
-Complete Phase 1 with final integration and polish:
-1. Run complete test suite and fix any remaining issues
-2. Add comprehensive error messages and user feedback
-3. Ensure all primitives work together seamlessly
-4. Add logging for debugging purposes
-5. Create README.md with installation and usage instructions
-6. Test with various NetLogo scenarios and agent types
-7. Verify all success criteria for Phase 1 are met
-8. Prepare for Phase 2 planning
-
-Files to create/modify:
-- README.md (comprehensive documentation)
-- Final integration tests
-- Performance and stress tests
-- Documentation improvements
-
-Success criteria: All Phase 1 requirements met, extension ready for real use, documentation complete
-```
-
-## 🎯 PHASE 1 COMPLETE - STATUS & NEXT PHASES
-
-### Phase 1 Summary ✅ COMPLETED
+## Current Architecture
 
 **Delivered Functionality:**
-
-- Complete NetLogo extension with OpenAI provider integration
+- Complete NetLogo extension with 4 LLM providers (OpenAI, Claude, Gemini, Ollama)
 - Strategy + Factory pattern architecture for extensible provider system
-- Per-agent conversation history using WeakHashMap for proper memory management  
+- Per-agent conversation history using WeakHashMap for proper memory management
 - Configuration management with external file loading (key=value format)
-- All core primitives implemented and functional
-- Working social simulation demo (color-sharing agents via LLM communication)
-- Robust error handling with JSON parsing fallbacks
+- True async chat using AwaitableReporter pattern
+- Constrained choice functionality (`llm:choose`) for agent-based modeling
 
 **Implemented Primitives:**
-
-- Configuration: `llm:set-provider`, `llm:set-api-key`, `llm:set-model`, `llm:load-config`
-- Chat: `llm:chat` (synchronous), `llm:chat-async` (returns reporter - basic implementation)
-- History: `llm:history`, `llm:set-history`, `llm:clear-history`
+- **Configuration**: `llm:set-provider`, `llm:set-api-key`, `llm:set-model`, `llm:load-config`
+- **Chat**: `llm:chat` (synchronous), `llm:chat-async` (true async with AwaitableReporter)
+- **History**: `llm:history`, `llm:set-history`, `llm:clear-history`
+- **Constrained Choice**: `llm:choose` (picks from predefined options)
+- **Provider Discovery**: `llm:providers`, `llm:models`
 
 **Architecture Achievements:**
-
 - Strategy pattern with LLMProvider trait successfully implemented
-- Factory pattern with ProviderFactory for dynamic provider creation
+- Factory pattern with ProviderFactory supporting all 4 providers
 - WeakHashMap-based per-agent conversation history working correctly
-- JSON serialization with upickle/ujson hybrid approach
-- NetLogo extension framework properly integrated
+- JSON serialization with upickle/ujson for Scala 3 compatibility
+- NetLogo extension framework properly integrated with platform upgrades
 
-**Known Current Limitations:**
+## Next Phase Implementation Roadmap
 
-- `llm:chat-async` implementation is basic (returns reporter but not truly async)
-- No rate limiting or retry logic for API calls
-- Error handling could be more granular with specific error codes
-- Only OpenAI provider implemented
-
-## Phase 2: Multi-Provider LLM Support (PRIORITY 1) 🎯
-
-**Objective**: Implement support for Claude, Gemini, and Ollama providers - the core value proposition
-
-**Priority Rationale**: Multi-provider support is the primary differentiator and user value. This should be completed first before system upgrades or comprehensive testing.
-
-### Design Philosophy: Best of Both Worlds
-
-**Keep Existing Strengths:**
-- ✅ Strategy + Factory pattern architecture (extensibility)
-- ✅ Modular package structure (maintainability)
-- ✅ Configuration system with file loading (flexibility)
-- ✅ Multi-provider support foundation
-
-**Add NetLogoGptExtension Proven Patterns:**
-- ✅ AwaitableReporter for true async
-- ✅ Constrained choice functionality (`llm:choose`)
-- ✅ Simple, direct error handling
-- ✅ Essential features without over-engineering
-
-### Step 11: Fix Async + Add Constrained Choice ✅ COMPLETED
-
-**Objective**: Fix broken async using AwaitableReporter + add missing killer feature from GPT extension
-
-**NetLogoGptExtension Key Feature Missing**: `gpt:choose` with logit bias for constrained multiple choice - this is crucial for ABM applications where you need agents to pick from specific options.
-
-**Current Issues**:
-- `llm:chat-async` blocks when called (not truly async)
-- Missing constrained choice capability that makes LLMs much more useful for agent-based modeling
-
-**Prompt**:
-```
-Fix async and add constrained choice following NetLogoGptExtension patterns:
-1. Create AwaitableReporter case class that wraps Future and defers execution until runresult
-2. Replace current ChatAsyncReporter with AwaitableReporter implementation  
-3. Add llm:choose primitive with logit bias for multiple choice (key GPT extension feature)
-4. Add configurable timeout from config (timeout_seconds, default 30 like GPT extension)
-5. Ensure Future starts immediately but execution defers until runresult is called
-6. Add proper error handling for timeouts and Future failures following GPT patterns
-7. Test constrained choice with list of options (essential for ABM scenarios)
-8. Test async behavior with multiple concurrent agents
-
-Files to modify:
-- src/main/LLMExtension.scala (add AwaitableReporter + ChooseReporter)
-- src/main/config/ConfigStore.scala (add timeout configuration)
-- Unit tests for async and constrained choice functionality
-
-**Status**: ✅ **COMPLETED** - True async chat with AwaitableReporter pattern works correctly with runresult, constrained choice functionality (llm:choose) working with predefined options, configurable timeouts implemented (default 30 seconds), both primitives tested and functional in test-basic.nlogo
-
-Success criteria: ✅ llm:chat-async works like GPT extension, ✅ llm:choose enables constrained agent choices, ✅ configurable timeouts, ✅ conversation history correct, ✅ tests pass
-```
-
-### Step 12: Multi-Provider Implementation ✅ COMPLETED
-
-**Objective**: Add Claude, Gemini, and Ollama providers using existing extensible architecture
-
-**Status**: ✅ **COMPLETED** - All 4 providers implemented with unified interface, new primitives working, comprehensive tests added
-
-**Implementation Notes**:
-- ✅ **All Providers Created**: ClaudeProvider, GeminiProvider, OllamaProvider all implement LLMProvider trait
-- ✅ **ProviderFactory Enhanced**: Supports all 4 providers with proper validation and configuration  
-- ✅ **New Primitives Added**: `llm:providers` and `llm:models` primitives for provider discovery
-- ✅ **Comprehensive Tests**: Full test suite added to demos/tests.nlogox for multi-provider functionality
-- ✅ **Default Models Updated**: gpt-4o, claude-3-sonnet, gemini-1.5-pro, llama3 as requested
-- ✅ **Configuration Files**: Reference and working config files created for easy provider switching
-
-**Prompt**:
-```
-Implement multi-provider support using existing architecture:
-1. Create ClaudeProvider implementing existing LLMProvider trait
-2. Create GeminiProvider implementing existing LLMProvider trait  
-3. Create OllamaProvider implementing existing LLMProvider trait
-4. Enhance existing ProviderFactory to support all providers
-5. Add provider-specific configuration validation to existing ConfigStore
-6. Add llm:providers primitive to list available providers
-7. Add llm:models primitive to list models for current provider
-8. Test provider switching using existing llm:set-provider primitive
-
-Files to create:
-- src/main/providers/ClaudeProvider.scala (Anthropic API integration)
-- src/main/providers/GeminiProvider.scala (Google API integration) 
-- src/main/providers/OllamaProvider.scala (local Ollama integration)
-
-Files to modify:
-- src/main/providers/ProviderFactory.scala (add new providers)
-- src/main/LLMExtension.scala (add provider info primitives)
-- src/main/config/ConfigStore.scala (provider-specific validation)
-
-Success criteria: All providers work with existing primitives, provider switching seamless,
-configuration validation works, new info primitives functional, tests pass
-```
-
-### Step 13: Essential Resilience Features ✅ READY
+### Phase 3: Essential Resilience Features 📋
 
 **Objective**: Add basic reliability without over-engineering
 
-**Keep It Simple**: Basic retry logic and rate limiting, no complex circuit breakers
+**Status**: ✅ **READY** - Foundation complete, implement next
 
-**Prompt**:
-```
-Add essential resilience features following GPT extension simplicity:
-1. Add simple retry logic: max 3 attempts with basic exponential backoff
-2. Add basic rate limiting: configurable requests_per_minute (default 60)
-3. Enhance error messages to be more user-friendly like GPT extension
-4. Add configurable timeouts (replace hard-coded 30 seconds)
-5. Integrate retry and rate limiting into existing LLMProvider trait
-6. Distinguish retryable (network, 5xx) vs non-retryable (auth, 4xx) errors
-7. Test retry and rate limiting with all providers
-8. Ensure all resilience features work with both sync and async chat
-
-Files to modify:
-- src/main/providers/LLMProvider.scala (add retry and rate limiting methods)
-- src/main/providers/OpenAIProvider.scala (integrate resilience features)
-- src/main/providers/ClaudeProvider.scala (integrate resilience features)
-- src/main/providers/GeminiProvider.scala (integrate resilience features)
-- src/main/providers/OllamaProvider.scala (integrate resilience features)
-- src/main/config/ConfigStore.scala (add resilience configuration)
-
-Success criteria: Basic retry works for transient failures, rate limiting prevents overuse,
-better error messages, configurable timeouts, works for all providers, tests pass
-```
-
-### Step 14: Multi-Provider Demo and Documentation ✅ READY
-
-**Objective**: Create comprehensive demo and documentation for NetLogo users
-
-**User Focus**: Make it easy for NetLogo users to get started with any provider
-
-**Prompt**:
-```
-Create multi-provider demo and user-ready documentation:
-1. Create multi-provider NetLogo demo showcasing provider switching
-2. Include constrained choice examples using llm:choose with all providers
-3. Add configuration examples for each provider (OpenAI, Claude, Gemini, Ollama)
-4. Update README with clear setup instructions for each provider
-5. Add troubleshooting guide for common configuration issues
-6. Test complete user workflow: config → load → chat → choose → switch provider
-7. Document all primitives with examples
-8. Verify extension ready for real NetLogo users
-
-Files to create:
-- demos/multi-provider-demo.nlogo (comprehensive demo with all providers)
-- demos/configs/openai-config.txt (OpenAI configuration example)
-- demos/configs/claude-config.txt (Claude configuration example)
-- demos/configs/gemini-config.txt (Gemini configuration example)
-- demos/configs/ollama-config.txt (Ollama configuration example)
-
-Files to modify:
-- README.md (comprehensive setup guide for all providers)
-- docs/troubleshooting.md (common issues and solutions)
-- docs/primitives.md (complete primitive reference)
-
-Success criteria: Demo works with all providers, documentation clear and complete,
-setup instructions work for new users, troubleshooting guide helpful, ready for distribution
-```
-
-## Phase 2 Success Criteria (Balanced Approach)
-
-**Phase 2 Complete When:**
-- ✅ **True async chat** with AwaitableReporter pattern works like NetLogoGptExtension
-- ✅ **Constrained choice** (`llm:choose`) enables agents to pick from specific options
-- ✅ **Multi-provider support** - OpenAI, Claude, Gemini, Ollama all working
-- ✅ **Provider switching** seamless via configuration and primitives
-- ✅ **Essential resilience** - basic retry logic and rate limiting
-- ✅ **Better error handling** - user-friendly messages like GPT extension
-- ✅ **Configurable timeouts** - replace hard-coded values
-- ✅ **Multi-provider demo** showcases all capabilities and constrained choice
-- ✅ **Clear documentation** for NetLogo users with setup guides
-- ✅ **Ready for real users** - config-based workflow fully functional
-
-**Key Deliverables:**
-- Working async chat using proven AwaitableReporter pattern
-- Constrained choice functionality crucial for agent-based modeling
-- Four LLM providers accessible through unified interface
-- Essential reliability without over-engineering
-- Complete user documentation and working demos
-
-## 🚀 NEW PRIORITY ORDER - IMPLEMENTATION ROADMAP
-
-**Based on current status and user priorities**:
-
-### PRIORITY 1: System Upgrade and Critical Fixes (START HERE)
-### PRIORITY 2: Multi-Model LLM Support  
-### PRIORITY 3: Comprehensive Testing Framework
-### PRIORITY 4: Resilience Features
-### PRIORITY 5: Documentation and Polish
-
----
-
-## Phase 3: System Upgrade and Critical Fixes (PRIORITY 1) 🎯
-
-**Objective**: Complete Scala 3.7.0 and NetLogo 7.0.0-beta1-c8d671e upgrade, fix critical issues
-
-**Status**: ✅ **COMPLETED** - All critical platform issues fixed, extension fully functional
-
-### Step 15: Fix Critical Platform Issues ✅ COMPLETED
-
-**Objective**: Fix broken functionality from platform upgrade
-
-**Critical Issues**:
-- ✅ **Model validation fixed** - ProviderFactory model validation implemented
-- ✅ **Tests package fixed** - Tests.scala updated to use `llm` extension package
-- ✅ **Platform upgraded** - Scala 3.7.0 and NetLogo 7.0.0-beta1-c8d671e configured
-- ✅ **Dependencies compatible** - upickle 3.1.0, sttp.client3 3.8.15 work with Scala 3
-
-**Completed Tasks**:
-
-1. ✅ Fixed model validation in ProviderFactory.scala (implemented proper OpenAI model validation)
-2. ✅ Updated Tests.scala package from `org.nlogo.extensions.array` to `org.nlogo.extensions.llm`
-3. ✅ Fixed Scala 3 syntax compatibility (no issues found)
-4. ✅ Tested NetLogo 7.0.0-beta1-c8d671e extension loading (works perfectly)
-5. ✅ Verified all existing Phase 1-2 functionality works with upgrades (all primitives functional)
-
-**Files modified**:
-
-- `src/main/providers/ProviderFactory.scala` (model validation implemented)
-- `src/test/Tests.scala` (package and references updated)
-
-**Success criteria met**: ✅ Extension compiles, loads, existing OpenAI functionality works perfectly
-
-### Step 16: Comprehensive Scala Testing Framework ✅ READY
-
-**Objective**: Implement robust Scala-based unit and integration tests
-
-**Current Issues**:
-- Tests.scala is skeletal and has wrong package
-- No actual test implementation for LLM extension functionality
-- Missing provider testing, configuration testing, async testing
-
-**Prompt**:
-```
-Implement comprehensive Scala testing framework:
-1. Fix Tests.scala to properly test LLM extension (not array extension)
-2. Add unit tests for all providers (OpenAI, mock providers for others)
-3. Add configuration loading and validation tests
-4. Add async chat and history management tests
-5. Add ProviderFactory and model validation tests
-6. Add error handling and edge case tests
-7. Ensure all tests work with ScalaTest and NetLogo TestLanguage framework
-8. Test memory management and WeakHashMap cleanup
-
-Files to create/modify:
-- src/test/Tests.scala (complete rewrite for LLM extension)
-- Unit tests for each major component
-- Integration tests for full workflow
-
-Success criteria: Comprehensive test coverage, all tests pass, proper LLM extension testing
-```
-
-### Step 17: NetLogo Integration Testing ✅ READY
-
-**Objective**: Complete NetLogo `.txt` test file implementation for integration testing
-
-**Current Issues**:
-- tests.txt only has basic structure (6 lines)
-- Missing comprehensive integration tests
-- No testing of all primitives and error conditions
-
-**Prompt**:
-```
-Implement comprehensive NetLogo integration tests:
-1. Complete tests.txt with full primitive testing
-2. Test all configuration primitives (set-provider, set-api-key, set-model, load-config)
-3. Test chat functionality (llm:chat, llm:chat-async with runresult)
-4. Test history management (llm:history, llm:set-history, llm:clear-history)
-5. Test error conditions (invalid config, network errors, invalid models)
-6. Test multi-agent scenarios with separate conversation histories
-7. Test provider switching and configuration reloading
-8. Add tests for llm:choose constrained choice functionality
-
-Files to modify:
-- tests.txt (comprehensive NetLogo test scenarios)
-- Create additional test config files for different scenarios
-
-Success criteria: All NetLogo primitives tested, error conditions covered, multi-agent scenarios work
-```
-
-### Step 18: Build Validation and Documentation ✅ READY
-
-**Objective**: Ensure entire system works with upgrades and update documentation
-
-**Prompt**:
-```
-Validate complete upgraded system and update documentation:
-1. Run complete test suite (Scala + NetLogo tests)
-2. Test manual NetLogo loading and all demo scenarios
-3. Verify build process works with assembly
-4. Test all primitives work correctly with NetLogo 7.0.0-beta1
-5. Update README.md with Scala 3.7.0 and NetLogo 7.0.0-beta1 requirements
-6. Document any upgrade-specific configuration changes
-7. Test performance with upgraded versions
-8. Validate that all Phase 1-2 functionality still works
-
-Files to modify:
-- README.md (upgrade documentation)
-- Comprehensive testing of all functionality
-- Performance validation
-
-Success criteria: All tests pass, documentation updated, system fully functional with upgrades
-```
-
-## Phase 4: Multi-Model LLM Support (PRIORITY 2) 🎯
-
-**Objective**: Add Claude, Gemini, and Ollama providers - core value proposition
-
-**Status**: ✅ **READY** - Architecture supports this, implement after platform fixes
-
-### Step 16: Claude Provider Implementation ✅ READY
-
-**Tasks**:
-1. Create ClaudeProvider implementing LLMProvider trait
-2. Add Anthropic API integration with proper authentication
-3. Handle Claude-specific request/response formats
-4. Add Claude models to ProviderFactory
-5. Test Claude provider with configuration
-
-**Files to create**:
-- `src/main/providers/ClaudeProvider.scala`
-
-### Step 17: Gemini Provider Implementation ✅ READY
-
-**Tasks**:
-1. Create GeminiProvider implementing LLMProvider trait
-2. Add Google AI API integration
-3. Handle Gemini-specific request/response formats
-4. Add Gemini models to ProviderFactory
-5. Test Gemini provider with configuration
-
-**Files to create**:
-- `src/main/providers/GeminiProvider.scala`
-
-### Step 18: Ollama Provider Implementation ✅ READY
-
-**Tasks**:
-1. Create OllamaProvider implementing LLMProvider trait
-2. Add local Ollama API integration
-3. Handle Ollama-specific request/response formats
-4. Add Ollama support to ProviderFactory
-5. Test Ollama provider with local setup
-
-**Files to create**:
-- `src/main/providers/OllamaProvider.scala`
-
-### Step 19: Provider Factory Enhancement ✅ READY
-
-**Tasks**:
-1. Update ProviderFactory to support all providers
-2. Add provider-specific model validation for each
-3. Enhance configuration validation per provider
-4. Add `llm:providers` and `llm:models` primitives
-5. Test provider switching functionality
+**Implementation Tasks**:
+1. Add simple retry logic (max 3 attempts, exponential backoff)
+2. Add basic rate limiting (configurable requests_per_minute, default 60)
+3. Enhance error messages to be more user-friendly
+4. Add configurable timeouts (replace hard-coded values)
+5. Integrate resilience features into all providers
+6. Distinguish retryable vs non-retryable errors
 
 **Files to modify**:
-- `src/main/providers/ProviderFactory.scala`
-- `src/main/LLMExtension.scala`
+- All provider files (OpenAI, Claude, Gemini, Ollama)
+- `src/main/config/ConfigStore.scala` (add resilience configuration)
 
-**Success criteria**: All 4 providers (OpenAI, Claude, Gemini, Ollama) working through unified interface
+### Phase 4: Comprehensive Testing Framework 📋
 
-## Phase 5: Comprehensive Testing Framework (PRIORITY 3) 🎯
+**Objective**: Implement robust Scala and NetLogo testing
 
-**Objective**: Implement comprehensive Scala and NetLogo testing
+**Status**: ✅ **READY** - Implement after resilience features
 
-**Status**: ✅ **READY** - Implement after multi-provider support
+**Current Issues**:
+- Tests.scala is skeletal (needs complete LLM extension test suite)
+- tests.txt needs comprehensive NetLogo integration tests
+- Missing provider testing, configuration testing, async testing
 
-### Step 20: Complete Scala Unit Tests ✅ READY
-
-**Tasks**:
+**Implementation Tasks**:
 1. Complete rewrite of Tests.scala for LLM extension
 2. Add unit tests for all providers (with mocks)
 3. Add configuration loading and validation tests
 4. Add async chat and history management tests
-5. Add error handling and edge case tests
+5. Complete tests.txt with comprehensive NetLogo test scenarios
 6. Test memory management and WeakHashMap cleanup
 
-**Files to modify**:
-- `src/test/Tests.scala` (complete rewrite)
+### Phase 5: Documentation and User Experience 📋
 
-### Step 21: Complete NetLogo Integration Tests ✅ READY
-
-**Tasks**:
-1. Complete tests.txt with comprehensive NetLogo test scenarios
-2. Test all primitives: config, chat, history, choose
-3. Test error conditions and edge cases
-4. Test multi-agent scenarios with separate histories
-5. Test provider switching and configuration reloading
-6. Add performance tests with multiple agents
-
-**Files to modify**:
-- `tests.txt` (expand from 6 lines to comprehensive tests)
-
-**Success criteria**: Complete test coverage, all tests pass, edge cases handled
-
-## Phase 6: Resilience Features (PRIORITY 4) 🎯
-
-**Objective**: Add essential reliability features
-
-**Status**: ✅ **READY** - Implement after testing framework
-
-### Step 22: Essential Reliability ✅ READY
-
-**Tasks**:
-1. Add retry logic (3 attempts, exponential backoff)
-2. Add rate limiting (configurable requests per minute)
-3. Add configurable timeouts (replace hard-coded values)
-4. Improve error messages for better user experience
-5. Distinguish retryable vs non-retryable errors
-6. Test resilience features with all providers
-
-**Files to modify**:
-- All provider files
-- `src/main/config/ConfigStore.scala`
-
-**Success criteria**: Reliable operation under network issues, good error handling
-
-## Phase 7: Documentation and Polish (PRIORITY 5) 🎯
-
-**Objective**: Complete user-ready documentation
+**Objective**: Complete user-ready documentation and demos
 
 **Status**: ✅ **READY** - Final phase
 
-### Step 23: Multi-Provider Demo ✅ READY
-
-**Tasks**:
+**Implementation Tasks**:
 1. Create comprehensive multi-provider demo NetLogo model
 2. Add configuration examples for all providers
-3. Include constrained choice examples
-4. Test complete user workflow end-to-end
+3. Update README with Scala 3.7.0 and NetLogo 7.0.0-beta1 setup
+4. Document all primitives with examples
+5. Add troubleshooting guide for common issues
+6. Test complete user workflow end-to-end
 
-**Files to create**:
-- `demos/multi-provider-demo.nlogo`
-- Provider-specific config examples
+## Advanced Features (Future Extensions) 📋
 
-### Step 24: Complete Documentation ✅ READY
-
-**Tasks**:
-1. Update README.md with Scala 3.7.0 and NetLogo 7.0.0-beta1 setup
-2. Document all primitives with examples
-3. Add troubleshooting guide
-4. Create setup instructions for each provider
-5. Performance and usage guidelines
-
-**Files to modify**:
-- `README.md`
-- Create documentation files as needed
-
-**Success criteria**: Extension ready for real users, clear documentation
-
-## Phase 8: Advanced Features (Future Extensions)
-
-**Note**: Phase 8 is **optional** and focuses on advanced features for specialized use cases. The extension is fully functional after Phase 7.
+**Note**: These features are **optional** and focus on advanced capabilities for specialized use cases. The extension is fully functional for research and educational use without these features.
 
 ### Overview: Extension Points
 
 **Architecture Ready**: The existing Strategy+Factory pattern architecture makes these features easy to add as extensions when needed.
 
-### Step 15: Streaming Response Support (Optional) 📋 FUTURE
+### Streaming Response Support (Optional)
 
 **When Needed**: For long completions that benefit from real-time updates
 
-**Reference**: Not implemented in NetLogoGptExtension - this would be a novel addition
-
 **High-Level Approach**:
 - Add streaming support to LLMProvider trait
-- Implement server-sent events (SSE) handling for compatible providers  
+- Implement server-sent events (SSE) handling for compatible providers
 - Add `llm:chat-stream` primitive for streaming responses
-- Handle partial response updates in NetLogo interface
 
-### Step 16: Function Calling Support (Optional) 📋 FUTURE
+### Function Calling Support (Optional)
 
 **When Needed**: For advanced LLM integration where models can call NetLogo procedures
 
@@ -807,9 +109,8 @@ Success criteria: All tests pass, documentation updated, system fully functional
 - Add function calling support to LLMProvider trait
 - Create NetLogo-specific function definition system
 - Add `llm:register-function` primitive for function registration
-- Implement function call orchestration and execution
 
-### Step 17: Multi-modal Support (Optional) 📋 FUTURE
+### Multi-modal Support (Optional)
 
 **When Needed**: For text + image capabilities with compatible providers
 
@@ -817,9 +118,8 @@ Success criteria: All tests pass, documentation updated, system fully functional
 - Add multi-modal support to LLMProvider trait
 - Implement image input handling (file paths, base64)
 - Add `llm:chat-with-image` primitive for image + text requests
-- Create image processing utilities for NetLogo compatibility
 
-### Step 18: Usage Analytics (Optional) 📋 FUTURE
+### Usage Analytics (Optional)
 
 **When Needed**: For cost tracking and usage monitoring in production deployments
 
@@ -827,82 +127,22 @@ Success criteria: All tests pass, documentation updated, system fully functional
 - Create analytics system for usage tracking
 - Add cost calculation for all providers (tokens, requests)
 - Add `llm:get-usage-stats` primitive for usage reporting
-- Implement usage history and trend analysis
 
-## Phase 3 Implementation Notes
+## Extension Success Criteria
 
-**Extension-Friendly Design**: Each of these features can be added independently thanks to the existing architecture:
-- **Strategy Pattern**: LLMProvider trait easily extended with new capabilities
-- **Factory Pattern**: ProviderFactory can handle new provider features
-- **Configuration System**: ConfigStore ready for new configuration options
-- **Primitive System**: Extension class ready for new primitives
-
-**When to Implement**: Add these features when specific use cases require them, not proactively.
-
-## Extension Complete After Phase 2 
-
-**Primary Goal Achieved**: A working, extensible multi-LLM NetLogo extension ready for real users
-
-### Final Success Criteria
-
-**Core Functionality Complete When:**
-- ✅ **Multi-provider support** - OpenAI, Claude, Gemini, Ollama all working
-- ✅ **True async chat** using proven AwaitableReporter pattern
-- ✅ **Constrained choice** (`llm:choose`) for agent-based modeling scenarios
-- ✅ **Config-based workflow** - users can easily switch providers via configuration
-- ✅ **Essential reliability** - retry logic, rate limiting, proper error handling
-- ✅ **NetLogo-ready documentation** - clear setup guides and working demos
-- ✅ **Extensible architecture** - ready for future advanced features
-
-### Architecture Achievements
-
-**Strategy + Factory Success**: The existing extensible architecture allows for:
-- Easy addition of new LLM providers
-- Provider-specific configuration and features
-- Consistent interface regardless of underlying provider
-- Future extension with advanced features (streaming, function calling, etc.)
-
-**NetLogo Integration Success**: Following proven patterns from NetLogoGptExtension:
-- Per-agent conversation history with proper memory management
-- True async support compatible with NetLogo's execution model
-- Simple, direct error handling suitable for research/educational use
-- Constrained choice functionality essential for agent-based modeling
+**Core Functionality Complete ✅:**
+- Multi-provider support (OpenAI, Claude, Gemini, Ollama) all working
+- True async chat using proven AwaitableReporter pattern
+- Constrained choice (`llm:choose`) for agent-based modeling scenarios
+- Config-based workflow - users can easily switch providers via configuration
+- NetLogo-ready functionality - ready for research and educational applications
+- Extensible architecture - ready for future advanced features
 
 ### Extension Ready For
 
 **✅ Research Applications**: Agent-based models with LLM-powered agents
-**✅ Educational Use**: Teaching AI concepts in NetLogo environment  
+**✅ Educational Use**: Teaching AI concepts in NetLogo environment
 **✅ Prototyping**: Quick experimentation with different LLM providers
-**✅ Production Simulations**: Reliable operation with proper error handling
+**✅ Production Simulations**: Basic operation with multi-provider support
 
 **Future Extensions Available**: The architecture is ready for advanced features when specific use cases require them, including streaming, function calling, multi-modal support, and usage analytics.
-
-## Success Criteria for Each Step
-
-Each step must meet these criteria before proceeding:
-
-1. All tests pass (unit, integration, as applicable)
-2. Code compiles without warnings
-3. No orphaned or unused code
-4. Proper error handling implemented
-5. Documentation updated as needed
-6. Manual testing completed successfully
-7. Step integrates properly with previous steps
-
-## Risk Management
-
-- **API Changes**: Mock providers for testing reduce dependency on external APIs
-- **Configuration Issues**: Comprehensive config validation prevents runtime errors
-- **Memory Management**: WeakHashMap ensures proper cleanup of agent data
-- **Threading**: Proper synchronization prevents race conditions
-- **NetLogo Integration**: Each step tested with NetLogo context mocking
-
-## Testing Strategy
-
-- **Unit Tests**: Test individual components in isolation
-- **Integration Tests**: Test component interactions
-- **Mock Tests**: Test without external dependencies
-- **Manual Tests**: Real NetLogo model testing
-- **Performance Tests**: Ensure scalability with many agents
-
-This plan ensures steady progress with no large jumps in complexity, comprehensive testing at each step, and proper integration throughout the development process.

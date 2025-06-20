@@ -86,7 +86,7 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends LLMProvider {
           "role" -> msg.role,
           "content" -> msg.content
         )
-      }: _*
+      }*
     )
     
     val baseRequest = ujson.Obj(
