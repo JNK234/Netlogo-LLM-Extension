@@ -1,22 +1,53 @@
-# NetLogo LLM Extension Configuration
-# This file contains configuration for the LLM extension
-# Format: key=value (one per line)
+# NetLogo Multi-LLM Extension - Working Configuration
+# Edit these values to switch between providers and models
+# For all available options, see config-reference.txt
 
-# Provider selection (openai, anthropic, gemini, ollama)
-provider=openai
+# =============================================================================
+# ACTIVE CONFIGURATION - Change these as needed
+# =============================================================================
 
-# API key for the selected provider
-# Replace with your actual API key
-api_key=your-openai-api-key-here
+# Choose your provider: openai, anthropic, gemini, ollama
+provider=anthropic
 
-# Model to use
-model=gpt-4o
+# Choose your model (must match the provider above)
+# OpenAI: gpt-4o-mini, gpt-4o, gpt-4-turbo, gpt-3.5-turbo
+# Anthropic: claude-3-haiku-20240307, claude-3-sonnet-20240229, claude-3-opus-20240229
+# Gemini: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
+# Ollama: llama3.2, llama3.1, mistral, codellama (must be installed)
+model=claude-3-sonnet-20240229
 
-# Base URL for API requests (optional)
-base_url=https://api.openai.com/v1
+# API Key (required for openai, anthropic, gemini - not needed for ollama)
+api_key=your-anthropic-key-here
 
-# Temperature for response randomness (0.0-2.0)
+# Generation settings
 temperature=0.7
-
-# Maximum tokens to generate
 max_tokens=1000
+timeout_seconds=30
+
+# =============================================================================
+# QUICK SWITCH EXAMPLES - Uncomment block to use
+# =============================================================================
+
+# OpenAI GPT-4o Mini (fast, cheap)
+# provider=openai
+# model=gpt-4o-mini
+# api_key=your-openai-key-here
+# temperature=0.7
+
+# Claude Haiku (fast, good quality)
+# provider=anthropic  
+# model=claude-3-haiku-20240307
+# api_key=your-anthropic-key-here
+# temperature=0.5
+
+# Gemini Flash (fast, free tier available)
+# provider=gemini
+# model=gemini-1.5-flash
+# api_key=your-gemini-key
+# temperature=0.8
+
+# Local Ollama (no API key needed)
+# provider=ollama
+# model=llama3.2
+# temperature=0.7
+# timeout_seconds=60

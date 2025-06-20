@@ -9,6 +9,7 @@ import scala.collection.mutable.{ArrayBuffer, WeakHashMap}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Try, Success, Failure, Random}
+import scala.jdk.CollectionConverters._
 
 /**
  * Main extension class for NetLogo Multi-LLM Extension
@@ -74,6 +75,10 @@ class LLMExtension extends DefaultClassManager {
     manager.addPrimitive("history", HistoryReporter)
     manager.addPrimitive("set-history", SetHistoryCommand)
     manager.addPrimitive("clear-history", ClearHistoryCommand)
+    
+    // Provider information primitives
+    manager.addPrimitive("providers", ProvidersReporter)
+    manager.addPrimitive("models", ModelsReporter)
   }
   
   /**
@@ -337,7 +342,7 @@ Response:"""
             ChatMessage(l(0).toString, l(1).toString)
           case _ =>
             throw new ExtensionException("History items must be lists of [role content] pairs")
-        }.to[ArrayBuffer]
+        }.to(ArrayBuffer)
         
         messageHistory.put(agent, messages)
         
@@ -355,6 +360,63 @@ Response:"""
     override def perform(args: Array[Argument], context: Context): Unit = {
       val agent = context.getAgent
       messageHistory.remove(agent)
+    }
+  }
+  
+  // Provider Information Reporters
+  
+  object ProvidersReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
+    
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      try {
+        val supportedProviders = ProviderFactory.getSupportedProviders.toList.sorted
+        LogoList.fromJava(supportedProviders.asJava)
+      } catch {
+        case e: Exception =>
+          throw new ExtensionException(s"Failed to get supported providers: ${e.getMessage}")
+      }
+    }
+  }
+  
+  object ModelsReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
+    
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      try {
+        val currentProvider = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
+        val supportedModels = currentProvider.toLowerCase.trim match {
+          case "openai" => Set(
+            "gpt-4", "gpt-4-turbo", "gpt-4-turbo-preview",
+            "gpt-3.5-turbo", "gpt-3.5-turbo-16k",
+            "gpt-4o", "gpt-4o-mini"
+          )
+          case "anthropic" => Set(
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229", 
+            "claude-3-haiku-20240307",
+            "claude-3-5-sonnet-20241022"
+          )
+          case "gemini" => Set(
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+            "gemini-1.0-pro",
+            "gemini-pro"
+          )
+          case "ollama" => Set(
+            "llama3.2", "llama3.1", "llama3", "llama2",
+            "mistral", "mixtral", "codellama", "vicuna",
+            "phi3", "gemma", "qwen2", "deepseek-coder"
+          )
+          case _ => Set.empty[String]
+        }
+        
+        val modelList = supportedModels.toList.sorted
+        LogoList.fromJava(modelList.asJava)
+      } catch {
+        case e: Exception =>
+          throw new ExtensionException(s"Failed to get supported models: ${e.getMessage}")
+      }
     }
   }
 }
