@@ -233,15 +233,6 @@ This architecture makes it easy to add new providers and ensures consistent beha
 - Rotate API keys regularly
 - Be cautious with sensitive data in prompts
 
-## 🤝 Contributing
-
-This extension is actively maintained and welcomes contributions:
-
-- **Bug Reports**: Please include NetLogo version, extension version, and provider details
-- **Feature Requests**: Describe use case and expected behavior
-- **Code Contributions**: Follow existing patterns and include tests
-- **Documentation**: Help improve guides and examples
-
 ## 📊 Version Information
 
 - **Current Version**: 1.0.0
@@ -249,17 +240,4 @@ This extension is actively maintained and welcomes contributions:
 - **Scala Version**: 3.7.0
 - **Last Updated**: 2024
 
-## 📄 License
 
-This extension is provided under standard open source licensing terms. See LICENSE file for details.
-
-## 🆘 Support
-
-- **Documentation**: Start with [SETUP.md](SETUP.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- **Examples**: Check [demos/](demos/) folder for working models
-- **Issues**: Report problems with detailed reproduction steps
-- **Community**: Share your models and use cases
-
----
-
-**Ready to get started?** Check out [SETUP.md](SETUP.md) for detailed installation instructions, or explore the [demos/](demos/) folder for working examples!
