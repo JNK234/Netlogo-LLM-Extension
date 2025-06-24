@@ -2,7 +2,7 @@
 
 A comprehensive NetLogo extension that provides unified access to multiple Large Language Model (LLM) providers including OpenAI, Anthropic Claude, Google Gemini, and local Ollama models.
 
-## ✨ Features
+## Features
 
 - **Multi-Provider Support**: OpenAI, Anthropic, Google Gemini, and Ollama
 - **Unified API**: Same NetLogo primitives work with all providers
@@ -12,7 +12,7 @@ A comprehensive NetLogo extension that provides unified access to multiple Large
 - **Flexible Configuration**: File-based config with easy provider switching
 - **Production Ready**: Timeout handling, error management, extensible architecture
 
-## 🚀 Quick Start
+## Quick Start
 
 1. **Install Extension**: Copy `llm.jar` to your NetLogo extensions folder
 2. **Configure Provider**: Create `config.txt` with your preferred LLM provider
@@ -57,10 +57,7 @@ end
 ### API Reference and Usage
 - **[API-REFERENCE.md](API-REFERENCE.md)** - Complete primitive documentation with examples
 - **[EXAMPLES.md](EXAMPLES.md)** - Comprehensive usage examples and patterns
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
 
-### Demo Models
-- **[demos/](demos/)** - Working NetLogo models demonstrating extension capabilities
 
 ## 🔧 Supported Providers
 
@@ -93,9 +90,9 @@ end
 - `llm:providers` - List available providers
 - `llm:models` - List models for current provider
 
-## 💡 Key Use Cases
+## Key Use Cases
 
-### 🤖 Intelligent Agents
+### Intelligent Agents
 Create NetLogo agents that make decisions using natural language reasoning:
 
 ```netlogo
@@ -106,7 +103,7 @@ ask turtles [
 ]
 ```
 
-### 🧠 Multi-Agent Conversations
+### Multi-Agent Conversations
 Enable agents with different personalities to interact:
 
 ```netlogo
@@ -121,7 +118,7 @@ ask turtles [
 ]
 ```
 
-### ⚡ Async Processing
+### Async Processing
 Handle multiple LLM requests simultaneously without blocking:
 
 ```netlogo
@@ -191,7 +188,7 @@ temperature=0.5
 max_tokens=4000
 ```
 
-## 🔬 Research Applications
+## Research Applications
 
 This extension is designed for:
 
@@ -201,7 +198,7 @@ This extension is designed for:
 - **Research Prototyping**: Quick experimentation with different LLM providers
 - **Behavioral Studies**: Modeling human-like decision making and interaction
 
-## 🏗️ Architecture
+## Architecture
 
 The extension uses a **Strategy + Factory pattern** for extensible provider management:
 
@@ -213,7 +210,7 @@ The extension uses a **Strategy + Factory pattern** for extensible provider mana
 
 This architecture makes it easy to add new providers and ensures consistent behavior across all LLM services.
 
-## 🚨 Important Notes
+## Important Notes
 
 ### API Costs
 - Cloud providers (OpenAI, Anthropic, Gemini) charge per token
