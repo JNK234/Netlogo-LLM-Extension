@@ -10,7 +10,6 @@ A comprehensive NetLogo extension that provides unified access to multiple Large
 - **Per-Agent Memory**: Automatic conversation history per NetLogo agent
 - **Constrained Choice**: `llm:choose` for agent decision-making
 - **Flexible Configuration**: File-based config with easy provider switching
-- **Production Ready**: Timeout handling, error management, extensible architecture
 
 ## Quick Start
 
