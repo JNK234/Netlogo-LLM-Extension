@@ -68,7 +68,7 @@ end
 |----------|---------|------------------|--------|
 | **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4-turbo, GPT-3.5-turbo | ✅ | ❌ |
 | **Anthropic** | Claude-3.5 Sonnet, Claude-3 Opus/Sonnet/Haiku | ✅ | ❌ |
-| **Google Gemini** | Gemini-1.5 Pro/Flash, Gemini-Pro | ✅ | ❌ |
+| **Google Gemini** | Gemini-2.5 Pro/Flash | ✅ | ❌ |
 | **Ollama** | Llama 3.2, Mistral, CodeLlama, DeepSeek, and more | ❌ | ✅ |
 
 ## 🎯 Core Primitives
