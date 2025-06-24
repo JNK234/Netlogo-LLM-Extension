@@ -17,3 +17,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Project planning and internal docs
+plan.md
+spec.md
+CLAUDE.md
