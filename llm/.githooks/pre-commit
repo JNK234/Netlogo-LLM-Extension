@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-
-scripts/scan-secrets.sh || exit 1
-
+set -e
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+"$DIR"/scripts/scan-secrets.sh || exit 1
