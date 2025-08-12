@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+scripts/scan-secrets.sh || exit 1
+
