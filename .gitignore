@@ -5,6 +5,7 @@ target/
 # Test files with API keys
 demos/test-basic.nlogo
 demos/simple-demo.nlogo
+scratchpads
 
 # IDE files
 .idea/
@@ -17,3 +18,38 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Project planning and internal docs
+.claude/*
+plan.md
+spec.md
+CLAUDE.md
+
+*.jar
+
+# LLM-specific docs to ignore
+AGENTS.md
+Agents.md
+GEMINI.md
+Gemini.md
+OPENAI.md
+OpenAI.md
+ANTHROPIC.md
+Anthropic.md
+OLLAMA.md
+Ollama.md
+Claude.md
+PROVIDERS.md
+Providers.md
+PROVIDER.md
+COMMANDS.md
+commands.md
+commands/
+
+# Local config files and secrets (keep demos/ checked in)
+config.txt
+config-*.txt
+*.env
+*.env.*
+*.secrets*
+

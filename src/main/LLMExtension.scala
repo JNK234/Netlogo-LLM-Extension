@@ -9,6 +9,11 @@ import scala.collection.mutable.{ArrayBuffer, WeakHashMap}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Try, Success, Failure, Random}
+import scala.jdk.CollectionConverters._
+import io.circe.yaml.parser
+import io.circe.{Json, HCursor}
+import java.nio.file.{Files, Paths}
+import java.nio.charset.StandardCharsets
 
 /**
  * Main extension class for NetLogo Multi-LLM Extension
@@ -68,12 +73,17 @@ class LLMExtension extends DefaultClassManager {
     // Core chat primitives
     manager.addPrimitive("chat", ChatReporter)
     manager.addPrimitive("chat-async", ChatAsyncReporter)
+    manager.addPrimitive("chat-with-template", ChatWithTemplateReporter)
     manager.addPrimitive("choose", ChooseReporter)
     
     // History management primitives
     manager.addPrimitive("history", HistoryReporter)
     manager.addPrimitive("set-history", SetHistoryCommand)
     manager.addPrimitive("clear-history", ClearHistoryCommand)
+    
+    // Provider information primitives
+    manager.addPrimitive("providers", ProvidersReporter)
+    manager.addPrimitive("models", ModelsReporter)
   }
   
   /**
@@ -105,6 +115,50 @@ class LLMExtension extends DefaultClassManager {
    */
   private def getAgentHistory(agent: Agent): ArrayBuffer[ChatMessage] = {
     messageHistory.getOrElseUpdate(agent, ArrayBuffer.empty[ChatMessage])
+  }
+  
+  /**
+   * Case class for YAML template structure
+   */
+  case class Template(system: String, template: String)
+  
+  /**
+   * Load a YAML template file and parse it
+   */
+  private def loadTemplate(filename: String): Try[Template] = {
+    Try {
+      val content = Files.readString(Paths.get(filename), StandardCharsets.UTF_8)
+      parser.parse(content) match {
+        case Right(json) =>
+          val cursor: HCursor = json.hcursor
+          val system = cursor.downField("system").as[String].getOrElse("")
+          val template = cursor.downField("template").as[String].getOrElse("")
+          Template(system, template)
+        case Left(error) =>
+          throw new RuntimeException(s"Failed to parse YAML: ${error.getMessage}")
+      }
+    }
+  }
+  
+  /**
+   * Substitute variables in a template string
+   */
+  private def substituteVariables(template: String, variables: Map[String, String]): String = {
+    variables.foldLeft(template) { case (text, (key, value)) =>
+      text.replace(s"{$key}", value)
+    }
+  }
+  
+  /**
+   * Convert NetLogo variable list to Scala Map
+   */
+  private def parseVariables(variablesList: LogoList): Map[String, String] = {
+    variablesList.map {
+      case varList: LogoList if varList.size == 2 =>
+        varList(0).toString -> varList(1).toString
+      case _ =>
+        throw new ExtensionException("Variables must be lists of [key value] pairs")
+    }.toMap
   }
   
   // Configuration Commands
@@ -226,6 +280,62 @@ class LLMExtension extends DefaultClassManager {
     }
   }
   
+  object ChatWithTemplateReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(
+      right = List(Syntax.StringType, Syntax.ListType),
+      ret = Syntax.StringType
+    )
+    
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      val templateFile = args(0).getString
+      val variablesList = args(1).getList
+      val agent = context.getAgent
+      
+      try {
+        val provider = ensureProvider()
+        val history = getAgentHistory(agent)
+        
+        // Load and parse template
+        val template = loadTemplate(templateFile) match {
+          case Success(t) => t
+          case Failure(e) => throw new ExtensionException(s"Failed to load template '$templateFile': ${e.getMessage}")
+        }
+        
+        // Parse variables from NetLogo list
+        val variables = parseVariables(variablesList)
+        
+        // Substitute variables in template
+        val processedTemplate = substituteVariables(template.template, variables)
+        
+        // Create a temporary history with system message if provided
+        val tempHistory = if (template.system.nonEmpty) {
+          ArrayBuffer(ChatMessage.system(template.system)) ++ history
+        } else {
+          history
+        }
+        
+        // Add user message with processed template
+        val userMessage = ChatMessage.user(processedTemplate)
+        tempHistory += userMessage
+        
+        // Send chat request
+        val responseFuture = provider.chat(tempHistory.toSeq)
+        val responseMessage = Await.result(responseFuture, 30.seconds)
+        
+        // Add both template message and response to permanent history
+        history += userMessage
+        history += responseMessage
+        
+        responseMessage.content
+        
+      } catch {
+        case e: ExtensionException => throw e
+        case e: Exception =>
+          throw new ExtensionException(s"Template chat failed: ${e.getMessage}")
+      }
+    }
+  }
+  
   object ChooseReporter extends Reporter {
     override def getSyntax: Syntax = Syntax.reporterSyntax(
       right = List(Syntax.StringType, Syntax.ListType),
@@ -255,6 +365,8 @@ You must respond with EXACTLY ONE of the following options (no other text):
 ${choices.zipWithIndex.map { case (choice, idx) => s"${idx + 1}. $choice" }.mkString("\n")}
 
 Response:"""
+
+// TODO: CHECK if the Generated output is only from the provided list.
         
         // Add user message to history
         val userMessage = ChatMessage.user(constrainedPrompt)
@@ -337,7 +449,7 @@ Response:"""
             ChatMessage(l(0).toString, l(1).toString)
           case _ =>
             throw new ExtensionException("History items must be lists of [role content] pairs")
-        }.to[ArrayBuffer]
+        }.to(ArrayBuffer)
         
         messageHistory.put(agent, messages)
         
@@ -355,6 +467,63 @@ Response:"""
     override def perform(args: Array[Argument], context: Context): Unit = {
       val agent = context.getAgent
       messageHistory.remove(agent)
+    }
+  }
+  
+  // Provider Information Reporters
+  
+  object ProvidersReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
+    
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      try {
+        val supportedProviders = ProviderFactory.getSupportedProviders.toList.sorted
+        LogoList.fromJava(supportedProviders.asJava)
+      } catch {
+        case e: Exception =>
+          throw new ExtensionException(s"Failed to get supported providers: ${e.getMessage}")
+      }
+    }
+  }
+  
+  object ModelsReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
+    
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      try {
+        val currentProvider = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
+        val supportedModels = currentProvider.toLowerCase.trim match {
+          case "openai" => Set(
+            "gpt-4", "gpt-4-turbo", "gpt-4-turbo-preview",
+            "gpt-3.5-turbo", "gpt-3.5-turbo-16k",
+            "gpt-4o", "gpt-4o-mini"
+          )
+          case "anthropic" => Set(
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229", 
+            "claude-3-haiku-20240307",
+            "claude-3-5-sonnet-20241022"
+          )
+          case "gemini" => Set(
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+            "gemini-1.0-pro",
+            "gemini-pro"
+          )
+          case "ollama" => Set(
+            "llama3.2", "llama3.1", "llama3", "llama2",
+            "mistral", "mixtral", "codellama", "vicuna",
+            "phi3", "gemma", "qwen2", "deepseek-coder"
+          )
+          case _ => Set.empty[String]
+        }
+        
+        val modelList = supportedModels.toList.sorted
+        LogoList.fromJava(modelList.asJava)
+      } catch {
+        case e: Exception =>
+          throw new ExtensionException(s"Failed to get supported models: ${e.getMessage}")
+      }
     }
   }
 }
