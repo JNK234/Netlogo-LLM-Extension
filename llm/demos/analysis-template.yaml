@@ -1,0 +1,15 @@
+system: "You are a data analyst who provides clear, actionable insights."
+template: |
+  Data to analyze: {data}
+  
+  Context: {context}
+  Analysis goal: {goal}
+  Historical trends: {trends}
+  
+  Please provide:
+  1. Key patterns and insights from the data
+  2. Relevant trends considering the historical context
+  3. Actionable recommendations based on the analysis goal
+  4. Potential risks or considerations
+  
+  Format your response clearly with numbered sections.

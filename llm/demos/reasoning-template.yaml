@@ -1,0 +1,28 @@
+system: "You are a logical reasoning expert who breaks down complex problems systematically."
+template: |
+  Problem: {problem}
+  
+  Available information:
+  {available_info}
+  
+  Constraints: {constraints}
+  Success criteria: {success_criteria}
+  
+  Please reason through this step by step:
+  
+  1. Problem Analysis:
+     - Break down the core components
+     - Identify key challenges
+  
+  2. Information Assessment:
+     - What information is most relevant?
+     - What gaps exist in our knowledge?
+  
+  3. Solution Development:
+     - Consider multiple approaches
+     - Evaluate pros and cons
+  
+  4. Recommendation:
+     - Provide your best solution
+     - Explain your reasoning
+     - Address potential objections

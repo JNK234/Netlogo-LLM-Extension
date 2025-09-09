@@ -1,0 +1,258 @@
+3075797 - JNK234, 2 minutes ago : Remove API keys from configuration and test files for security
+c520537 - JNK234, 4 minutes ago : Streamline project plan and update to current multi-provider status
+f0dbdce - JNK234, 31 minutes ago : Complete Step 12: Multi-Provider Implementation
+029a6e2 - JNK234, 6 hours ago : Complete Step 15: Fix Critical Platform Issues
+6a0ec10 - JNK234, 3 days ago : Implement Step 11: Fix Async + Add Constrained Choice
+793b771 - JNK234, 6 days ago : Update plan.md with Phase 1 completion and realistic Phase 2-4 roadmap
+b2757ce - JNK234, 6 days ago : Fix NetLogo demo and improve configuration loading
+3bfc1f0 - JNK234, 6 days ago : Fix string extension function call in NetLogo demo
+c5d7aac - JNK234, 6 days ago : Fix NetLogo demo files: define show-debug variable
+9f1ffd8 - JNK234, 6 days ago : Step 6: Complete main extension class with NetLogo primitives
+3412a05 - JNK234, 6 days ago : Step 5: Complete provider factory + color-sharing demo
+0f067a9 - JNK234, 6 days ago : Step 4: Complete OpenAI provider implementation
+16cd4ba - JNK234, 6 days ago : Step 3: Complete configuration management and demo files
+8a504a7 - JNK234, 6 days ago : Step 2: Complete data models and core abstractions
+93fce64 - JNK234, 6 days ago : Step 1: Complete project structure and build setup
+0103521 - JNK234, 6 days ago : Add detailed TDD implementation plan and TODO tracker
+3a3b80e - JNK234, 6 days ago : Initial specification for NetLogo Multi-LLM Extension
+=== DETAILED COMMIT HISTORY ===
+
+3075797c6dcc65a84eac40c22a9cd395c9240a85
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-19 23:17:34 -0500
+Remove API keys from configuration and test files for security
+- Replace actual API keys with placeholder text in demos/config.txt
+- Replace actual API keys with placeholder text in demos/tests.nlogo
+- Ensures repository can be safely pushed to GitHub without exposing secrets
+- Users need to add their own API keys when using the extension
+
+---
+c5205379a461c32754eb4b78b3e07eb71316caf2
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-19 23:16:01 -0500
+Streamline project plan and update to current multi-provider status
+Major Changes:
+- Remove redundant historical implementation details from plan.md
+- Focus on current accurate status: complete multi-provider extension ready for use
+- Clear future roadmap organized into logical phases (resilience, testing, documentation)
+- Update build configuration to reflect platform upgrades (Scala 3.7.0, NetLogo 7.0.0-beta1)
+
+Current Status Summary:
+- All 4 LLM providers (OpenAI, Claude, Gemini, Ollama) implemented and working
+- True async chat using AwaitableReporter pattern
+- Constrained choice functionality (llm:choose) for agent-based modeling
+- Provider discovery primitives (llm:providers, llm:models)
+- Comprehensive configuration system with seamless provider switching
+- Strategy + Factory pattern architecture for extensibility
+
+Technical Updates:
+- Platform successfully upgraded to Scala 3.7.0 and NetLogo 7.0.0-beta1-c8d671e
+- Dependencies updated to Scala 3 compatible versions (upickle 3.1.0, sttp 3.8.15)
+- Build artifacts updated to reflect new Scala 3 compilation
+- Configuration files enhanced with all provider examples and working defaults
+
+Next Phase Roadmap:
+- Phase 3: Essential resilience features (retry logic, rate limiting)
+- Phase 4: Comprehensive testing framework (Scala unit tests, NetLogo integration tests)
+- Phase 5: Documentation and user experience (demos, guides, troubleshooting)
+
+The extension is now feature-complete for research and educational applications with
+multi-provider LLM support through a unified, extensible interface.
+
+---
+f0dbdce33913b8457cae99067844e7fbf385d0d6
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-19 22:48:29 -0500
+Complete Step 12: Multi-Provider Implementation
+- Add ClaudeProvider, GeminiProvider, OllamaProvider implementing LLMProvider trait
+- Enhance ProviderFactory to support all 4 providers with full validation
+- Add llm:providers and llm:models primitives for provider discovery
+- Update default models: gpt-4o, claude-3-sonnet, gemini-1.5-pro, llama3
+- Create comprehensive config files (reference + working configs)
+- Add complete test suite for multi-provider functionality
+- Fix Scala 3 collection conversion issues with .asJava
+
+Multi-provider LLM support now fully functional with unified interface
+
+---
+029a6e283163d9f9626137c1c2e2c6b4951e6cff
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-19 17:26:31 -0500
+Complete Step 15: Fix Critical Platform Issues
+- Fix model validation in ProviderFactory.scala (implement TODO at lines 176-180)
+- Update Tests.scala package from array extension to llm extension
+- All existing Phase 1-2 functionality verified working with upgrades
+- Extension loads and works perfectly with Scala 3.7.0 and NetLogo 7.0.0-beta1-c8d671e
+
+---
+6a0ec102c25444e5d7c879a8913950965d8f9730
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-17 01:46:15 -0500
+Implement Step 11: Fix Async + Add Constrained Choice
+Fixed async implementation using AwaitableReporter pattern:
+- Replaced case class with AnonymousReporter for NetLogo runresult compatibility
+- Async requests start immediately but execution defers until runresult
+- Configurable timeout support (default 30 seconds)
+
+Added llm:choose constrained choice functionality:
+- Forces LLM to pick from predefined options using prompt engineering
+- Essential for agent-based modeling scenarios
+- Robust fallback matching logic
+
+Enhanced configuration system:
+- Added timeout_seconds configuration option
+- Updated build to support assembly for fat JAR with dependencies
+
+Testing and validation:
+- All basic tests working (test-extension-loading, test-sync-chat, test-async-chat, test-choose)
+- Demo updated to showcase llm:choose functionality
+- API keys removed from committed files
+
+---
+793b771408fa66fb37339ded3d549ccf5a361394
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-14 01:29:36 -0500
+Update plan.md with Phase 1 completion and realistic Phase 2-4 roadmap
+- Mark all Phase 1 steps as completed with current status
+- Document delivered functionality and known limitations
+- Plan Phase 2 priorities based on current async implementation issues
+- Align Phase 3-4 with original spec.md provider roadmap
+- Fix markdown linting issues for clean documentation
+
+---
+b2757ce1583af74ba4f2ac93b678c08201a18ed2
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-14 01:23:11 -0500
+Fix NetLogo demo and improve configuration loading
+- Updated NetLogo demo to use synchronous llm:chat instead of unimplemented async
+- Removed async-related variables (response-pending, response-reporter)
+- Fixed color assignment using explicit if-statements instead of runresult
+- Added better JSON parsing error handling with fallback to raw response
+- Improved configuration file loading to search multiple paths
+- Enhanced LLM prompt with clearer JSON format instructions
+
+---
+3bfc1f0668fc6452aae12d1eb247fccc840de82a
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 17:47:17 -0500
+Fix string extension function call in NetLogo demo
+- Changed string:split to string:split-on (correct function name)
+- Fixes 'Nothing named STRING:SPLIT has been named' error
+- NetLogo demos should now load without string extension errors
+
+---
+c5d7aac1fa5547e4a4c6fbfa127957eb5d20c78f
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 17:43:52 -0500
+Fix NetLogo demo files: define show-debug variable
+- Added show-debug as a global variable instead of undefined switch
+- Initialize show-debug to false in setup procedure
+- Fixes 'nothing named SHOW-DEBUG has been defined' error
+- Both color-sharing demos now load without errors
+
+---
+9f1ffd84fabc4d1221d77f61c62b163ad8a722ba
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 17:01:39 -0500
+Step 6: Complete main extension class with NetLogo primitives
+- Implemented full LLMExtension class with all NetLogo primitives
+- Added configuration primitives: set-provider, set-api-key, set-model, load-config
+- Added chat primitives: chat, chat-async with proper async support
+- Added history management: history, set-history, clear-history
+- Integrated provider factory and configuration management
+- Added per-agent conversation history using WeakHashMap
+- Added comprehensive error handling with NetLogo exceptions
+- Extension compiles and packages successfully
+
+---
+3412a057e00f5fef52b4a3684cf1d4bf2e9d64cb
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:57:25 -0500
+Step 5: Complete provider factory + color-sharing demo
+- Created ProviderFactory with complete factory pattern implementation
+- Added provider validation and configuration management
+- Added support for future providers (Anthropic, Gemini, Ollama)
+- Added comprehensive error handling and validation
+- Created color-sharing-llm.nlogo demo inspired by original GPT extension
+- Added social network simulation with LLM-powered agent communication
+- Agents learn each other's favorite colors through JSON-structured conversations
+- Added interface configuration and debugging features
+- All code compiles successfully with Java 11
+
+---
+0f067a99d7bd75869af9f492a9b23af6e2a34377
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:52:19 -0500
+Step 4: Complete OpenAI provider implementation
+- Created OpenAIProvider implementing LLMProvider trait
+- Added HTTP client integration using sttp.client3
+- Implemented proper JSON handling with ujson for API requests/responses
+- Added configuration management integration with ConfigStore
+- Added comprehensive error handling for API failures
+- Added model validation for supported OpenAI models (GPT-3.5, GPT-4, etc.)
+- Fixed JSON serialization issues using ujson instead of upickle
+- All code compiles successfully with Java 11
+
+---
+16cd4ba85529a6cd02e364a303a3a677f6fbbab2
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:46:26 -0500
+Step 3: Complete configuration management and demo files
+- Fixed ConfigLoader for Scala 2.12 compatibility (removed Using)
+- Created ConfigLoader with key=value file parsing and error handling
+- Created ConfigStore with thread-safe in-memory configuration storage
+- Added validation, defaults, and security masking for sensitive keys
+- Created sample config.txt with all configuration options
+- Created comprehensive basic-llm-test.nlogo with test procedures
+- All code compiles successfully with Java 11
+
+---
+8a504a7049923cd4052b748d08c0bd5cf7c47efb
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:38:30 -0500
+Step 2: Complete data models and core abstractions
+- Created ChatMessage case class with role/content and helper methods
+- Created ChatRequest case class with model, messages, and optional parameters
+- Created ChatResponse case class with choices and convenience methods
+- Created LLMProvider trait with complete interface for Strategy pattern
+- Added proper JSON serialization with upickle for all models
+- All models compile successfully and ready for provider implementations
+
+---
+93fce648b53e4816d011aff59ddf7f7ba9fdac03
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:28:37 -0500
+Step 1: Complete project structure and build setup
+- Created build.sbt with NetLogo extension configuration
+- Set up project structure: src/main/, project/, demos/
+- Added proper SBT plugin configuration for NetLogo extensions
+- Created placeholder LLMExtension class with basic structure
+- Added dependencies: upickle, sttp.client3 for HTTP and JSON
+- Ready for compilation testing once SBT environment is fixed
+
+---
+0103521158a63b16393c0eb00d3efafc4ee386bc
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:16:24 -0500
+Add detailed TDD implementation plan and TODO tracker
+- Comprehensive 10-step plan for Phase 1 OpenAI implementation
+- Test-driven development approach with incremental builds
+- Each step builds on previous with no orphaned code
+- Detailed prompts for LLM-assisted implementation
+- TODO tracker for progress monitoring
+- Clear success criteria and risk management
+
+---
+3a3b80eab4360c0b34b486f6dd8533b459e0ecf8
+JNK234 <jwalapuramnarasimha@gmail.com>
+2025-06-13 16:08:45 -0500
+Initial specification for NetLogo Multi-LLM Extension
+- Comprehensive spec for multi-provider LLM extension
+- Strategy + Factory pattern architecture for extensibility
+- Phase 1: OpenAI baseline implementation
+- Phases 2-4: Enhanced functionality and multi-provider support
+- Simple key=value configuration file format
+- Per-agent conversation history management
+- Clean primitive naming: llm:set-provider, llm:chat, etc.
+
+---

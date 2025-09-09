@@ -1,0 +1,7 @@
+system: "You are a helpful assistant."
+template: |
+  Task: {task}
+  Input: {input}
+  Additional context: {context}
+  
+  Please complete the task with the given input and context.

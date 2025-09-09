@@ -1,0 +1,18 @@
+system: "You are an expert NetLogo programmer who improves agent behavior through code evolution."
+template: |
+  Current code: {current_code}
+  
+  Code evolution history:
+  {code_history}
+  
+  Objective: {objective}
+  Constraints: {constraints}
+  Performance context: {performance_notes}
+  
+  Please generate an improved version of the current code that:
+  1. Builds upon lessons learned from the evolution history
+  2. Maintains valid NetLogo syntax
+  3. Addresses the objective while respecting constraints
+  4. Is a logical progression from previous versions
+  
+  Return only the improved NetLogo code, no explanations.

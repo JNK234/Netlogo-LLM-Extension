@@ -5,6 +5,7 @@ target/
 # Test files with API keys
 demos/test-basic.nlogo
 demos/simple-demo.nlogo
+scratchpads
 
 # IDE files
 .idea/
@@ -51,3 +52,4 @@ config-*.txt
 *.env
 *.env.*
 *.secrets*
+

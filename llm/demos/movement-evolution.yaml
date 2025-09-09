@@ -1,0 +1,24 @@
+system: "You are a NetLogo programming expert who helps agents evolve better movement strategies."
+template: |
+  Current movement rule: {current_rule}
+  
+  Rule evolution history:
+  {rule_history}
+  
+  Performance data:
+  - Energy collected: {energy_collected}
+  - Environment: {environment_info}
+  - Goal: {goal}
+  
+  Generate an improved NetLogo movement rule that:
+  1. Builds on lessons from previous rule attempts
+  2. Uses only these NetLogo commands: fd, bk, lt, rt, random
+  3. Is a single line of valid NetLogo code
+  4. Aims to improve food collection efficiency
+  
+  Examples of good rules:
+  - "lt random 45 fd 2"
+  - "rt 30 fd 1 lt 60 fd 1"
+  - "fd random 3"
+  
+  Return only the improved movement rule code, no explanations:
