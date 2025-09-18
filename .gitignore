@@ -1,6 +1,5 @@
 # Build artifacts
 target/
-*.jar
 
 # Test files with API keys
 demos/test-basic.nlogo
@@ -25,7 +24,6 @@ plan.md
 spec.md
 CLAUDE.md
 
-*.jar
 
 # LLM-specific docs to ignore
 AGENTS.md
