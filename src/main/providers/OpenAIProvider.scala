@@ -2,7 +2,8 @@ package org.nlogo.extensions.llm.providers
 
 import org.nlogo.extensions.llm.models.{ChatMessage, ChatRequest, ChatResponse}
 import org.nlogo.extensions.llm.config.ConfigStore
-import sttp.client3._
+import sttp.client4._
+import sttp.client4.httpclient.HttpClientFutureBackend
 import upickle.default.{read, write}
 import ujson._
 import scala.concurrent.{Future, ExecutionContext}

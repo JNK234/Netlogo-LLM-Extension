@@ -20,9 +20,6 @@ Test / scalaSource    := baseDirectory.value / "src" / "test"
 scalacOptions        ++= Seq("-deprecation", "-unchecked", "-Xfatal-warnings", "-encoding", "us-ascii", "-release", "11")
 
 libraryDependencies ++= Seq(
-  "com.lihaoyi" %% "upickle" % "3.1.0",
-  "com.lihaoyi" %% "ujson" % "3.1.0",
-  "com.softwaremill.sttp.client3" %% "core" % "3.8.15",
   "io.circe" %% "circe-yaml" % "0.15.0"
 )
 
