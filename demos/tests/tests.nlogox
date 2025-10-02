@@ -20,7 +20,7 @@ to test-sync-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "demos/config.txt"
+    llm:load-config "demos/config"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -37,7 +37,7 @@ to test-async-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "demos/config.txt"
+    llm:load-config "demos/config"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -57,7 +57,7 @@ to test-choose
 
   ; Load config or set manually
   carefully [
-    llm:load-config "tension/demos/config.txt"
+    llm:load-config "demos/config"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -150,7 +150,7 @@ to test-config-loading
 
   ; Test loading config file
   carefully [
-    llm:load-config "demos/config.txt"
+    llm:load-config "demos/config"
     print "✓ Config loaded successfully"
 
     ; Check what provider was loaded
