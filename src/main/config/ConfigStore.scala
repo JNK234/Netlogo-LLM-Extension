@@ -5,17 +5,17 @@ import scala.util.{Try, Success, Failure}
 
 /**
  * In-memory configuration storage and management
- * 
+ *
  * This class provides thread-safe storage and retrieval of configuration
  * key-value pairs with support for validation and defaults.
  */
 class ConfigStore {
   private val config = mutable.Map[String, String]()
   private val lock = new Object
-  
+
   /**
    * Set a configuration value
-   * 
+   *
    * @param key Configuration key
    * @param value Configuration value
    */
@@ -24,10 +24,10 @@ class ConfigStore {
       config(key) = value
     }
   }
-  
+
   /**
    * Get a configuration value
-   * 
+   *
    * @param key Configuration key
    * @return Option containing the value if it exists
    */
@@ -36,10 +36,10 @@ class ConfigStore {
       config.get(key)
     }
   }
-  
+
   /**
    * Get a configuration value with a default
-   * 
+   *
    * @param key Configuration key
    * @param default Default value if key is not found
    * @return The configuration value or default
@@ -49,10 +49,10 @@ class ConfigStore {
       config.getOrElse(key, default)
     }
   }
-  
+
   /**
    * Check if a configuration key exists
-   * 
+   *
    * @param key Configuration key
    * @return true if the key exists
    */
@@ -61,10 +61,10 @@ class ConfigStore {
       config.contains(key)
     }
   }
-  
+
   /**
    * Remove a configuration key
-   * 
+   *
    * @param key Configuration key to remove
    * @return Option containing the removed value
    */
@@ -73,7 +73,7 @@ class ConfigStore {
       config.remove(key)
     }
   }
-  
+
   /**
    * Clear all configuration
    */
@@ -82,10 +82,10 @@ class ConfigStore {
       config.clear()
     }
   }
-  
+
   /**
    * Load configuration from a map, replacing existing values
-   * 
+   *
    * @param newConfig Map of configuration key-value pairs
    */
   def loadFromMap(newConfig: Map[String, String]): Unit = {
@@ -94,10 +94,10 @@ class ConfigStore {
       config ++= newConfig
     }
   }
-  
+
   /**
    * Update configuration from a map, merging with existing values
-   * 
+   *
    * @param newConfig Map of configuration key-value pairs
    */
   def updateFromMap(newConfig: Map[String, String]): Unit = {
@@ -105,10 +105,10 @@ class ConfigStore {
       config ++= newConfig
     }
   }
-  
+
   /**
    * Get all configuration as an immutable map
-   * 
+   *
    * @return Map containing all configuration key-value pairs
    */
   def toMap: Map[String, String] = {
@@ -116,10 +116,10 @@ class ConfigStore {
       config.toMap
     }
   }
-  
+
   /**
    * Get all configuration keys
-   * 
+   *
    * @return Set of all configuration keys
    */
   def keys: Set[String] = {
@@ -127,17 +127,17 @@ class ConfigStore {
       config.keySet.toSet
     }
   }
-  
+
   /**
    * Validate that required keys are present
-   * 
+   *
    * @param requiredKeys Set of required configuration keys
    * @return Try[Unit] - Success if all required keys present, Failure otherwise
    */
   def validateRequired(requiredKeys: Set[String]): Try[Unit] = {
     lock.synchronized {
       val missingKeys = requiredKeys -- config.keySet
-      
+
       if (missingKeys.nonEmpty) {
         Failure(new IllegalStateException(
           s"Missing required configuration keys: ${missingKeys.mkString(", ")}"
@@ -147,10 +147,10 @@ class ConfigStore {
       }
     }
   }
-  
+
   /**
    * Get configuration summary for debugging
-   * 
+   *
    * @return String representation of configuration (values masked for security)
    */
   def summary: String = {
@@ -179,7 +179,7 @@ object ConfigStore {
   val TEMPERATURE = "temperature"
   val MAX_TOKENS = "max_tokens"
   val TIMEOUT_SECONDS = "timeout_seconds"
-  
+
   // Default values
   val DEFAULT_PROVIDER = "openai"
   val DEFAULT_OPENAI_MODEL = "gpt-3.5-turbo"
@@ -187,7 +187,7 @@ object ConfigStore {
   val DEFAULT_TEMPERATURE = "0.7"
   val DEFAULT_MAX_TOKENS = "1000"
   val DEFAULT_TIMEOUT_SECONDS = "30"
-  
+
   /**
    * Create a new ConfigStore with default values
    */

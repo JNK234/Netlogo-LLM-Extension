@@ -12,15 +12,15 @@ turtles-own [
 
 to setup
   clear-all
-  
+
   ; Load LLM configuration
   llm:load-config "demos/config.txt"
-  
+
   set-default-shape turtles "person"
-  
+
   let names ["Alice" "Ben" "Cindy" "David" "Emily" "Frank"]
   set colors ["red" "blue" "green" "yellow" "purple" "orange"]
-  
+
   create-turtles num-agents [
     setxy random-xcor random-ycor
     set size 2
@@ -28,21 +28,21 @@ to setup
     set favorite-color one-of colors
     set color runresult favorite-color
     set last-message ""
-    
+
     ; Set up personality for each agent
     llm:set-history (list
-      (list "system" (word 
+      (list "system" (word
         "You are " name " and your favorite color is " favorite-color ". "
         "You are friendly and like to chat with others. "
         "Keep your responses short (1-2 sentences). "
         "Try to learn about other agents' favorite colors."))
     )
   ]
-  
+
   ask turtles [
     set label (word name ": " favorite-color)
   ]
-  
+
   reset-ticks
 end
 
@@ -53,7 +53,7 @@ to go
     set last-message response
     set label (word name ": " first 30 response)
   ]
-  
+
   tick
 end
 

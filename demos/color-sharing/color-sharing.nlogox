@@ -18,20 +18,20 @@ undirected-link-breed [connections connection]
 
 to setup
   clear-all
-  
+
   ; Load LLM configuration
   llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
-  
+
   set-default-shape turtles "person"
-  
+
   let names ["Alice" "Ben" "Cindy" "David" "Emily" "Frank"
     "Gina" "Harry" "Isabella" "Jack" "Katie" "Liam"
     "Maggie" "Noah" "Olivia" "Patrick" "Quinn" "Rachel"
     "Samuel" "Tracy" "Ursula" "Vanessa" "William" "Xander"
     "Yvette" "Zack"]
-  
+
   set colors ["red" "blue" "green" "yellow" "orange" "magenta"]
-  
+
   create-turtles num-agents [
     fd 10
     set size 2
@@ -40,18 +40,18 @@ to setup
     set color runresult favorite-color
     set last-message ""
     set conversation-knowledge table:make
-    
+
     ; Connect to nearby agents
     create-connections-with min-n-of 2 other turtles [distance myself]
   ]
-  
+
   ; Initialize each agent with their personality and goal
   ask turtles [
     set label (word name ": " favorite-color)
-    
+
     ; Set up initial conversation history with personality
     llm:set-history (list
-      (list "system" (word 
+      (list "system" (word
         "You are " name " in a social network. "
         "Your favorite color is " favorite-color ". "
         "You are connected to: " (reduce [[s w] -> (word s ", " w)] [name] of link-neighbors) ". "
@@ -62,7 +62,7 @@ to setup
         "Only include agents whose colors you've definitively learned in the 'learned' object."))
     )
   ]
-  
+
   reset-ticks
 end
 
@@ -73,26 +73,26 @@ to go
     ask link-neighbors with [last-message != ""] [
       set neighbor-messages (word neighbor-messages name ": " last-message "\n")
     ]
-    
+
     ; Create prompt for this turn
     let current-prompt (word
       "Recent messages from your neighbors:\n" neighbor-messages
       "\nWhat would you like to say to learn more about everyone's favorite colors? "
       "Remember to respond in JSON format with 'message' and 'learned' fields.")
-    
+
     ; Get LLM response
     carefully [
       let response llm:chat current-prompt
-      
+
       ; Try to parse JSON response
       let parsed-response table:from-json response
-      
+
       ; Extract message
       if table:has-key? parsed-response "message" [
         set last-message table:get parsed-response "message"
         set label word-wrap (word name ": " last-message) 25
       ]
-      
+
       ; Update knowledge about other agents' colors
       if table:has-key? parsed-response "learned" [
         let learned-colors table:get parsed-response "learned"
@@ -100,7 +100,7 @@ to go
           table:put conversation-knowledge (first color-pair) (last color-pair)
         ]
       ]
-      
+
     ] [
       ; Fallback if JSON parsing fails
       let response llm:chat current-prompt
@@ -108,15 +108,15 @@ to go
       set label word-wrap (word name ": " last-message) 25
     ]
   ]
-  
+
   ; Update visual indicators based on learned knowledge
   ask turtles [
     ; Count how many colors this agent has learned
     let known-colors table:length conversation-knowledge
-    
+
     ; Adjust turtle size to show learning progress
     set size 2 + (known-colors * 0.3)
-    
+
     ; Show knowledge in a tooltip or separate display
     if show-knowledge? [
       let knowledge-text ""
@@ -128,7 +128,7 @@ to go
       ]
     ]
   ]
-  
+
   tick
 end
 
