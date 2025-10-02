@@ -57,7 +57,7 @@ to setup
   ; For config file, try to use the one in the same directory as the model
   if llm-config-file = 0 [
     ; Try just the filename first (works if model saved and opened from same location)
-    set llm-config-file "config.txt"
+    set llm-config-file "demos/config"
   ]
   ; Initialize boolean switches (0 means not set by interface)
   if show-trails? = 0 [ set show-trails? true ]

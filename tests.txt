@@ -1,6 +1,6 @@
 LLMConfigLoading
   extensions [llm]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
+  O> llm:load-config "demos/config"
   llm:providers => ["anthropic" "gemini" "ollama" "openai"]
 
 LLMProviderAndModelInfo
@@ -29,13 +29,13 @@ LLMHistoryManagement
 
 LLMChoosePrimitive
   extensions [llm]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
+  O> llm:load-config "demos/config"
   member? (llm:choose "pick one" ["a" "b" "c"]) ["a" "b" "c"] => true
 
 LLMChatPrimitives
   extensions [llm]
   globals [promise]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
+  O> llm:load-config "demos/config"
   empty? (llm:chat "Say anything") => false
   O> set promise llm:chat-async "Say anything"
   is-anonymous-reporter? promise => true
@@ -44,37 +44,37 @@ LLMChatPrimitives
 LLMTemplateSystem
   extensions [llm]
   globals [result code-history]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
-  O> set result llm:chat-with-template "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/simple-template.yaml" [["task" "test"] ["input" "hello"] ["context" "unit test"]]
+  O> llm:load-config "demos/config"
+  O> set result llm:chat-with-template "demos/simple-template.yaml" [["task" "test"] ["input" "hello"] ["context" "unit test"]]
   empty? result => false
   is-string? result => true
 
 LLMTemplateWithHistory
   extensions [llm]
   globals [template-result msg1 msg2]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
+  O> llm:load-config "demos/config"
   O> llm:clear-history
   O> set msg1 llm:chat "previous message 1"
   O> set msg2 llm:chat "previous message 2"
-  O> set template-result llm:chat-with-template "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/simple-template.yaml" [["task" "respond"] ["input" "test data"] ["context" "with history"]]
+  O> set template-result llm:chat-with-template "demos/simple-template.yaml" [["task" "respond"] ["input" "test data"] ["context" "with history"]]
   empty? template-result => false
   is-string? template-result => true
 
 LLMTemplateVariableSubstitution
   extensions [llm]
   globals [result]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
-  O> set result llm:chat-with-template "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/simple-template.yaml" [["task" "greeting"] ["input" "world"] ["context" "friendly"]]
+  O> llm:load-config "demos/config"
+  O> set result llm:chat-with-template "demos/simple-template.yaml" [["task" "greeting"] ["input" "world"] ["context" "friendly"]]
   empty? result => false
   is-string? result => true
 
 LLMTemplateWithMultipleAgents
   extensions [llm]
   turtles-own [agent-result]
-  O> llm:load-config "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/config.txt"
+  O> llm:load-config "demos/config"
   O> create-turtles 2
-  O> ask turtle 0 [ set agent-result llm:chat-with-template "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/simple-template.yaml" [["task" "agent0"] ["input" "test0"] ["context" "turtle"]] ]
-  O> ask turtle 1 [ set agent-result llm:chat-with-template "/Users/jnk789/Developer/CCL/NetLogo/extensions/llm/demos/simple-template.yaml" [["task" "agent1"] ["input" "test1"] ["context" "turtle"]] ]
+  O> ask turtle 0 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["task" "agent0"] ["input" "test0"] ["context" "turtle"]] ]
+  O> ask turtle 1 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["task" "agent1"] ["input" "test1"] ["context" "turtle"]] ]
   empty? [agent-result] of turtle 0 => false
   empty? [agent-result] of turtle 1 => false
   [agent-result] of turtle 0 != [agent-result] of turtle 1 => true
