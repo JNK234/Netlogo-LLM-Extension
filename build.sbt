@@ -8,7 +8,7 @@ isSnapshot := true
 
 netLogoExtName      := "llm"
 netLogoClassManager := "org.nlogo.extensions.llm.LLMExtension"
-netLogoVersion      := "7.0.0-beta1-c8d671e" 
+netLogoVersion      := "7.0.0-2486d1e"
 netLogoShortDescription := "Multi-provider LLM extension for NetLogo agents"
 netLogoLongDescription := "A NetLogo extension that provides unified interface for multiple LLM providers including OpenAI, Anthropic, Gemini, and Ollama"
 netLogoHomepage := "https://github.com/yourusername/NetLogoLLMExtension"
