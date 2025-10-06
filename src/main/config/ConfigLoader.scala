@@ -14,14 +14,17 @@ object ConfigLoader {
    *
    * The file is searched in the following order:
    * 1. Same directory as the NetLogo model file (if available)
-   * 2. Current working directory
-   * 3. Exact path as specified
+   * 2. Exact path as specified
+   * 3. Current working directory
    *
    * @param filename Path to the configuration file
+   * @param modelDir Optional directory of the currently-open NetLogo model
    * @return Try containing Map of configuration key-value pairs
    */
-  def loadFromFile(filename: String): Try[Map[String, String]] = {
-    val possiblePaths = Seq(
+  def loadFromFile(filename: String, modelDir: Option[String] = None): Try[Map[String, String]] = {
+    val possiblePaths = modelDir.map(dir =>
+      new File(dir, filename)
+    ).toSeq ++ Seq(
       new File(filename),                                    // Exact path as given
       new File(System.getProperty("user.dir"), filename)    // Current working directory
     )
