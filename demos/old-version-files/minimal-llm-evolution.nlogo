@@ -18,7 +18,7 @@ to setup
   clear-all
   
   ; Load LLM config
-  llm:load-config "config.txt"
+  llm:load-config "demos/config"
   
   set generation 0
   set best-fitness 0

@@ -59,7 +59,7 @@ to setup
   ; For config file, try to use the one in the same directory as the model
   if llm-config-file = 0 [
     ; Try just the filename first (works if model saved and opened from same location)
-    set llm-config-file "config.txt"
+    set llm-config-file "demos/config"
   ]
   ; Initialize boolean switches (0 means not set by interface)
   if show-trails? = 0 [ set show-trails? true ]
@@ -749,7 +749,7 @@ set-plot-pen-color blue</setup>
       <choice type="string" value="wall-follower"></choice>
       <choice type="string" value="mixed"></choice>
     </chooser>
-    <input x="765" multiline="false" y="170" height="60" variable="llm-config-file" type="string" width="250">config.txt</input>
+    <input x="765" multiline="false" y="170" height="60" variable="llm-config-file" type="string" width="250">demos/config</input>
     <output x="1150" y="75" height="61" fontSize="12" width="216"></output>
     <monitor x="20" precision="17" y="120" height="60" fontSize="11" width="300" display="Treasure Status">treasure-status</monitor>
     <monitor x="20" precision="17" y="205" height="60" fontSize="11" width="130" display="Active Hunters">count treasure-hunters</monitor>

@@ -124,10 +124,26 @@ class LLMExtension extends DefaultClassManager {
   
   /**
    * Load a YAML template file and parse it
+   *
+   * @param filename Path to the template file
+   * @param modelDir Optional directory of the currently-open NetLogo model
    */
-  private def loadTemplate(filename: String): Try[Template] = {
+  private def loadTemplate(filename: String, modelDir: Option[String] = None): Try[Template] = {
     Try {
-      val content = Files.readString(Paths.get(filename), StandardCharsets.UTF_8)
+      val possiblePaths = modelDir.map(dir =>
+        Paths.get(dir, filename)
+      ).toSeq ++ Seq(
+        Paths.get(filename),
+        Paths.get(System.getProperty("user.dir"), filename)
+      )
+
+      val path = possiblePaths.find(Files.exists(_)).getOrElse {
+        throw new IllegalArgumentException(
+          s"Template file not found: $filename. Place the file in the same directory as your NetLogo model or in the current working directory."
+        )
+      }
+
+      val content = Files.readString(path, StandardCharsets.UTF_8)
       parser.parse(content) match {
         case Right(json) =>
           val cursor: HCursor = json.hcursor
@@ -195,11 +211,16 @@ class LLMExtension extends DefaultClassManager {
   
   object LoadConfigCommand extends Command {
     override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType))
-    
+
     override def perform(args: Array[Argument], context: Context): Unit = {
       val filename = args(0).getString
-      
-      ConfigLoader.loadFromFile(filename) match {
+
+      // Extract model directory from workspace
+      val modelDir = Option(context.workspace.getModelPath).flatMap { path =>
+        Option(new java.io.File(path).getParent)
+      }
+
+      ConfigLoader.loadFromFile(filename, modelDir) match {
         case Success(config) =>
           configStore.loadFromMap(config)
           currentProvider = None // Force re-initialization with new config
@@ -285,18 +306,23 @@ class LLMExtension extends DefaultClassManager {
       right = List(Syntax.StringType, Syntax.ListType),
       ret = Syntax.StringType
     )
-    
+
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val templateFile = args(0).getString
       val variablesList = args(1).getList
       val agent = context.getAgent
-      
+
       try {
         val provider = ensureProvider()
         val history = getAgentHistory(agent)
-        
+
+        // Extract model directory from workspace
+        val modelDir = Option(context.workspace.getModelPath).flatMap { path =>
+          Option(new java.io.File(path).getParent)
+        }
+
         // Load and parse template
-        val template = loadTemplate(templateFile) match {
+        val template = loadTemplate(templateFile, modelDir) match {
           case Success(t) => t
           case Failure(e) => throw new ExtensionException(s"Failed to load template '$templateFile': ${e.getMessage}")
         }
