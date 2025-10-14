@@ -15,13 +15,13 @@ agents-own [
 
 to setup
   clear-all
-  
+
   ; Setup LLM
-  llm:load-config "config.txt"
-  
+  llm:load-config "demos/config"
+
   set generation 0
   set best-fitness 0
-  
+
   ; Create agents with initial rule
   create-agents 10 [
     set color red
@@ -29,7 +29,7 @@ to setup
     set rule "fd 1 rt random 45"
     set energy 0
   ]
-  
+
   ; Create food sources
   create-food-sources 20 [
     set shape "circle"
@@ -37,7 +37,7 @@ to setup
     set size 0.5
     setxy random-xcor random-ycor
   ]
-  
+
   reset-ticks
 end
 
@@ -51,12 +51,12 @@ to go
     ]
     collect-food
   ]
-  
+
   ; Evolution every 100 ticks
   if ticks mod 100 = 0 and ticks > 0 [
     evolve
   ]
-  
+
   ; Replenish food
   if count food-sources < 20 [
     create-food-sources (20 - count food-sources) [
@@ -66,7 +66,7 @@ to go
       setxy random-xcor random-ycor
     ]
   ]
-  
+
   tick
 end
 
@@ -80,10 +80,10 @@ end
 to evolve
   set generation generation + 1
   print (word "Generation: " generation)
-  
+
   ; Find best performers
   let top-agents max-n-of 3 agents [energy]
-  
+
   ; Update best fitness
   if any? top-agents [
     let current-best max [energy] of top-agents
@@ -91,26 +91,26 @@ to evolve
       set best-fitness current-best
     ]
   ]
-  
+
   ; Evolve worst performers
   let worst-agents min-n-of 3 agents [energy]
-  
+
   ask worst-agents [
     ; Get a good rule to mutate
     let parent-rule [rule] of one-of top-agents
     set rule mutate-with-llm parent-rule
     set energy 0
   ]
-  
+
   ; Reset all energies
   ask agents [ set energy 0 ]
 end
 
 to-report mutate-with-llm [current-rule]
-  let prompt (word 
-    "Improve this NetLogo movement rule for food collection: " current-rule 
+  let prompt (word
+    "Improve this NetLogo movement rule for food collection: " current-rule
     " Make it better at finding food. Use only: fd, bk, rt, lt, random. Keep it simple, one line.")
-  
+
   let new-rule ""
   carefully [
     set new-rule llm:chat prompt
@@ -122,7 +122,7 @@ to-report mutate-with-llm [current-rule]
     ; Fallback if LLM fails
     set new-rule (word "fd " (1 + random 2) " rt random " (30 + random 60))
   ]
-  
+
   report new-rule
 end
 @#$#@#$#@
@@ -215,7 +215,7 @@ best-fitness
 Red agents evolve movement rules using an LLM to collect green food.
 
 1. Click SETUP
-2. Click GO  
+2. Click GO
 3. Watch agents evolve better food-finding rules
 
 Every 100 ticks, the worst agents get new rules evolved from the best agents using the LLM.
