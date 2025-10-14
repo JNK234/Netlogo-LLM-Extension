@@ -20,7 +20,7 @@ to test-sync-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "demos/config"
+    llm:load-config "../config.txt"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
