@@ -12,7 +12,7 @@ to setup
   print "=== LLM Configuration Test ==="
 
   ; Test 1: Try loading config.txt
-  test-config-file "config.txt"
+  test-config-file "demos/config"
 
   ; Test 2: Try loading config-env.txt
   test-config-file "config-env.txt"

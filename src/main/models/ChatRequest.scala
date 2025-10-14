@@ -4,7 +4,7 @@ import upickle.default.{ReadWriter => RW, macroRW}
 
 /**
  * Represents a chat completion request to an LLM provider
- * 
+ *
  * @param model The model identifier (e.g., "gpt-4", "claude-3-sonnet")
  * @param messages The conversation history as a sequence of messages
  * @param maxTokens Optional maximum number of tokens to generate
@@ -19,14 +19,14 @@ case class ChatRequest(
 
 object ChatRequest {
   implicit val rw: RW[ChatRequest] = macroRW
-  
+
   /**
    * Create a simple request with just model and messages
    */
   def simple(model: String, messages: Seq[ChatMessage]): ChatRequest = {
     ChatRequest(model, messages)
   }
-  
+
   /**
    * Create a request with temperature control
    */

@@ -1,0 +1,4 @@
+system: You are concise.
+template: |
+  Summarize the following in one sentence:
+  {text}

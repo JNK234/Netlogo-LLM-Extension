@@ -46,3 +46,7 @@ show llm:chat "Say hello in five words."
 - For local, no-API usage, see the Ollama quick start in `docs/CONFIGURATION.md`.
 
 If you need deeper details (architecture, patterns, troubleshooting), start with `docs/USAGE.md` and the full reference document.
+
+## License
+
+This project is licensed under the BSD 3-Clause License - see the [LICENSE](../LICENSE) file for details.

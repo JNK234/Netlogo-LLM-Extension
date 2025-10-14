@@ -1,5 +1,6 @@
 # Build artifacts
 target/
+*.jar
 
 # Test files with API keys
 demos/test-basic.nlogo
@@ -50,4 +51,3 @@ config-*.txt
 *.env
 *.env.*
 *.secrets*
-

@@ -4,7 +4,7 @@ import upickle.default.{ReadWriter => RW, macroRW}
 
 /**
  * Represents a response choice from an LLM provider
- * 
+ *
  * @param index The index of this choice (usually 0 for single responses)
  * @param message The message content of the response
  * @param finishReason The reason the response ended (e.g., "stop", "length")
@@ -21,7 +21,7 @@ object Choice {
 
 /**
  * Represents a complete chat response from an LLM provider
- * 
+ *
  * @param id Unique identifier for this response
  * @param created Timestamp when the response was created
  * @param model The model that generated the response
@@ -39,7 +39,7 @@ case class ChatResponse(
   def firstMessage: Option[ChatMessage] = {
     choices.headOption.map(_.message)
   }
-  
+
   /**
    * Get the content of the first response message
    */
@@ -50,7 +50,7 @@ case class ChatResponse(
 
 object ChatResponse {
   implicit val rw: RW[ChatResponse] = macroRW
-  
+
   /**
    * Create a simple response with a single message
    */

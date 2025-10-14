@@ -18,14 +18,14 @@ agents-own [
 
 to setup
   clear-all
-  
+
   ; Load LLM config
-  llm:load-config "config.txt"
-  
+  llm:load-config "demos/config"
+
   set generation 0
   set best-fitness 0
   set best-rule "fd 1"
-  
+
   ; Create agents
   create-agents 10 [
     set color red
@@ -33,7 +33,7 @@ to setup
     set rule "fd 1 rt random 45"
     set energy 0
   ]
-  
+
   ; Create food
   create-foods 20 [
     set shape "circle"
@@ -41,7 +41,7 @@ to setup
     set size 0.5
     setxy random-xcor random-ycor
   ]
-  
+
   reset-ticks
 end
 
@@ -51,12 +51,12 @@ to go
     carefully [ run rule ] [ ]
     eat-food
   ]
-  
+
   ; Evolution every 100 ticks
   if ticks > 0 and ticks mod 100 = 0 [
     evolve
   ]
-  
+
   ; Replenish food
   if count foods < 20 [
     create-foods (20 - count foods) [
@@ -66,7 +66,7 @@ to go
       setxy random-xcor random-ycor
     ]
   ]
-  
+
   tick
 end
 
@@ -80,7 +80,7 @@ end
 to evolve
   set generation generation + 1
   print (word "Generation " generation)
-  
+
   ; Find best agent
   let best-agent max-one-of agents [energy]
   if best-agent != nobody [
@@ -92,22 +92,22 @@ to evolve
       ]
     ]
   ]
-  
+
   ; Kill worst agents and replace with mutated versions
   let worst-agents min-n-of 3 agents [energy]
   ask worst-agents [
     set rule mutate-rule [rule] of best-agent
     set energy 0
   ]
-  
+
   ; Reset all energy
   ask agents [ set energy 0 ]
 end
 
 to-report mutate-rule [parent-rule]
-  let prompt (word "Improve this NetLogo rule for finding food: " parent-rule 
+  let prompt (word "Improve this NetLogo rule for finding food: " parent-rule
                    " Return only NetLogo code, one line, using: fd, bk, rt, lt, random")
-  
+
   let new-rule parent-rule
   carefully [
     set new-rule llm:chat prompt
@@ -115,7 +115,7 @@ to-report mutate-rule [parent-rule]
     ; Fallback if LLM fails
     set new-rule one-of ["fd 1 rt random 60" "fd 2 lt random 45" "fd 1"]
   ]
-  
+
   report new-rule
 end]]></code>
   <widgets>
