@@ -1,1 +1,58 @@
-../config.txt
+# NetLogo LLM Extension Configuration
+# Choose ONE provider by uncommenting the relevant section
+
+# ============================================
+# OPTION 1: Ollama (Local, FREE, No API Key)
+# ============================================
+# Best for: Testing, privacy, no costs
+# Setup: Install Ollama from https://ollama.ai
+# Then run: ollama pull llama3.2
+provider=ollama
+model=llama3.2:latest
+base_url=http://localhost:11434
+temperature=0.7
+max_tokens=500
+timeout_seconds=60
+
+# ============================================
+# OPTION 2: OpenAI (Cloud, Requires API Key)
+# ============================================
+# Best for: High quality responses
+# Setup: Get API key from https://platform.openai.com
+#provider=openai
+#api_key=YOUR_OPENAI_API_KEY_HERE
+#model=gpt-4o-mini
+#temperature=0.7
+#max_tokens=500
+#timeout_seconds=30
+
+# ============================================
+# OPTION 3: Anthropic Claude (Cloud, API Key)
+# ============================================
+# Best for: Detailed reasoning, long context
+# Setup: Get API key from https://console.anthropic.com
+#provider=anthropic
+#api_key=YOUR_ANTHROPIC_API_KEY_HERE
+#model=claude-3-5-sonnet-20241022
+#temperature=0.7
+#max_tokens=500
+#timeout_seconds=30
+
+# ============================================
+# OPTION 4: Google Gemini (Cloud, API Key)
+# ============================================
+# Best for: Fast responses, good reasoning
+# Setup: Get API key from https://makersuite.google.com
+#provider=gemini
+#api_key=YOUR_GEMINI_API_KEY_HERE
+#model=gemini-1.5-flash
+#temperature=0.7
+#max_tokens=500
+#timeout_seconds=30
+
+# ============================================
+# CONFIGURATION PARAMETERS
+# ============================================
+# temperature: 0.0 = deterministic, 2.0 = very creative (default 0.7)
+# max_tokens: Maximum response length (default 500)
+# timeout_seconds: Request timeout (default 30)
