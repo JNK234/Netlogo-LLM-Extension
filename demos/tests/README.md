@@ -21,13 +21,34 @@ This directory contains test models for the NetLogo LLM Extension.
    - `test-extension-loading` - Tests basic extension loading
    - `test-sync-chat` - Tests synchronous chat functionality
    - `test-async-chat` - Tests asynchronous chat functionality
+   - `test-providers-list` - Tests provider listing and status primitives
+   - `test-active-config` - Tests active configuration reporting
+   - `test-provider-help` - Tests provider help system
+   - `test-models-list` - Tests model listing for each provider
 
 ## Configuration
 
 The test suite supports all LLM providers:
-- OpenAI
-- Anthropic (Claude)
-- Google (Gemini)
-- Ollama (local)
+- OpenAI (requires API key)
+- Anthropic/Claude (requires API key)
+- Google/Gemini (requires API key)
+- Ollama (requires running server, no API key)
 
-Edit `config.txt` to switch between providers.
+Edit `config.txt` to switch between providers. You can configure multiple providers at once using provider-specific keys (`openai_api_key`, `anthropic_api_key`, etc.).
+
+## New Features Tested
+
+### Provider Status and Information
+- `llm:providers` - Lists only READY providers (with keys or reachable)
+- `llm:providers-all` - Lists all supported providers
+- `llm:provider-status` - Detailed status for each provider
+- `llm:provider-help` - Setup instructions for a provider
+
+### Active Configuration
+- `llm:active` - Returns current provider and model
+- `llm:config` - Returns full config summary (with masked keys)
+
+### Immediate Validation
+- Provider readiness is validated immediately when setting provider or loading config
+- Clear error messages with setup guidance if validation fails
+- Ollama reachability checked when selecting Ollama provider
