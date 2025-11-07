@@ -2,11 +2,35 @@
 
 This guide explains how to create, save, and use a configuration file for the NetLogo LLM extension.
 
+## Configuration Precedence
+The extension follows this order of precedence for configuration:
+
+1. **Runtime Commands** (highest priority) - `llm:set-provider`, `llm:set-api-key`, `llm:set-model`, etc.
+2. **Config File** - Settings loaded via `llm:load-config`
+3. **Built-in Defaults** (lowest priority) - Applied only if no other config exists
+
+This allows you to:
+- Use config file for persistent settings (recommended approach)
+- Override specific settings at runtime when needed
+- Switch between configurations during experimentation
+
+## Immediate Validation
+Starting from this version, configuration is validated immediately:
+- When you call `llm:load-config` or `llm:set-provider`, the extension checks if the provider is ready
+- **Cloud providers** (OpenAI, Anthropic, Gemini) require API keys
+- **Ollama** requires the server to be running and reachable
+- If validation fails, you get a clear error message with setup instructions
+- Use `print llm:provider-help "provider-name"` to get detailed setup guidance
+
 ## Format
 - Plain text, UTF-8 encoded, one `key=value` per line.
 - Empty lines are ignored; lines starting with `#` are comments.
 - No quotes required; avoid trailing spaces around `=`.
-- Supported keys: `provider`, `api_key`, `model`, `base_url`, `temperature`, `max_tokens`, `timeout_seconds`.
+- **Supported keys**:
+  - Common: `provider`, `model`, `temperature`, `max_tokens`, `timeout_seconds`
+  - Provider-specific API keys: `openai_api_key`, `anthropic_api_key`, `gemini_api_key`
+  - Provider-specific base URLs: `openai_base_url`, `anthropic_base_url`, `gemini_base_url`, `ollama_base_url`
+  - Legacy (still supported): `api_key`, `base_url` (applies to current provider)
 
 ## Where to Save the File
 - Recommended: save the file next to your `.nlogo` model (e.g., `config.txt`).
@@ -20,45 +44,62 @@ This guide explains how to create, save, and use a configuration file for the Ne
 
 ## Provider Examples
 
-OpenAI
+### OpenAI
 ```
 provider=openai
-api_key=sk-REPLACE_ME
+openai_api_key=sk-REPLACE_ME
 model=gpt-4o-mini
 temperature=0.7
 max_tokens=1000
 timeout_seconds=30
 ```
 
-Anthropic (Claude)
+### Anthropic (Claude)
 ```
 provider=anthropic
-api_key=REPLACE_ME
+anthropic_api_key=sk-ant-REPLACE_ME
 model=claude-3-5-sonnet-20241022
 temperature=0.7
 max_tokens=4000
 timeout_seconds=30
 ```
 
-Google (Gemini)
+### Google (Gemini)
 ```
 provider=gemini
-api_key=REPLACE_ME
-model=gemini-1.5-pro
-base_url=https://generativelanguage.googleapis.com/v1beta
+gemini_api_key=REPLACE_ME
+model=gemini-1.5-flash
+gemini_base_url=https://generativelanguage.googleapis.com/v1beta
 temperature=0.7
 max_tokens=2048
 timeout_seconds=30
 ```
 
-Local (Ollama, no API key)
+### Local (Ollama, no API key)
 ```
 provider=ollama
 model=llama3.2
-base_url=http://localhost:11434
+ollama_base_url=http://localhost:11434
 temperature=0.7
 max_tokens=2048
 timeout_seconds=30
+```
+
+### Multi-Provider Configuration
+You can configure multiple providers at once using provider-specific keys:
+```
+# Configure all providers in one file
+openai_api_key=sk-REPLACE_ME
+anthropic_api_key=sk-ant-REPLACE_ME
+gemini_api_key=REPLACE_ME
+
+# Set the active provider
+provider=openai
+model=gpt-4o-mini
+
+# Switch providers at runtime:
+# llm:set-provider "anthropic"
+# llm:set-model "claude-3-5-sonnet-20241022"
 ```
 
 ## Ollama Quick Start (No API Key)
