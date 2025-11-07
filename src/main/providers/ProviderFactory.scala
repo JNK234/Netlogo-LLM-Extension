@@ -156,10 +156,13 @@ object ProviderFactory {
    * Validate OpenAI-specific configuration
    */
   private def validateOpenAIConfig(config: Map[String, String]): Try[Unit] = {
-    val apiKey = config.get(ConfigStore.API_KEY)
+    // Check for provider-specific key first, then generic key
+    val apiKey = config.get(ConfigStore.OPENAI_API_KEY).orElse(config.get(ConfigStore.API_KEY))
 
     if (apiKey.isEmpty) {
-      return Failure(new IllegalArgumentException("OpenAI provider requires 'api_key' configuration"))
+      return Failure(new IllegalArgumentException(
+        s"OpenAI provider requires an API key. Set '${ConfigStore.OPENAI_API_KEY}' in config or call llm:set-api-key"
+      ))
     }
 
     val key = apiKey.get
@@ -176,7 +179,7 @@ object ProviderFactory {
       case Some(model) =>
         if (!isValidOpenAIModel(model)) {
           return Failure(new IllegalArgumentException(
-            s"Unsupported OpenAI model: '$model'. Supported models: ${getOpenAISupportedModels.mkString(", ")}"
+            s"Unsupported OpenAI model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("openai")}"
           ))
         }
       case None => // Model is optional, will use default
@@ -189,15 +192,18 @@ object ProviderFactory {
    * Validate Claude-specific configuration
    */
   private def validateClaudeConfig(config: Map[String, String]): Try[Unit] = {
-    val apiKey = config.get(ConfigStore.API_KEY)
+    // Check for provider-specific key first, then generic key
+    val apiKey = config.get(ConfigStore.ANTHROPIC_API_KEY).orElse(config.get(ConfigStore.API_KEY))
 
     if (apiKey.isEmpty) {
-      return Failure(new IllegalArgumentException("Claude provider requires 'api_key' configuration"))
+      return Failure(new IllegalArgumentException(
+        s"Anthropic provider requires an API key. Set '${ConfigStore.ANTHROPIC_API_KEY}' in config or call llm:set-api-key"
+      ))
     }
 
     val key = apiKey.get
     if (key.trim.isEmpty) {
-      return Failure(new IllegalArgumentException("Claude API key cannot be empty"))
+      return Failure(new IllegalArgumentException("Anthropic API key cannot be empty"))
     }
 
     // Validate model if specified
@@ -205,7 +211,7 @@ object ProviderFactory {
       case Some(model) =>
         if (!isValidClaudeModel(model)) {
           return Failure(new IllegalArgumentException(
-            s"Unsupported Claude model: '$model'. Supported models: ${getClaudeSupportedModels.mkString(", ")}"
+            s"Unsupported Anthropic model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("anthropic")}"
           ))
         }
       case None => // Model is optional, will use default
@@ -218,10 +224,13 @@ object ProviderFactory {
    * Validate Gemini-specific configuration
    */
   private def validateGeminiConfig(config: Map[String, String]): Try[Unit] = {
-    val apiKey = config.get(ConfigStore.API_KEY)
+    // Check for provider-specific key first, then generic key
+    val apiKey = config.get(ConfigStore.GEMINI_API_KEY).orElse(config.get(ConfigStore.API_KEY))
 
     if (apiKey.isEmpty) {
-      return Failure(new IllegalArgumentException("Gemini provider requires 'api_key' configuration"))
+      return Failure(new IllegalArgumentException(
+        s"Gemini provider requires an API key. Set '${ConfigStore.GEMINI_API_KEY}' in config or call llm:set-api-key"
+      ))
     }
 
     val key = apiKey.get
@@ -234,7 +243,7 @@ object ProviderFactory {
       case Some(model) =>
         if (!isValidGeminiModel(model)) {
           return Failure(new IllegalArgumentException(
-            s"Unsupported Gemini model: '$model'. Supported models: ${getGeminiSupportedModels.mkString(", ")}"
+            s"Unsupported Gemini model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("gemini")}"
           ))
         }
       case None => // Model is optional, will use default
@@ -254,7 +263,7 @@ object ProviderFactory {
       case Some(model) =>
         if (!isValidOllamaModel(model)) {
           return Failure(new IllegalArgumentException(
-            s"Unsupported Ollama model: '$model'. Supported models: ${getOllamaSupportedModels.mkString(", ")}"
+            s"Unsupported Ollama model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("ollama")}"
           ))
         }
       case None => // Model is optional, will use default
@@ -274,67 +283,49 @@ object ProviderFactory {
    * Get list of supported OpenAI models
    */
   private def getOpenAISupportedModels: Set[String] = {
-    Set(
-      "gpt-4", "gpt-4-turbo", "gpt-4-turbo-preview",
-      "gpt-3.5-turbo", "gpt-3.5-turbo-16k",
-      "gpt-4o", "gpt-4o-mini"
-    )
+    ModelRegistry.getSupportedModels("openai")
   }
 
   /**
    * Check if a Claude model is supported
    */
   private def isValidClaudeModel(model: String): Boolean = {
-    getClaudeSupportedModels.contains(model)
+    ModelRegistry.isValidModel("anthropic", model)
   }
 
   /**
    * Get list of supported Claude models
    */
   private def getClaudeSupportedModels: Set[String] = {
-    Set(
-      "claude-3-opus-20240229",
-      "claude-3-sonnet-20240229",
-      "claude-3-haiku-20240307",
-      "claude-3-5-sonnet-20241022"
-    )
+    ModelRegistry.getSupportedModels("anthropic")
   }
 
   /**
    * Check if a Gemini model is supported
    */
   private def isValidGeminiModel(model: String): Boolean = {
-    getGeminiSupportedModels.contains(model)
+    ModelRegistry.isValidModel("gemini", model)
   }
 
   /**
    * Get list of supported Gemini models
    */
   private def getGeminiSupportedModels: Set[String] = {
-    Set(
-      "gemini-1.5-pro",
-      "gemini-1.5-flash",
-      "gemini-1.0-pro",
-      "gemini-pro"
-    )
+    ModelRegistry.getSupportedModels("gemini")
   }
 
   /**
    * Check if an Ollama model is supported
    */
   private def isValidOllamaModel(model: String): Boolean = {
-    getOllamaSupportedModels.contains(model)
+    ModelRegistry.isValidModel("ollama", model)
   }
 
   /**
    * Get list of supported Ollama models
    */
   private def getOllamaSupportedModels: Set[String] = {
-    Set(
-      "llama3.2", "llama3.1", "llama3", "llama2",
-      "mistral", "mixtral", "codellama", "vicuna",
-      "phi3", "gemma", "qwen2", "deepseek-coder"
-    )
+    ModelRegistry.getSupportedModels("ollama")
   }
 
   /**
@@ -362,26 +353,26 @@ object ProviderFactory {
   def getDefaultConfig(providerName: String): Map[String, String] = {
     providerName.toLowerCase.trim match {
       case OPENAI => Map(
-        ConfigStore.MODEL -> "gpt-4o",
+        ConfigStore.MODEL -> ModelRegistry.defaultModel("openai"),
         ConfigStore.BASE_URL -> ConfigStore.DEFAULT_OPENAI_BASE_URL,
         ConfigStore.TEMPERATURE -> ConfigStore.DEFAULT_TEMPERATURE,
         ConfigStore.MAX_TOKENS -> ConfigStore.DEFAULT_MAX_TOKENS
       )
       case ANTHROPIC => Map(
-        ConfigStore.MODEL -> "claude-3-sonnet-20240229",
-        ConfigStore.BASE_URL -> "https://api.anthropic.com/v1",
+        ConfigStore.MODEL -> ModelRegistry.defaultModel("anthropic"),
+        ConfigStore.BASE_URL -> ConfigStore.DEFAULT_ANTHROPIC_BASE_URL,
         ConfigStore.TEMPERATURE -> ConfigStore.DEFAULT_TEMPERATURE,
         ConfigStore.MAX_TOKENS -> "4000"
       )
       case GEMINI => Map(
-        ConfigStore.MODEL -> "gemini-1.5-pro",
-        ConfigStore.BASE_URL -> "https://generativelanguage.googleapis.com/v1beta",
+        ConfigStore.MODEL -> ModelRegistry.defaultModel("gemini"),
+        ConfigStore.BASE_URL -> ConfigStore.DEFAULT_GEMINI_BASE_URL,
         ConfigStore.TEMPERATURE -> ConfigStore.DEFAULT_TEMPERATURE,
         ConfigStore.MAX_TOKENS -> "2048"
       )
       case OLLAMA => Map(
-        ConfigStore.MODEL -> "llama3",
-        ConfigStore.BASE_URL -> "http://localhost:11434",
+        ConfigStore.MODEL -> ModelRegistry.defaultModel("ollama"),
+        ConfigStore.BASE_URL -> ConfigStore.DEFAULT_OLLAMA_BASE_URL,
         ConfigStore.TEMPERATURE -> ConfigStore.DEFAULT_TEMPERATURE,
         ConfigStore.MAX_TOKENS -> "2048"
       )
