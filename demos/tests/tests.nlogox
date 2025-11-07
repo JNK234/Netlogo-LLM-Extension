@@ -73,24 +73,65 @@ end
 to test-providers-list
   print "Testing llm:providers primitive..."
 
-  let providers llm:providers
-  print (word "Available providers: " providers)
+  ; llm:providers now returns only READY providers (with API keys or reachable)
+  let ready-providers llm:providers
+  print (word "Ready providers: " ready-providers)
+  print (word "Total ready providers: " length ready-providers)
 
-  ; Verify we have expected providers
-  if member? "openai" providers [
-    print "✓ OpenAI provider available"
-  ]
-  if member? "anthropic" providers [
-    print "✓ Anthropic provider available"
-  ]
-  if member? "gemini" providers [
-    print "✓ Gemini provider available"
-  ]
-  if member? "ollama" providers [
-    print "✓ Ollama provider available"
-  ]
+  ; llm:providers-all returns ALL supported providers
+  let all-providers llm:providers-all
+  print (word "All supported providers: " all-providers)
+  print (word "Total supported providers: " length all-providers)
 
-  print (word "Total providers available: " length providers)
+  ; llm:provider-status gives detailed status
+  print "Provider status details:"
+  foreach llm:provider-status [ provider-info ->
+    print provider-info
+  ]
+end
+
+to test-active-config
+  print "Testing llm:active and llm:config primitives..."
+
+  ; Set a provider and model
+  carefully [
+    llm:set-provider "openai"
+    llm:set-model "gpt-4o-mini"
+    
+    ; Check active configuration
+    let active llm:active
+    print (word "Active provider and model: " active)
+    
+    if item 0 active = "openai" [
+      print "✓ Active provider is openai"
+    ]
+    if item 1 active = "gpt-4o-mini" [
+      print "✓ Active model is gpt-4o-mini"
+    ]
+    
+    ; Show full config (with masked keys)
+    print "Current configuration:"
+    print llm:config
+  ] [
+    print "Failed to test active config (provider validation failed)"
+  ]
+end
+
+to test-provider-help
+  print "Testing llm:provider-help primitive..."
+
+  ; Get help for each provider
+  print "\n=== OpenAI Setup Help ==="
+  print llm:provider-help "openai"
+  
+  print "\n=== Ollama Setup Help ==="
+  print llm:provider-help "ollama"
+  
+  print "\n=== Anthropic Setup Help ==="
+  print llm:provider-help "anthropic"
+  
+  print "\n=== Gemini Setup Help ==="
+  print llm:provider-help "gemini"
 end
 
 to test-models-list

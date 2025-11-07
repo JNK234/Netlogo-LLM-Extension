@@ -198,4 +198,34 @@ class OllamaProvider(implicit ec: ExecutionContext) extends LLMProvider {
       case _ => false
     }
   }
+
+  /**
+   * List installed models from Ollama server
+   * 
+   * @return Future containing set of installed model names
+   */
+  def listInstalledModels(): Future[Set[String]] = {
+    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "http://localhost:11434")
+    val apiUrl = uri"$baseUrl/api/tags"
+
+    val httpRequest = basicRequest.get(apiUrl)
+
+    httpRequest.send(backend).map { response =>
+      response.body match {
+        case Right(responseBody) =>
+          try {
+            val parsed = ujson.read(responseBody)
+            val models = parsed("models").arr
+            models.map { model =>
+              model("name").str
+            }.toSet
+          } catch {
+            case _: Exception => Set.empty[String]
+          }
+        case Left(_) => Set.empty[String]
+      }
+    }.recover {
+      case _ => Set.empty[String]
+    }
+  }
 }
