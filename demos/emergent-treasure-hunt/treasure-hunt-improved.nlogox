@@ -50,7 +50,7 @@ to setup
   if communication-range = 0 [ set communication-range 2 ]
   if confidence-threshold = 0 [ set confidence-threshold 0.7 ]
   if default-strategy = 0 [ set default-strategy "mixed" ]
-  if llm-config-file = 0 [ set llm-config-file "demos/config" ]
+  if llm-config-file = 0 [ set llm-config-file "config.txt" ]
   if show-trails? = 0 [ set show-trails? true ]
   if show-communications? = 0 [ set show-communications? true ]
 
@@ -350,7 +350,8 @@ end
 to detect-nearby-agents
   let nearby-hunters other treasure-hunters in-radius communication-range
 
-  if any? nearby-hunters and (ticks - last-communication) > 5 [
+  ; Cooldown of 20 ticks (~2 seconds at 10 FPS) to prevent rate limits
+  if any? nearby-hunters and (ticks - last-communication) > 20 [
     let communication-partner one-of nearby-hunters
 
     ; Visual effects
@@ -427,7 +428,7 @@ to communicate-with [partner]
     ]
   ]
 
-  if is-useful? [
+  ifelse is-useful? [
     ; FIX #1: BOTH agents get EVERYTHING (complete knowledge transfer)
     let combined-facts sentence my-learned partner-learned
     set combined-facts lput synthesis combined-facts
@@ -447,7 +448,7 @@ to communicate-with [partner]
 
     print (word "✓ Useful knowledge gained!")
     print (word "  Confidence: " precision confidence-level 2 " | Knowledge count: " length learned-facts)
-  ] else [
+  ] [
     ; Poor quality - share facts but don't increase confidence much
     let combined-facts sentence my-learned partner-learned
     set combined-facts remove-duplicates combined-facts
@@ -626,14 +627,14 @@ to attempt-treasure-manifestation
       print "Asking LLM for treasure description..."
       set description llm:chat treasure-prompt
 
-      if length description > 10 [
+      ifelse length description > 10 [
         set treasure-definition description
         set treasure-location patch-here
         manifest-treasure
 
         print "✓✓✓ TREASURE MANIFESTED! ✓✓✓"
         print (word "Description: " description)
-      ] else [
+      ] [
         print "✗ LLM gave short description, retrying..."
         stop
       ]
@@ -641,12 +642,12 @@ to attempt-treasure-manifestation
       ; Fallback description
       print (word "✗ LLM failed: " error-message)
 
-      if length all-knowledge >= 4 [
+      ifelse length all-knowledge >= 4 [
         set treasure-definition "A radiant golden orb, glowing with ancient light at the intersection of paths."
         set treasure-location patch-here
         manifest-treasure
         print "✓ TREASURE MANIFESTED (fallback description)"
-      ] else [
+      ] [
         print "✗ Not enough knowledge for fallback"
       ]
     ]
@@ -865,7 +866,7 @@ set-plot-pen-color blue</setup>
     <input x="765" multiline="false" y="170" height="60" variable="llm-config-file" type="string" width="250">demos/config</input>
     <monitor x="20" precision="17" y="285" height="80" fontSize="11" width="305" display="Agent Status">knowledge-summary</monitor>
   </widgets>
-  <info>## IMPROVED TREASURE HUNT
+  <info><![CDATA[## IMPROVED TREASURE HUNT
 
 ### What Changed?
 
@@ -880,7 +881,7 @@ set-plot-pen-color blue</setup>
 
 **FIX #3: Deterministic Goals**
 - No LLM for goal selection
-- Confidence &lt; 0.4: explore
+- Confidence < 0.4: explore
 - Confidence 0.4-0.7: find-crossing
 - Confidence ≥ 0.7: search-systematically
 
@@ -911,7 +912,7 @@ This version MUST converge because:
 3. Quality gates ensure good knowledge
 4. Location checking has robust fallback
 5. Multiple agents searching simultaneously
-</info>
+]]></info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">
@@ -920,6 +921,9 @@ This version MUST converge because:
         <point x="150" y="205"></point>
         <point x="260" y="250"></point>
       </polygon>
+    </shape>
+    <shape name="circle" rotatable="false" editableColorIndex="0">
+      <circle x="0" y="0" marked="true" color="-1920102913" diameter="300" filled="true"></circle>
     </shape>
     <shape name="person" rotatable="false" editableColorIndex="0">
       <circle x="110" y="5" marked="true" color="-1920102913" diameter="80" filled="true"></circle>
@@ -950,16 +954,6 @@ This version MUST converge because:
         <point x="135" y="105"></point>
       </polygon>
     </shape>
-    <shape name="circle" rotatable="false" editableColorIndex="0">
-      <circle x="0" y="0" marked="true" color="-1920102913" diameter="300" filled="true"></circle>
-    </shape>
-    <shape name="triangle" rotatable="false" editableColorIndex="0">
-      <polygon color="-1920102913" filled="true" marked="true">
-        <point x="150" y="30"></point>
-        <point x="15" y="255"></point>
-        <point x="285" y="255"></point>
-      </polygon>
-    </shape>
     <shape name="square" rotatable="false" editableColorIndex="0">
       <rectangle endX="270" startY="30" marked="true" color="-1920102913" endY="270" startX="30" filled="true"></rectangle>
     </shape>
@@ -975,6 +969,13 @@ This version MUST converge because:
         <point x="94" y="175"></point>
         <point x="3" y="108"></point>
         <point x="116" y="108"></point>
+      </polygon>
+    </shape>
+    <shape name="triangle" rotatable="false" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="30"></point>
+        <point x="15" y="255"></point>
+        <point x="285" y="255"></point>
       </polygon>
     </shape>
   </turtleShapes>
