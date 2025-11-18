@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0-beta2" snapToGrid="false">
-  <code>extensions [ llm ]
+  <code><![CDATA[extensions [ llm ]
 
 to test-extension-loading
   print "Testing extension loading..."
@@ -20,7 +20,7 @@ to test-sync-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "../config.txt"
+    llm:load-config "config.txt"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -28,6 +28,7 @@ to test-sync-chat
     llm:set-api-key "your-openai-key-here"
   ]
 
+  print "Q: Who are you ?"
   let result llm:chat "Who are you ?"
   print (word "Sync chat result: " result)
 end
@@ -37,7 +38,7 @@ to test-async-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "demos/config"
+    llm:load-config "config.txt"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -204,6 +205,152 @@ to test-config-loading
   ]
 end
 
+to test-ollama-not-running
+  print "Testing Ollama provider when server is not running..."
+
+  ; Check status - should show reachable: false if Ollama is not running
+  print "Checking Ollama status in provider-status:"
+  let status llm:provider-status
+  foreach status [ provider-info ->
+    if item 0 provider-info = "ollama" [
+      print provider-info
+      ; Expected: ["ollama" ["ready" false] ["reachable" false] ["base-url" "http://localhost:11434"]]
+    ]
+  ]
+
+  ; Check if Ollama appears in ready providers list
+  let ready-providers llm:providers
+  ifelse member? "ollama" ready-providers [
+    print "✓ Ollama is reachable and ready"
+  ] [
+    print "✗ Ollama is NOT in ready providers list (server not running or not installed)"
+  ]
+
+  ; Try to use Ollama when not running (will fail if server is down)
+  print "\nAttempting to use Ollama provider:"
+  carefully [
+    llm:set-provider "ollama"
+    print "Provider set to Ollama"
+
+    ; This will fail if Ollama server is not running
+    let result llm:chat "test"
+    print "✓ UNEXPECTED: Chat succeeded (Ollama must be running)"
+  ] [
+    print (word "✓ EXPECTED: Error when Ollama not running: " error-message)
+  ]
+end
+
+to test-invalid-config
+  print "Testing config validation with missing API keys..."
+
+  ; First, clear any existing configuration
+  carefully [
+    llm:set-provider "openai"
+    ; Don't set API key
+
+    print "Checking provider status without API key:"
+    let status llm:provider-status
+    foreach status [ provider-info ->
+      if item 0 provider-info = "openai" [
+        print provider-info
+        ; Expected: ["openai" ["ready" false] ["has-key" false]]
+      ]
+    ]
+
+    ; Check if OpenAI appears in ready providers
+    let ready-providers llm:providers
+    ifelse member? "openai" ready-providers [
+      print "✗ UNEXPECTED: OpenAI in ready list without API key"
+    ] [
+      print "✓ EXPECTED: OpenAI NOT in ready list (no API key)"
+    ]
+
+    ; Try to use provider without API key (should fail)
+    print "\nAttempting to chat without API key:"
+    let result llm:chat "test"
+    print "✗ UNEXPECTED: Chat succeeded without API key"
+  ] [
+    print (word "✓ EXPECTED: Error when using provider without API key: " error-message)
+  ]
+end
+
+to test-provider-readiness
+  print "Testing provider readiness checks..."
+  print ""
+
+  ; Show all providers vs ready providers
+  print "All supported providers:"
+  let all-providers llm:providers-all
+  print all-providers
+  print ""
+
+  print "Ready providers (with API keys or reachable):"
+  let ready-providers llm:providers
+  print ready-providers
+  print ""
+
+  ; Show which providers are not ready and why
+  print "Detailed status for non-ready providers:"
+  let status llm:provider-status
+  foreach status [ provider-info ->
+    let provider-name item 0 provider-info
+    let is-ready false
+
+    ; Check if provider is in ready list
+    ifelse member? provider-name ready-providers [
+      ; Skip ready providers
+    ] [
+      ; Show why provider is not ready
+      print (word provider-name " is NOT ready:")
+      print (word "  Status: " provider-info)
+
+      ; Suggest how to fix
+      if provider-name = "ollama" [
+        print "  Fix: Install and start Ollama server, or run: ollama serve"
+      ]
+      if provider-name = "openai" or provider-name = "anthropic" or provider-name = "gemini" [
+        print (word "  Fix: Set API key or run: llm:provider-help \"" provider-name "\"")
+      ]
+      print ""
+    ]
+  ]
+end
+
+to test-config-error-messages
+  print "Testing helpful error messages for config issues..."
+  print ""
+
+  ; Test 1: Provider help for all providers
+  print "=== Testing provider help messages ==="
+  foreach ["openai" "anthropic" "gemini" "ollama"] [ provider ->
+    print (word "\nHelp for " provider ":")
+    print llm:provider-help provider
+  ]
+  print ""
+
+  ; Test 2: Invalid provider name
+  print "=== Testing invalid provider name ==="
+  carefully [
+    llm:set-provider "invalid-provider"
+    print "✗ UNEXPECTED: Set invalid provider succeeded"
+  ] [
+    print (word "✓ EXPECTED: Error for invalid provider: " error-message)
+  ]
+  print ""
+
+  ; Test 3: Show active config
+  print "=== Testing active config display ==="
+  carefully [
+    llm:set-provider "openai"
+    let active llm:active
+    print (word "Active configuration: " active)
+    print "\nFull config summary:"
+    print llm:config
+  ] [
+    print (word "Error getting active config: " error-message)
+  ]
+end
+
 to test-multi-provider-complete
   print "=== Multi-Provider Extension Test Suite ==="
   print ""
@@ -226,7 +373,52 @@ to test-multi-provider-complete
 
   print "=== Multi-Provider Test Suite Complete ==="
   print "Ready to test with real API keys!"
-end</code>
+end
+
+to test-config-validation-complete
+  print "=== Config Validation and Error Handling Test Suite ==="
+  print ""
+
+  ; Test 1: Provider readiness checks
+  print "Test 1: Provider Readiness Checks"
+  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  test-provider-readiness
+  print ""
+
+  ; Test 2: Ollama server not running
+  print "Test 2: Ollama Server Not Running"
+  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  test-ollama-not-running
+  print ""
+
+  ; Test 3: Invalid config (missing API keys)
+  print "Test 3: Invalid Config (Missing API Keys)"
+  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  test-invalid-config
+  print ""
+
+  ; Test 4: Error messages and help
+  print "Test 4: Error Messages and Help"
+  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  test-config-error-messages
+  print ""
+
+  ; Test 5: Active config and status
+  print "Test 5: Active Config and Status"
+  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  test-active-config
+  print ""
+
+  print "=== Config Validation Test Suite Complete ==="
+  print ""
+  print "Summary of what was tested:"
+  print "  ✓ Provider readiness checks (llm:providers vs llm:providers-all)"
+  print "  ✓ Ollama server reachability detection"
+  print "  ✓ API key validation and error handling"
+  print "  ✓ Helpful error messages and setup instructions"
+  print "  ✓ Active configuration reporting"
+  print "  ✓ Provider status detailed reporting"
+end]]></code>
   <widgets>
     <view x="210" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="429" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="429" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>
   </widgets>
