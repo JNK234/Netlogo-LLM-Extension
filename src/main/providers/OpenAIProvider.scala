@@ -20,7 +20,7 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends LLMProvider {
   // Set default configuration
   configStore.set(ConfigStore.PROVIDER, "openai")
   configStore.set(ConfigStore.MODEL, ConfigStore.DEFAULT_OPENAI_MODEL)
-  configStore.set(ConfigStore.BASE_URL, ConfigStore.DEFAULT_OPENAI_BASE_URL)
+  configStore.set(ConfigStore.OPENAI_BASE_URL, ConfigStore.DEFAULT_OPENAI_BASE_URL)
   configStore.set(ConfigStore.TEMPERATURE, ConfigStore.DEFAULT_TEMPERATURE)
   configStore.set(ConfigStore.MAX_TOKENS, ConfigStore.DEFAULT_MAX_TOKENS)
 
@@ -49,11 +49,12 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends LLMProvider {
   }
 
   private def sendChatRequest(request: ChatRequest): Future[ChatResponse] = {
-    val apiKey = configStore.get(ConfigStore.API_KEY).getOrElse(
-      throw new IllegalStateException("API key not configured")
-    )
+    val apiKey = configStore.get(ConfigStore.OPENAI_API_KEY)
+      .orElse(configStore.get(ConfigStore.API_KEY))
+      .getOrElse(throw new IllegalStateException("API key not configured"))
 
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, ConfigStore.DEFAULT_OPENAI_BASE_URL)
+    val baseUrl = configStore.get(ConfigStore.OPENAI_BASE_URL)
+      .getOrElse(ConfigStore.DEFAULT_OPENAI_BASE_URL)
     val apiUrl = uri"$baseUrl/chat/completions"
 
     val headers = Map(

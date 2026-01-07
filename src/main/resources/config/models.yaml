@@ -34,6 +34,7 @@ openai:
   - chatgpt-4o
   - gpt-4o-search-preview
   - gpt-4o-mini-search-preview
+  - gpt-3.5-turbo
 
 anthropic:
   # Claude 4.5 (latest production)

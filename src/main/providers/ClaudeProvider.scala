@@ -23,7 +23,7 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends LLMProvider {
   // Set default configuration
   configStore.set(ConfigStore.PROVIDER, "anthropic")
   configStore.set(ConfigStore.MODEL, defaultModel)
-  configStore.set(ConfigStore.BASE_URL, "https://api.anthropic.com/v1")
+  configStore.set(ConfigStore.ANTHROPIC_BASE_URL, "https://api.anthropic.com/v1")
   configStore.set(ConfigStore.TEMPERATURE, ConfigStore.DEFAULT_TEMPERATURE)
   configStore.set(ConfigStore.MAX_TOKENS, "4000")
 
@@ -52,11 +52,12 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends LLMProvider {
   }
 
   private def sendChatRequest(request: ChatRequest): Future[ChatResponse] = {
-    val apiKey = configStore.get(ConfigStore.API_KEY).getOrElse(
-      throw new IllegalStateException("API key not configured")
-    )
+    val apiKey = configStore.get(ConfigStore.ANTHROPIC_API_KEY)
+      .orElse(configStore.get(ConfigStore.API_KEY))
+      .getOrElse(throw new IllegalStateException("API key not configured"))
 
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "https://api.anthropic.com/v1")
+    val baseUrl = configStore.get(ConfigStore.ANTHROPIC_BASE_URL)
+      .getOrElse("https://api.anthropic.com/v1")
     val apiUrl = uri"$baseUrl/messages"
 
     val headers = Map(
