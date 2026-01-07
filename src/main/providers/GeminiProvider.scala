@@ -23,7 +23,7 @@ class GeminiProvider(implicit ec: ExecutionContext) extends LLMProvider {
   // Set default configuration
   configStore.set(ConfigStore.PROVIDER, "gemini")
   configStore.set(ConfigStore.MODEL, defaultModel)
-  configStore.set(ConfigStore.BASE_URL, "https://generativelanguage.googleapis.com/v1beta")
+  configStore.set(ConfigStore.GEMINI_BASE_URL, "https://generativelanguage.googleapis.com/v1beta")
   configStore.set(ConfigStore.TEMPERATURE, ConfigStore.DEFAULT_TEMPERATURE)
   configStore.set(ConfigStore.MAX_TOKENS, "2048")
 
@@ -52,11 +52,12 @@ class GeminiProvider(implicit ec: ExecutionContext) extends LLMProvider {
   }
 
   private def sendChatRequest(request: ChatRequest): Future[ChatResponse] = {
-    val apiKey = configStore.get(ConfigStore.API_KEY).getOrElse(
-      throw new IllegalStateException("API key not configured")
-    )
+    val apiKey = configStore.get(ConfigStore.GEMINI_API_KEY)
+      .orElse(configStore.get(ConfigStore.API_KEY))
+      .getOrElse(throw new IllegalStateException("API key not configured"))
 
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "https://generativelanguage.googleapis.com/v1beta")
+    val baseUrl = configStore.get(ConfigStore.GEMINI_BASE_URL)
+      .getOrElse("https://generativelanguage.googleapis.com/v1beta")
     val apiUrl = uri"$baseUrl/models/${request.model}:generateContent?key=$apiKey"
 
     val headers = Map(

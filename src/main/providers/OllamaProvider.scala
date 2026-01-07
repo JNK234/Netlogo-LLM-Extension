@@ -23,7 +23,7 @@ class OllamaProvider(implicit ec: ExecutionContext) extends LLMProvider {
   // Set default configuration
   configStore.set(ConfigStore.PROVIDER, "ollama")
   configStore.set(ConfigStore.MODEL, defaultModel)
-  configStore.set(ConfigStore.BASE_URL, "http://localhost:11434")
+  configStore.set(ConfigStore.OLLAMA_BASE_URL, "http://localhost:11434")
   configStore.set(ConfigStore.TEMPERATURE, ConfigStore.DEFAULT_TEMPERATURE)
   configStore.set(ConfigStore.MAX_TOKENS, "2048")
 
@@ -52,7 +52,8 @@ class OllamaProvider(implicit ec: ExecutionContext) extends LLMProvider {
   }
 
   private def sendChatRequest(request: ChatRequest): Future[ChatResponse] = {
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "http://localhost:11434")
+    val baseUrl = configStore.get(ConfigStore.OLLAMA_BASE_URL)
+      .getOrElse("http://localhost:11434")
     val apiUrl = uri"$baseUrl/api/chat"
 
     val headers = Map(
@@ -181,7 +182,8 @@ class OllamaProvider(implicit ec: ExecutionContext) extends LLMProvider {
    * Check if Ollama server is accessible
    */
   def checkServerConnection(): Future[Boolean] = {
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "http://localhost:11434")
+    val baseUrl = configStore.get(ConfigStore.OLLAMA_BASE_URL)
+      .getOrElse("http://localhost:11434")
     val apiUrl = uri"$baseUrl/api/tags"
 
     val httpRequest = basicRequest.get(apiUrl)
@@ -199,7 +201,8 @@ class OllamaProvider(implicit ec: ExecutionContext) extends LLMProvider {
    * @return Future containing set of installed model names
    */
   def listInstalledModels(): Future[Set[String]] = {
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "http://localhost:11434")
+    val baseUrl = configStore.get(ConfigStore.OLLAMA_BASE_URL)
+      .getOrElse("http://localhost:11434")
     val apiUrl = uri"$baseUrl/api/tags"
 
     val httpRequest = basicRequest.get(apiUrl)

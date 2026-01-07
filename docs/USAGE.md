@@ -104,8 +104,8 @@ Each agent (observer/turtles/patches) maintains its own conversation state.
 
 - Discovery
 ```
-show llm:providers   ;; available providers
-show llm:models      ;; models supported by current provider
+show llm:providers      ;; available providers
+show llm:list-models    ;; models supported by current provider
 ```
 
 ## Common Patterns
@@ -140,7 +140,7 @@ ask turtles with [label = "pending"] [
 - Verify setup:
 ```
 show llm:providers
-show llm:models
+show llm:list-models
 show llm:chat "Say hello in five words."
 ```
 - For Ollama:

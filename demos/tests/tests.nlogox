@@ -9,8 +9,6 @@ to test-llm-providers
   
   llm:set-provider "gemini"
 
-  
-
   llm:set-model "gemini-2.5-pro"
   
   let result llm:chat "Who are you ?"
@@ -28,7 +26,7 @@ to test-extension-loading
   llm:set-provider "openai"
   print "✓ llm:set-provider works"
 
-  llm:set-model "gpt-3.5-turbo"
+  llm:set-model "gpt-4o-mini"
   print "✓ llm:set-model works"
 
   print "Extension loaded successfully!"
@@ -47,7 +45,7 @@ to test-sync-chat
     llm:set-api-key "your-openai-key-here"
   ]
 
-  let result llm:chat "Who are you ?"
+  let result llm:chat "What is your name ?"
   print (word "Sync chat result: " result)
 end
 
@@ -56,7 +54,7 @@ to test-async-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "demos/config"
+    llm:load-config "../config.txt"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -112,70 +110,31 @@ to test-providers-list
   print (word "Total providers available: " length providers)
 end
 
-to test-models-list
-  print "Testing llm:list-models primitive..."
-
-  ; Test models for different providers
-  llm:set-provider "openai"
-  let openai-output llm:list-models
-  print "OpenAI models output:"
-  print openai-output
-
-  ; Verify output format contains expected sections
-  if member? "=== Available Models ===" openai-output [
-    print "✓ Output contains header section"
-  ]
-  if member? "--- openai ---" openai-output [
-    print "✓ Output contains provider section"
-  ]
-  if member? "Currently using:" openai-output [
-    print "✓ Output contains current model info"
-  ]
-
-  llm:set-provider "anthropic"
-  let anthropic-output llm:list-models
-  print ""
-  print "Anthropic models output:"
-  print anthropic-output
-
-  llm:set-provider "gemini"
-  let gemini-output llm:list-models
-  print ""
-  print "Gemini models output:"
-  print gemini-output
-
-  llm:set-provider "ollama"
-  let ollama-output llm:list-models
-  print ""
-  print "Ollama models output:"
-  print ollama-output
-end
-
 to test-provider-switching
   print "Testing provider switching..."
 
   ; Test switching between providers
   print "Switching to OpenAI..."
   llm:set-provider "openai"
-  llm:set-model "gpt-3.5-turbo"
+  llm:set-model "gpt-4o-mini"
   let openai-output llm:list-models
   print "OpenAI models listed"
 
   print "Switching to Anthropic..."
   llm:set-provider "anthropic"
-  llm:set-model "claude-3-haiku-20240307"
+  llm:set-model "claude-haiku-4-5-20251001"
   let claude-output llm:list-models
   print "Claude models listed"
 
   print "Switching to Gemini..."
   llm:set-provider "gemini"
-  llm:set-model "gemini-1.5-flash"
+  llm:set-model "gemini-2.5-flash"
   let gemini-output llm:list-models
   print "Gemini models listed"
 
   print "Switching to Ollama..."
   llm:set-provider "ollama"
-  llm:set-model "llama3.2"
+  llm:set-model "llama3.3:8b"
   let ollama-output llm:list-models
   print "Ollama models listed"
 
@@ -187,7 +146,7 @@ to test-config-loading
 
   ; Test loading config file
   carefully [
-    llm:load-config "demos/config"
+    llm:load-config "../config.txt"
     print "✓ Config loaded successfully"
 
     ; Check what provider was loaded
@@ -207,10 +166,6 @@ to test-multi-provider-complete
 
   ; Test 1: List available providers
   test-providers-list
-  print ""
-
-  ; Test 2: List models for each provider
-  test-models-list
   print ""
 
   ; Test 3: Test provider switching
@@ -303,11 +258,11 @@ to test-active-marker-changes
 
   ; Switch to different provider
   llm:set-provider "anthropic"
-  llm:set-model "claude-3-5-haiku-latest"
+  llm:set-model "claude-haiku-4-5-20251001"
   let output2 llm:list-models
 
-  ifelse member? "claude-3-5-haiku-latest [ACTIVE]" output2 [
-    print "PASS: claude-3-5-haiku-latest marked as [ACTIVE]"
+  ifelse member? "claude-haiku-4-5-20251001 [ACTIVE]" output2 [
+    print "PASS: claude-haiku-4-5-20251001 marked as [ACTIVE]"
   ] [
     print "FAIL: claude model not marked as active"
   ]

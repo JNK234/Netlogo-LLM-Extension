@@ -300,7 +300,7 @@ class LLMExtension extends DefaultClassManager {
       // Validate model against current provider
       if (!ModelRegistry.isValidModel(providerName, model)) {
         throw new ExtensionException(
-          s"Unsupported model '$model' for provider '$providerName'. Supported models: ${ModelRegistry.getModelListForDisplay(providerName)}. Use llm:models to see all available models."
+          s"Unsupported model '$model' for provider '$providerName'. Supported models: ${ModelRegistry.getModelListForDisplay(providerName)}. Use llm:list-models to see all available models."
         )
       }
       
