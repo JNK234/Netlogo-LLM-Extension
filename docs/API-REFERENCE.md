@@ -4,6 +4,29 @@
 
 The NetLogo Multi-LLM Extension provides a unified interface for multiple Large Language Model providers. All primitives are prefixed with `llm:`.
 
+## Quick Command Reference
+
+| Command | Category | Description |
+|---------|----------|-------------|
+| `llm:chat text` | Chat | Send synchronous chat message, returns response |
+| `llm:chat-async text` | Chat | Send asynchronous chat message, returns awaitable reporter |
+| `llm:chat-with-template file vars` | Chat | Send templated prompt with variable substitution |
+| `llm:choose prompt choices` | Chat | Force selection from provided options |
+| `llm:history` | History | Get current agent's conversation history |
+| `llm:set-history list` | History | Set conversation history for current agent |
+| `llm:clear-history` | History | Clear conversation history for current agent |
+| `llm:load-config filename` | Configuration | Load settings from file |
+| `llm:set-provider name` | Configuration | Set active provider (openai, anthropic, gemini, ollama) |
+| `llm:set-api-key key` | Configuration | Set API key for current provider |
+| `llm:set-model name` | Configuration | Set model to use for current provider |
+| `llm:providers` | Discovery | List ready providers with configured keys/servers |
+| `llm:providers-all` | Discovery | List all supported providers (ready or not) |
+| `llm:provider-status` | Discovery | Get detailed status of each provider |
+| `llm:provider-help name` | Discovery | Get setup instructions for a provider |
+| `llm:list-models` | Discovery | List all available models for current provider |
+| `llm:active` | Discovery | Get currently active provider and model |
+| `llm:config` | Discovery | Get configuration summary (keys masked for security) |
+
 ## Configuration Primitives
 
 ### llm:load-config
