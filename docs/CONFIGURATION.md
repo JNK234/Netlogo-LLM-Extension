@@ -159,7 +159,7 @@ show llm:chat "Name two agent-based modeling use cases."
 ```
 
 Notes
-- The extension’s `llm:models` reports supported models; `ollama list` shows what is actually installed locally.
+- The extension's `llm:list-models` shows all supported models across providers; `ollama list` shows what is actually installed locally.
 - Some models are large; ensure sufficient RAM/VRAM. Close other apps if startup fails.
 - Default port is `11434`; adjust `base_url` if you run on a different host/port.
 
@@ -178,7 +178,7 @@ llm:set-model "gpt-4o"
 - Verify provider and models:
 ```
 show llm:providers
-show llm:models
+print llm:list-models
 ```
 - Test a simple call:
 ```
@@ -189,3 +189,106 @@ show llm:chat "Say hello in five words."
 ## Security Tips
 - Do not commit secrets. Keep your config in `.gitignore`.
 - Use `demos/config-reference.txt` as a safe template and keep your real `config.txt` local.
+
+## Custom Model Registry (models-override.yaml)
+
+You can add custom or newly released models without waiting for an extension update by creating a `models-override.yaml` file.
+
+### Location
+Save the file in the same directory as your `.nlogo` model file:
+```
+my-model.nlogo
+models-override.yaml   <-- Place it here
+config.txt
+```
+
+### Format
+The file uses YAML format with provider sections. Each provider section completely replaces the bundled models for that provider:
+
+```yaml
+openai:
+  - gpt-4o
+  - gpt-4o-mini
+  - gpt-4-turbo
+  - o1-preview
+  - o1-mini
+  - gpt-4o-2024-11-20  # Add new model
+
+anthropic:
+  - claude-3-5-sonnet-20241022
+  - claude-3-5-haiku-latest
+  - claude-3-opus-latest
+  - claude-3-7-sonnet-20250219  # Add new model
+
+gemini:
+  - gemini-2.0-flash-exp  # Override to use only newest model
+  - gemini-1.5-pro
+  - gemini-1.5-flash
+
+ollama:
+  - llama3.2
+  - mistral
+  - qwen2
+  - deepseek-r1:latest  # Add locally installed model
+```
+
+### Behavior
+- **Complete replacement**: Each provider section you include completely replaces the bundled models for that provider
+- **Partial override**: You can override just one provider and leave others unchanged
+- **Custom marker**: Models from the override file are marked with `[custom]` in `llm:list-models` output
+- **Validation**: The extension still validates that the model you select exists in the combined registry
+
+### Use Cases
+1. **New model releases**: Add newly announced models before the extension is updated
+   ```yaml
+   openai:
+     - gpt-4o
+     - gpt-4o-mini
+     - gpt-5  # Hypothetical future model
+   ```
+
+2. **Local Ollama models**: Include models you've installed locally
+   ```yaml
+   ollama:
+     - llama3.2
+     - my-custom-finetune:latest
+     - codellama:13b
+   ```
+
+3. **Simplify model list**: Reduce clutter by listing only the models you use
+   ```yaml
+   anthropic:
+     - claude-3-5-sonnet-20241022  # Only show the model I use
+   ```
+
+### Example
+1. Create `models-override.yaml` next to your model:
+   ```yaml
+   gemini:
+     - gemini-2.0-flash-exp
+     - gemini-1.5-pro
+   ```
+
+2. Load config and check available models:
+   ```netlogo
+   extensions [ llm ]
+   llm:load-config "config.txt"
+   print llm:list-models
+
+   ; Output shows:
+   ; === Gemini Models ===
+   ; gemini-2.0-flash-exp [custom]
+   ; gemini-1.5-pro [custom]
+   ```
+
+3. Set a custom model:
+   ```netlogo
+   llm:set-provider "gemini"
+   llm:set-model "gemini-2.0-flash-exp"  ; Uses custom model
+   ```
+
+### Notes
+- The override file is optional - if not present, bundled models are used
+- Invalid YAML syntax will cause an error when loading config
+- The file is loaded automatically when you call `llm:load-config`
+- You must include ALL models you want for a provider - no merging with bundled list

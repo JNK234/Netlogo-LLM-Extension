@@ -97,7 +97,7 @@ llm:set-model "llama3.2"
 **Notes**:
 - Validates model against current provider's supported models
 - Throws error with model suggestions if model is invalid
-- Use `llm:models` to see all available models for the current provider
+- Use `llm:list-models` to see all available models across all providers
 
 ## Chat Primitives
 
@@ -372,24 +372,59 @@ print llm:config
 - API keys are masked for security (shows first 4 and last 4 characters)
 - Useful for debugging configuration issues
 
-### llm:models
+### llm:list-models
 
-**Syntax**: `llm:models`
+**Syntax**: `llm:list-models`
 
-**Description**: Returns list of available models for current provider
+**Description**: Returns a formatted string showing available models for ALL providers
 
-**Returns**: List - Available model names for active provider
+**Returns**: String - Formatted multi-line string with provider sections, model lists, and status indicators
+
+**Format**:
+- Shows all providers grouped with headers
+- Marks active provider and model with `[ACTIVE]`
+- Marks custom models from `models-override.yaml` with `[custom]`
+- Each provider section shows all available models for that provider
 
 **Example**:
 ```netlogo
-llm:set-provider "openai"
-let openai-models llm:models
-print openai-models  ; ["gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini" "o1" ...]
+print llm:list-models
 
-llm:set-provider "ollama"
-let local-models llm:models
-print local-models   ; Models installed locally via ollama
+; Output format:
+; === OpenAI Models ===
+; gpt-4o [ACTIVE]
+; gpt-4o-mini
+; gpt-4-turbo
+; gpt-3.5-turbo
+; o1-preview
+; o1-mini
+;
+; === Anthropic Models ===
+; claude-3-5-sonnet-20241022
+; claude-3-5-haiku-latest
+; claude-3-opus-latest
+;
+; === Gemini Models === [ACTIVE]
+; gemini-2.0-flash-exp [custom] [ACTIVE]
+; gemini-1.5-pro
+; gemini-1.5-flash
+;
+; === Ollama Models ===
+; llama3.2
+; mistral
+; qwen2
+
+; Use it to see what models are available
+llm:set-provider "anthropic"
+print llm:list-models  ; Shows all providers, with Anthropic marked as ACTIVE
 ```
+
+**Notes**:
+- Returns a STRING (not a list) with formatted output
+- Shows ALL providers in a single view, not just the active one
+- Use this to discover available models across all providers
+- Custom models added via `models-override.yaml` are marked with `[custom]`
+- The currently active provider and model are marked with `[ACTIVE]`
 
 ## Usage Patterns
 

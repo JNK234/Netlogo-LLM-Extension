@@ -86,7 +86,7 @@ class LLMExtension extends DefaultClassManager {
     manager.addPrimitive("providers-all", ProvidersAllReporter)
     manager.addPrimitive("provider-status", ProviderStatusReporter)
     manager.addPrimitive("provider-help", ProviderHelpReporter)
-    manager.addPrimitive("models", ModelsReporter)
+    manager.addPrimitive("list-models", ListModelsReporter)
     manager.addPrimitive("active", ActiveReporter)
     manager.addPrimitive("config", ConfigReporter)
   }
@@ -323,7 +323,14 @@ class LLMExtension extends DefaultClassManager {
       ConfigLoader.loadFromFile(filename, modelDir) match {
         case Success(config) =>
           configStore.loadFromMap(config)
-          
+
+          // Load model override file if available
+          modelDir.foreach { dir =>
+            ModelRegistry.loadOverride(dir).foreach { message =>
+              println(message)
+            }
+          }
+
           // Validate provider after loading config
           val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
           providerName.toLowerCase.trim match {
@@ -800,47 +807,25 @@ Response:"""
     }
   }
   
-  object ModelsReporter extends Reporter {
-    override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
-    
+  object ListModelsReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.StringType)
+
     override def report(args: Array[Argument], context: Context): AnyRef = {
       try {
-        val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
-        
-        // For Ollama, try to fetch installed models if reachable
-        val supportedModels = if (providerName.toLowerCase.trim == "ollama") {
-          try {
-            currentProvider match {
-              case Some(provider: OllamaProvider) =>
-                // Try to get installed models with a short timeout
-                val installedFuture = provider.listInstalledModels()
-                val installed = Await.result(installedFuture, 2.seconds)
-                
-                if (installed.nonEmpty) {
-                  installed
-                } else {
-                  // Fallback to curated list if empty
-                  ModelRegistry.getSupportedModels("ollama")
-                }
-              case _ =>
-                // Provider not initialized yet, use curated list
-                ModelRegistry.getSupportedModels("ollama")
-            }
-          } catch {
-            case _: Exception =>
-              // If fetching fails, use curated list
-              ModelRegistry.getSupportedModels("ollama")
-          }
-        } else {
-          // For non-Ollama providers, use ModelRegistry
-          ModelRegistry.getSupportedModels(providerName)
+        // Load override from model directory if available
+        Option(context.workspace.getModelPath).flatMap { path =>
+          Option(new java.io.File(path).getParent)
+        }.foreach { modelDir =>
+          ModelRegistry.loadOverride(modelDir)
         }
-        
-        val modelList = supportedModels.toList.sorted
-        LogoList.fromJava(modelList.asJava)
+
+        val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
+        val model = configStore.getOrElse(ConfigStore.MODEL, ModelRegistry.defaultModel(providerName))
+
+        ModelRegistry.formatModelList(providerName, model)
       } catch {
         case e: Exception =>
-          throw new ExtensionException(s"Failed to get supported models: ${e.getMessage}")
+          throw new ExtensionException(s"Failed to list models: ${e.getMessage}")
       }
     }
   }

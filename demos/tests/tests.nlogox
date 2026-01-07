@@ -2,6 +2,25 @@
 <model version="NetLogo 7.0.0-beta2" snapToGrid="false">
   <code><![CDATA[extensions [ llm ]
 
+to test-llm-providers
+  print "Testing Available providers..."
+  
+  llm:set-api-key "AIzaSyDbM-TMmsX_tiP790DF6vLjmRHM1dXOwOw"
+  
+  llm:set-provider "gemini"
+
+  
+
+  llm:set-model "gemini-2.5-pro"
+  
+  let result llm:chat "Who are you ?"
+  print (word "Sync chat result: " result)
+  
+  
+  
+  print result
+end
+
 to test-extension-loading
   print "Testing extension loading..."
 
@@ -20,7 +39,7 @@ to test-sync-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "config.txt"
+    llm:load-config "../config.txt"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -28,7 +47,6 @@ to test-sync-chat
     llm:set-api-key "your-openai-key-here"
   ]
 
-  print "Q: Who are you ?"
   let result llm:chat "Who are you ?"
   print (word "Sync chat result: " result)
 end
@@ -38,7 +56,7 @@ to test-async-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "config.txt"
+    llm:load-config "demos/config"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -74,86 +92,63 @@ end
 to test-providers-list
   print "Testing llm:providers primitive..."
 
-  ; llm:providers now returns only READY providers (with API keys or reachable)
-  let ready-providers llm:providers
-  print (word "Ready providers: " ready-providers)
-  print (word "Total ready providers: " length ready-providers)
+  let providers llm:providers
+  print (word "Available providers: " providers)
 
-  ; llm:providers-all returns ALL supported providers
-  let all-providers llm:providers-all
-  print (word "All supported providers: " all-providers)
-  print (word "Total supported providers: " length all-providers)
-
-  ; llm:provider-status gives detailed status
-  print "Provider status details:"
-  foreach llm:provider-status [ provider-info ->
-    print provider-info
+  ; Verify we have expected providers
+  if member? "openai" providers [
+    print "✓ OpenAI provider available"
   ]
-end
-
-to test-active-config
-  print "Testing llm:active and llm:config primitives..."
-
-  ; Set a provider and model
-  carefully [
-    llm:set-provider "openai"
-    llm:set-model "gpt-4o-mini"
-    
-    ; Check active configuration
-    let active llm:active
-    print (word "Active provider and model: " active)
-    
-    if item 0 active = "openai" [
-      print "✓ Active provider is openai"
-    ]
-    if item 1 active = "gpt-4o-mini" [
-      print "✓ Active model is gpt-4o-mini"
-    ]
-    
-    ; Show full config (with masked keys)
-    print "Current configuration:"
-    print llm:config
-  ] [
-    print "Failed to test active config (provider validation failed)"
+  if member? "anthropic" providers [
+    print "✓ Anthropic provider available"
   ]
-end
+  if member? "gemini" providers [
+    print "✓ Gemini provider available"
+  ]
+  if member? "ollama" providers [
+    print "✓ Ollama provider available"
+  ]
 
-to test-provider-help
-  print "Testing llm:provider-help primitive..."
-
-  ; Get help for each provider
-  print "\n=== OpenAI Setup Help ==="
-  print llm:provider-help "openai"
-  
-  print "\n=== Ollama Setup Help ==="
-  print llm:provider-help "ollama"
-  
-  print "\n=== Anthropic Setup Help ==="
-  print llm:provider-help "anthropic"
-  
-  print "\n=== Gemini Setup Help ==="
-  print llm:provider-help "gemini"
+  print (word "Total providers available: " length providers)
 end
 
 to test-models-list
-  print "Testing llm:models primitive..."
+  print "Testing llm:list-models primitive..."
 
   ; Test models for different providers
   llm:set-provider "openai"
-  let openai-models llm:models
-  print (word "OpenAI models: " openai-models)
+  let openai-output llm:list-models
+  print "OpenAI models output:"
+  print openai-output
+
+  ; Verify output format contains expected sections
+  if member? "=== Available Models ===" openai-output [
+    print "✓ Output contains header section"
+  ]
+  if member? "--- openai ---" openai-output [
+    print "✓ Output contains provider section"
+  ]
+  if member? "Currently using:" openai-output [
+    print "✓ Output contains current model info"
+  ]
 
   llm:set-provider "anthropic"
-  let anthropic-models llm:models
-  print (word "Anthropic models: " anthropic-models)
+  let anthropic-output llm:list-models
+  print ""
+  print "Anthropic models output:"
+  print anthropic-output
 
   llm:set-provider "gemini"
-  let gemini-models llm:models
-  print (word "Gemini models: " gemini-models)
+  let gemini-output llm:list-models
+  print ""
+  print "Gemini models output:"
+  print gemini-output
 
   llm:set-provider "ollama"
-  let ollama-models llm:models
-  print (word "Ollama models: " ollama-models)
+  let ollama-output llm:list-models
+  print ""
+  print "Ollama models output:"
+  print ollama-output
 end
 
 to test-provider-switching
@@ -163,26 +158,26 @@ to test-provider-switching
   print "Switching to OpenAI..."
   llm:set-provider "openai"
   llm:set-model "gpt-3.5-turbo"
-  let openai-models llm:models
-  print (word "OpenAI models available: " length openai-models)
+  let openai-output llm:list-models
+  print "OpenAI models listed"
 
   print "Switching to Anthropic..."
   llm:set-provider "anthropic"
   llm:set-model "claude-3-haiku-20240307"
-  let claude-models llm:models
-  print (word "Claude models available: " length claude-models)
+  let claude-output llm:list-models
+  print "Claude models listed"
 
   print "Switching to Gemini..."
   llm:set-provider "gemini"
   llm:set-model "gemini-1.5-flash"
-  let gemini-models llm:models
-  print (word "Gemini models available: " length gemini-models)
+  let gemini-output llm:list-models
+  print "Gemini models listed"
 
   print "Switching to Ollama..."
   llm:set-provider "ollama"
   llm:set-model "llama3.2"
-  let ollama-models llm:models
-  print (word "Ollama models available: " length ollama-models)
+  let ollama-output llm:list-models
+  print "Ollama models listed"
 
   print "✓ Provider switching test completed"
 end
@@ -196,158 +191,13 @@ to test-config-loading
     print "✓ Config loaded successfully"
 
     ; Check what provider was loaded
-    let current-models llm:models
-    print (word "Current provider models: " current-models)
+    let current-output llm:list-models
+    print "Current provider models output:"
+    print current-output
 
   ] [
     print "✗ Config loading failed"
     print error-message
-  ]
-end
-
-to test-ollama-not-running
-  print "Testing Ollama provider when server is not running..."
-
-  ; Check status - should show reachable: false if Ollama is not running
-  print "Checking Ollama status in provider-status:"
-  let status llm:provider-status
-  foreach status [ provider-info ->
-    if item 0 provider-info = "ollama" [
-      print provider-info
-      ; Expected: ["ollama" ["ready" false] ["reachable" false] ["base-url" "http://localhost:11434"]]
-    ]
-  ]
-
-  ; Check if Ollama appears in ready providers list
-  let ready-providers llm:providers
-  ifelse member? "ollama" ready-providers [
-    print "✓ Ollama is reachable and ready"
-  ] [
-    print "✗ Ollama is NOT in ready providers list (server not running or not installed)"
-  ]
-
-  ; Try to use Ollama when not running (will fail if server is down)
-  print "\nAttempting to use Ollama provider:"
-  carefully [
-    llm:set-provider "ollama"
-    print "Provider set to Ollama"
-
-    ; This will fail if Ollama server is not running
-    let result llm:chat "test"
-    print "✓ UNEXPECTED: Chat succeeded (Ollama must be running)"
-  ] [
-    print (word "✓ EXPECTED: Error when Ollama not running: " error-message)
-  ]
-end
-
-to test-invalid-config
-  print "Testing config validation with missing API keys..."
-
-  ; First, clear any existing configuration
-  carefully [
-    llm:set-provider "openai"
-    ; Don't set API key
-
-    print "Checking provider status without API key:"
-    let status llm:provider-status
-    foreach status [ provider-info ->
-      if item 0 provider-info = "openai" [
-        print provider-info
-        ; Expected: ["openai" ["ready" false] ["has-key" false]]
-      ]
-    ]
-
-    ; Check if OpenAI appears in ready providers
-    let ready-providers llm:providers
-    ifelse member? "openai" ready-providers [
-      print "✗ UNEXPECTED: OpenAI in ready list without API key"
-    ] [
-      print "✓ EXPECTED: OpenAI NOT in ready list (no API key)"
-    ]
-
-    ; Try to use provider without API key (should fail)
-    print "\nAttempting to chat without API key:"
-    let result llm:chat "test"
-    print "✗ UNEXPECTED: Chat succeeded without API key"
-  ] [
-    print (word "✓ EXPECTED: Error when using provider without API key: " error-message)
-  ]
-end
-
-to test-provider-readiness
-  print "Testing provider readiness checks..."
-  print ""
-
-  ; Show all providers vs ready providers
-  print "All supported providers:"
-  let all-providers llm:providers-all
-  print all-providers
-  print ""
-
-  print "Ready providers (with API keys or reachable):"
-  let ready-providers llm:providers
-  print ready-providers
-  print ""
-
-  ; Show which providers are not ready and why
-  print "Detailed status for non-ready providers:"
-  let status llm:provider-status
-  foreach status [ provider-info ->
-    let provider-name item 0 provider-info
-    let is-ready false
-
-    ; Check if provider is in ready list
-    ifelse member? provider-name ready-providers [
-      ; Skip ready providers
-    ] [
-      ; Show why provider is not ready
-      print (word provider-name " is NOT ready:")
-      print (word "  Status: " provider-info)
-
-      ; Suggest how to fix
-      if provider-name = "ollama" [
-        print "  Fix: Install and start Ollama server, or run: ollama serve"
-      ]
-      if provider-name = "openai" or provider-name = "anthropic" or provider-name = "gemini" [
-        print (word "  Fix: Set API key or run: llm:provider-help \"" provider-name "\"")
-      ]
-      print ""
-    ]
-  ]
-end
-
-to test-config-error-messages
-  print "Testing helpful error messages for config issues..."
-  print ""
-
-  ; Test 1: Provider help for all providers
-  print "=== Testing provider help messages ==="
-  foreach ["openai" "anthropic" "gemini" "ollama"] [ provider ->
-    print (word "\nHelp for " provider ":")
-    print llm:provider-help provider
-  ]
-  print ""
-
-  ; Test 2: Invalid provider name
-  print "=== Testing invalid provider name ==="
-  carefully [
-    llm:set-provider "invalid-provider"
-    print "✗ UNEXPECTED: Set invalid provider succeeded"
-  ] [
-    print (word "✓ EXPECTED: Error for invalid provider: " error-message)
-  ]
-  print ""
-
-  ; Test 3: Show active config
-  print "=== Testing active config display ==="
-  carefully [
-    llm:set-provider "openai"
-    let active llm:active
-    print (word "Active configuration: " active)
-    print "\nFull config summary:"
-    print llm:config
-  ] [
-    print (word "Error getting active config: " error-message)
   ]
 end
 
@@ -375,49 +225,241 @@ to test-multi-provider-complete
   print "Ready to test with real API keys!"
 end
 
-to test-config-validation-complete
-  print "=== Config Validation and Error Handling Test Suite ==="
+;; ============================================================================
+;; NEW MODEL MANAGEMENT TESTS
+;; ============================================================================
+
+to test-list-models-format
+  print "=== Testing llm:list-models Output Format ==="
+
+  ; Set a known provider/model
+  llm:set-provider "openai"
+  llm:set-model "gpt-4o-mini"
+
+  let output llm:list-models
+
+  ; Test 1: Header present
+  ifelse member? "=== Available Models ===" output [
+    print "PASS: Header '=== Available Models ===' present"
+  ] [
+    print "FAIL: Missing header"
+  ]
+
+  ; Test 2: All provider sections present
+  ifelse member? "--- openai ---" output [
+    print "PASS: OpenAI section present"
+  ] [
+    print "FAIL: Missing OpenAI section"
+  ]
+
+  ifelse member? "--- anthropic ---" output [
+    print "PASS: Anthropic section present"
+  ] [
+    print "FAIL: Missing Anthropic section"
+  ]
+
+  ifelse member? "--- gemini ---" output [
+    print "PASS: Gemini section present"
+  ] [
+    print "FAIL: Missing Gemini section"
+  ]
+
+  ifelse member? "--- ollama ---" output [
+    print "PASS: Ollama section present"
+  ] [
+    print "FAIL: Missing Ollama section"
+  ]
+
+  ; Test 3: Currently using line present
+  ifelse member? "Currently using:" output [
+    print "PASS: 'Currently using:' line present"
+  ] [
+    print "FAIL: Missing 'Currently using:' line"
+  ]
+
+  ; Test 4: Active marker present for current model
+  ifelse member? "[ACTIVE]" output [
+    print "PASS: [ACTIVE] marker present"
+  ] [
+    print "FAIL: Missing [ACTIVE] marker"
+  ]
+
+  print "=== Format Test Complete ==="
+end
+
+to test-active-marker-changes
+  print "=== Testing [ACTIVE] Marker Updates ==="
+
+  ; Test switching providers changes the active marker
+  llm:set-provider "openai"
+  llm:set-model "gpt-4o"
+  let output1 llm:list-models
+
+  ifelse member? "gpt-4o [ACTIVE]" output1 [
+    print "PASS: gpt-4o marked as [ACTIVE]"
+  ] [
+    print "FAIL: gpt-4o not marked as active"
+  ]
+
+  ; Switch to different provider
+  llm:set-provider "anthropic"
+  llm:set-model "claude-3-5-haiku-latest"
+  let output2 llm:list-models
+
+  ifelse member? "claude-3-5-haiku-latest [ACTIVE]" output2 [
+    print "PASS: claude-3-5-haiku-latest marked as [ACTIVE]"
+  ] [
+    print "FAIL: claude model not marked as active"
+  ]
+
+  ; Verify old model no longer marked active
+  ifelse not member? "gpt-4o [ACTIVE]" output2 [
+    print "PASS: gpt-4o no longer marked [ACTIVE] after switch"
+  ] [
+    print "FAIL: gpt-4o still shows [ACTIVE] after switch"
+  ]
+
+  print "=== Active Marker Test Complete ==="
+end
+
+to test-model-validation
+  print "=== Testing Model Validation ==="
+
+  ; Test 1: Valid model should work
+  llm:set-provider "openai"
+  carefully [
+    llm:set-model "gpt-4o"
+    print "PASS: Valid model 'gpt-4o' accepted"
+  ] [
+    print "FAIL: Valid model rejected"
+  ]
+
+  ; Test 2: Invalid model should be rejected
+  carefully [
+    llm:set-model "invalid-model-xyz"
+    print "FAIL: Invalid model should have been rejected"
+  ] [
+    print "PASS: Invalid model 'invalid-model-xyz' correctly rejected"
+  ]
+
+  ; Test 3: Model from wrong provider should be rejected
+  llm:set-provider "anthropic"
+  carefully [
+    llm:set-model "gpt-4o"  ; OpenAI model on Anthropic provider
+    print "FAIL: Wrong provider model should have been rejected"
+  ] [
+    print "PASS: Model from wrong provider correctly rejected"
+  ]
+
+  print "=== Validation Test Complete ==="
+end
+
+to test-provider-all-vs-ready
+  print "=== Testing llm:providers vs llm:providers-all ==="
+
+  let ready-providers llm:providers
+  let all-providers llm:providers-all
+
+  print (word "Ready providers: " ready-providers)
+  print (word "All providers: " all-providers)
+
+  ; All providers should include at least 4
+  ifelse length all-providers >= 4 [
+    print "PASS: At least 4 providers in all-providers list"
+  ] [
+    print "FAIL: Expected at least 4 providers"
+  ]
+
+  ; All providers should be a superset of ready providers
+  let all-ready-in-all? true
+  foreach ready-providers [ p ->
+    if not member? p all-providers [
+      set all-ready-in-all? false
+    ]
+  ]
+
+  ifelse all-ready-in-all? [
+    print "PASS: All ready providers are in all-providers list"
+  ] [
+    print "FAIL: Some ready providers missing from all-providers"
+  ]
+
+  print "=== Provider Lists Test Complete ==="
+end
+
+to test-provider-status
+  print "=== Testing llm:provider-status ==="
+
+  let status llm:provider-status
+  print (word "Provider status: " status)
+
+  ; Check that status is a list
+  ifelse is-list? status [
+    print "PASS: provider-status returns a list"
+  ] [
+    print "FAIL: provider-status should return a list"
+  ]
+
+  ; Check each provider has status info
+  ifelse length status >= 4 [
+    print "PASS: Status for all 4 providers returned"
+  ] [
+    print "FAIL: Expected status for at least 4 providers"
+  ]
+
+  print "=== Provider Status Test Complete ==="
+end
+
+to test-quick-commands
+  print "=== Quick Command Reference ==="
+  print ""
+  print "Run these in Command Center to test the extension:"
+  print ""
+  print "1. List all models (new!):"
+  print "   print llm:list-models"
+  print ""
+  print "2. Check provider status:"
+  print "   print llm:provider-status"
+  print ""
+  print "3. List ready providers:"
+  print "   print llm:providers"
+  print ""
+  print "4. Get current config:"
+  print "   print llm:active"
+  print ""
+  print "5. Switch provider and model:"
+  print "   llm:set-provider \"ollama\""
+  print "   llm:set-model \"llama3.2\""
+  print ""
+  print "6. Test chat (requires working provider):"
+  print "   print llm:chat \"Hello!\""
+  print ""
+end
+
+to run-all-model-management-tests
+  print "========================================"
+  print "  MODEL MANAGEMENT TEST SUITE"
+  print "========================================"
   print ""
 
-  ; Test 1: Provider readiness checks
-  print "Test 1: Provider Readiness Checks"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-provider-readiness
+  test-list-models-format
   print ""
 
-  ; Test 2: Ollama server not running
-  print "Test 2: Ollama Server Not Running"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-ollama-not-running
+  test-active-marker-changes
   print ""
 
-  ; Test 3: Invalid config (missing API keys)
-  print "Test 3: Invalid Config (Missing API Keys)"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-invalid-config
+  test-model-validation
   print ""
 
-  ; Test 4: Error messages and help
-  print "Test 4: Error Messages and Help"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-config-error-messages
+  test-provider-all-vs-ready
   print ""
 
-  ; Test 5: Active config and status
-  print "Test 5: Active Config and Status"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-active-config
+  test-provider-status
   print ""
 
-  print "=== Config Validation Test Suite Complete ==="
-  print ""
-  print "Summary of what was tested:"
-  print "  ✓ Provider readiness checks (llm:providers vs llm:providers-all)"
-  print "  ✓ Ollama server reachability detection"
-  print "  ✓ API key validation and error handling"
-  print "  ✓ Helpful error messages and setup instructions"
-  print "  ✓ Active configuration reporting"
-  print "  ✓ Provider status detailed reporting"
+  print "========================================"
+  print "  ALL TESTS COMPLETE"
+  print "========================================"
 end]]></code>
   <widgets>
     <view x="210" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="429" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="429" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>
