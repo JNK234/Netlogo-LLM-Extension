@@ -160,13 +160,7 @@ class OllamaProvider(implicit ec: ExecutionContext) extends LLMProvider {
   override def defaultModel: String = "llama3.2"
 
   override def supportsModel(model: String): Boolean = {
-    // Common Ollama models - in practice, this would check what's actually installed
-    val commonModels = Set(
-      "llama3.2", "llama3.1", "llama3", "llama2",
-      "mistral", "mixtral", "codellama", "vicuna",
-      "phi3", "gemma", "qwen2", "deepseek-coder"
-    )
-    commonModels.contains(model)
+    ModelRegistry.isValidModel("ollama", model)
   }
 
   /**

@@ -1,0 +1,142 @@
+# NetLogo LLM Extension - Bundled Model Registry
+# This file defines the supported models for each LLM provider.
+# Only includes current/recommended models - legacy models removed.
+
+openai:
+  # GPT-5 (latest flagship)
+  - gpt-5
+  - gpt-5-mini
+  - gpt-5-nano
+  - gpt-5-chat
+  
+  # o-series reasoning models (latest)
+  - o3-deep-research
+  - o4-mini-deep-research
+  - o3-pro
+  - o3
+  - o3-mini
+  - o4-mini
+  
+  # GPT-4.1 (current non-reasoning)
+  - gpt-4.1
+  - gpt-4.1-mini
+  - gpt-4.1-nano
+
+    # o1 series (previous reasoning)
+  - o1-pro
+  - o1
+  - o1-mini  # deprecated
+  - o1-preview  # deprecated
+  
+  # GPT-4o (stable multimodal)
+  - gpt-4o
+  - gpt-4o-mini
+  - chatgpt-4o
+  - gpt-4o-search-preview
+  - gpt-4o-mini-search-preview
+
+anthropic:
+  # Claude 4.5 (latest production)
+  - claude-opus-4-5-20251101
+  - claude-sonnet-4-5-20250929
+  - claude-haiku-4-5-20251001
+  
+  # Claude 4.1 (current)
+  - claude-opus-4-1-20250805
+  
+  # Claude 4 (stable)
+  - claude-sonnet-4-20250514
+  - claude-opus-4-20250514
+  
+  # Claude 3.7 (deprecated, retiring Feb 19, 2026)
+  - claude-3-7-sonnet-20250219  # deprecated
+
+gemini:
+  # Gemini 3 (latest preview)
+  - gemini-3-pro-preview
+  - gemini-3-pro-image-preview
+  - gemini-3-flash-preview
+  
+  # Gemini 2.5 (current production)
+  - gemini-2.5-pro
+  - gemini-2.5-pro-latest
+  - gemini-2.5-pro-preview-tts
+  - gemini-2.5-flash
+  - gemini-2.5-flash-latest
+  - gemini-2.5-flash-preview-09-2025
+  - gemini-2.5-flash-image
+  - gemini-2.5-flash-native-audio-preview-12-2025
+  - gemini-2.5-flash-preview-tts
+  - gemini-2.5-flash-lite
+  - gemini-2.5-flash-lite-latest
+  - gemini-2.5-flash-lite-preview-09-2025
+
+ollama:
+  # Top reasoning models
+  - deepseek-r1:70b
+  - deepseek-r1:32b
+  - deepseek-r1:14b
+  - deepseek-r1:8b
+  - deepseek-r1:1.5b
+  
+  # Meta Llama 3 series (best all-round)
+  - llama3.3:70b
+  - llama3.3:8b
+  - llama3.2:3b
+  - llama3.2:1b
+  - llama3.1:405b
+  - llama3.1:70b
+  - llama3.1:8b
+  
+  # Alibaba Qwen series (multilingual)
+  - qwen2.5:72b
+  - qwen2.5:32b
+  - qwen2.5:14b
+  - qwen2.5:7b
+  - qwen2.5:3b
+  - qwen2.5:1.5b
+  - qwen2.5:0.5b
+  
+  # Coding specialists
+  - qwen2.5-coder:32b
+  - qwen2.5-coder:7b
+  - qwen2.5-coder:1.5b
+  - codellama:34b
+  - codellama:13b
+  - codellama:7b
+  - deepseek-coder-v2:16b
+  - deepseek-coder-v2:6.7b
+  
+  # Google Gemma (efficient)
+  - gemma2:27b
+  - gemma2:9b
+  - gemma2:2b
+  
+  # Microsoft Phi (lightweight powerhouse)
+  - phi4:14b
+  - phi3:14b
+  - phi3:3.8b
+  
+  # Mistral AI series (fast)
+  - mistral:7b
+  - mistral-nemo:12b
+  - mixtral:8x7b
+  - mixtral:8x22b
+  
+  # Vision and multimodal
+  - llava:34b
+  - llava:13b
+  - llava:7b
+  - qwen2-vl:7b
+  - qwen2-vl:2b
+  
+  # Ultra-lightweight (edge devices)
+  - tinyllama:1.1b
+  - orca-mini:3b
+  - stablelm2:1.6b
+  
+  # Conversational specialists
+  - vicuna:13b
+  - vicuna:7b
+  - solar:10.7b
+
