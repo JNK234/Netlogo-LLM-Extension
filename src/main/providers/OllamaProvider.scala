@@ -18,13 +18,13 @@ import scala.concurrent.{Future, ExecutionContext}
  */
 class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
-  override val providerName: String = "ollama"
-  override val defaultModel: String = ModelRegistry.defaultModel("ollama")
-  override protected val defaultBaseUrl: String = ConfigStore.DEFAULT_OLLAMA_BASE_URL
-  override protected val baseUrlConfigKey: String = ConfigStore.OLLAMA_BASE_URL
-  override protected val apiKeyConfigKey: String = ConfigStore.API_KEY
-  override protected val defaultMaxTokens: String = "2048"
-  override protected val requiresApiKey: Boolean = false
+  override def providerName: String = "ollama"
+  override def defaultModel: String = ModelRegistry.defaultModel("ollama")
+  override protected def defaultBaseUrl: String = ConfigStore.DEFAULT_OLLAMA_BASE_URL
+  override protected def baseUrlConfigKey: String = ConfigStore.OLLAMA_BASE_URL
+  override protected def apiKeyConfigKey: String = ConfigStore.API_KEY
+  override protected def defaultMaxTokens: String = "2048"
+  override protected def requiresApiKey: Boolean = false
 
   override protected def buildApiUrl(baseUrl: String): Uri = {
     uri"$baseUrl/api/chat"
