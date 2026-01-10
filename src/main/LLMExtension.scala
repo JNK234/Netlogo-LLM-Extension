@@ -484,8 +484,7 @@ class LLMExtension extends DefaultClassManager {
         responseMessage.content
         
       } catch {
-        case e: ExtensionException => throw e
-        case e: Exception =>
+        case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"Template chat failed: ${e.getMessage}")
       }
     }
@@ -567,8 +566,7 @@ Response:"""
         chosenOption
         
       } catch {
-        case e: ExtensionException => throw e
-        case e: Exception =>
+        case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"LLM choice failed: ${e.getMessage}")
       }
     }
@@ -609,8 +607,7 @@ Response:"""
         messageHistory.put(agent, messages)
         
       } catch {
-        case e: ExtensionException => throw e
-        case e: Exception =>
+        case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"Invalid history format: ${e.getMessage}")
       }
     }
