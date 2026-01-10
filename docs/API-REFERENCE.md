@@ -24,7 +24,8 @@ llm:load-config "models/gpt4-config.txt"
 **Notes**:
 - File path is relative to NetLogo model location
 - Overwrites any existing configuration
-- Must be called before using other LLM primitives
+- Validates provider readiness after loading (throws error if provider not ready)
+- Prefer config file approach over runtime commands when possible
 
 ### llm:set-provider
 
@@ -44,8 +45,17 @@ llm:load-config "models/gpt4-config.txt"
 **Example**:
 ```netlogo
 llm:set-provider "openai"
+; Sets default model (gpt-4o-mini) and validates API key
+
 llm:set-provider "ollama"
+; Sets default model (llama3.2) and checks if Ollama server is reachable
 ```
+
+**Notes**:
+- Automatically applies provider defaults (model, base URL, etc.)
+- Validates immediately: requires API key for cloud providers or reachable server for Ollama
+- Throws helpful error with setup instructions if provider not ready
+- Use `llm:provider-help` to get setup instructions if validation fails
 
 ### llm:set-api-key
 
@@ -63,9 +73,10 @@ llm:set-api-key "sk-ant-your-claude-key-here"
 ```
 
 **Notes**:
+- Stores key for the currently active provider (provider-specific key like `openai_api_key`)
 - Not required for Ollama (local models)
 - Keep API keys secure, avoid hard-coding in models
-- Use configuration files instead when possible
+- Prefer setting keys in config file over runtime commands
 
 ### llm:set-model
 
@@ -79,9 +90,14 @@ llm:set-api-key "sk-ant-your-claude-key-here"
 **Example**:
 ```netlogo
 llm:set-model "gpt-4o-mini"
-llm:set-model "claude-3-haiku-20240307"
+llm:set-model "claude-3-5-haiku-latest"
 llm:set-model "llama3.2"
 ```
+
+**Notes**:
+- Validates model against current provider's supported models
+- Throws error with model suggestions if model is invalid
+- Use `llm:models` to see all available models for the current provider
 
 ## Chat Primitives
 
@@ -228,20 +244,133 @@ print length llm:history  ; 0
 
 **Syntax**: `llm:providers`
 
-**Description**: Returns list of available providers
+**Description**: Returns list of READY providers (those with API keys or reachable servers)
 
-**Returns**: List - Available provider names
+**Returns**: List - Provider names that are ready to use
 
 **Example**:
 ```netlogo
-let available-providers llm:providers
-print available-providers  ; ["openai" "anthropic" "gemini" "ollama"]
+let ready-providers llm:providers
+print ready-providers  ; ["openai" "ollama"] - only providers with keys/reachable
 
-; Check if specific provider is available
+; Check if specific provider is ready
 if member? "ollama" llm:providers [
-  print "Ollama is available for local models"
+  print "Ollama is ready for use"
 ]
 ```
+
+**Notes**:
+- Only lists providers that have API keys configured (OpenAI, Anthropic, Gemini) or are reachable (Ollama)
+- Use `llm:providers-all` to see all supported providers regardless of readiness
+- Use `llm:provider-status` for detailed status of each provider
+
+### llm:providers-all
+
+**Syntax**: `llm:providers-all`
+
+**Description**: Returns list of all supported providers (regardless of readiness)
+
+**Returns**: List - All supported provider names
+
+**Example**:
+```netlogo
+let all-providers llm:providers-all
+print all-providers  ; ["openai" "anthropic" "gemini" "ollama"]
+```
+
+### llm:provider-status
+
+**Syntax**: `llm:provider-status`
+
+**Description**: Returns detailed status information for all providers
+
+**Returns**: List - Nested lists with provider status details
+
+**Example**:
+```netlogo
+let status llm:provider-status
+print status
+; Output format:
+; [["openai" ["ready" true] ["has-key" true]]
+;  ["anthropic" ["ready" false] ["has-key" false]]
+;  ["gemini" ["ready" false] ["has-key" false]]
+;  ["ollama" ["ready" true] ["reachable" true] ["base-url" "http://localhost:11434"]]]
+
+; Check specific provider status
+foreach llm:provider-status [ provider-info ->
+  let provider-name item 0 provider-info
+  if provider-name = "ollama" [
+    print provider-info
+  ]
+]
+```
+
+**Notes**:
+- For cloud providers (OpenAI, Anthropic, Gemini): shows `ready` and `has-key` status
+- For Ollama: shows `ready`, `reachable`, and `base-url`
+- Use this to diagnose configuration issues
+
+### llm:provider-help
+
+**Syntax**: `llm:provider-help provider-name`
+
+**Description**: Returns setup instructions for a specific provider
+
+**Parameters**:
+- `provider-name` (string): Provider to get help for
+
+**Returns**: String - Multi-line setup instructions
+
+**Example**:
+```netlogo
+; Get Ollama setup instructions
+print llm:provider-help "ollama"
+
+; Get OpenAI setup instructions
+print llm:provider-help "openai"
+```
+
+**Notes**:
+- Provides step-by-step setup instructions
+- Includes installation, configuration, and verification steps
+- Useful when a provider is not ready
+
+### llm:active
+
+**Syntax**: `llm:active`
+
+**Description**: Returns the currently active provider and model
+
+**Returns**: List - [provider model]
+
+**Example**:
+```netlogo
+let current llm:active
+print current  ; ["openai" "gpt-4o-mini"]
+print (word "Using " item 0 current " with " item 1 current)
+```
+
+**Notes**:
+- Use this to verify your current configuration
+- Helpful for sanity checks before sending chat requests
+
+### llm:config
+
+**Syntax**: `llm:config`
+
+**Description**: Returns a summary of the current configuration (with masked API keys)
+
+**Returns**: String - Configuration summary
+
+**Example**:
+```netlogo
+print llm:config
+; Output: provider=openai, model=gpt-4o-mini, openai_api_key=sk-pr...jYzQ, ...
+```
+
+**Notes**:
+- API keys are masked for security (shows first 4 and last 4 characters)
+- Useful for debugging configuration issues
 
 ### llm:models
 
@@ -255,7 +384,7 @@ if member? "ollama" llm:providers [
 ```netlogo
 llm:set-provider "openai"
 let openai-models llm:models
-print openai-models  ; ["gpt-4o-mini" "gpt-4o" "gpt-4-turbo" ...]
+print openai-models  ; ["gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini" "o1" ...]
 
 llm:set-provider "ollama"
 let local-models llm:models
