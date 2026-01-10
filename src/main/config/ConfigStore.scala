@@ -179,11 +179,28 @@ object ConfigStore {
   val TEMPERATURE = "temperature"
   val MAX_TOKENS = "max_tokens"
   val TIMEOUT_SECONDS = "timeout_seconds"
+  
+  // Per-provider API keys
+  val OPENAI_API_KEY = "openai_api_key"
+  val ANTHROPIC_API_KEY = "anthropic_api_key"
+  val GEMINI_API_KEY = "gemini_api_key"
+  
+  // Per-provider base URLs
+  val OPENAI_BASE_URL = "openai_base_url"
+  val ANTHROPIC_BASE_URL = "anthropic_base_url"
+  val GEMINI_BASE_URL = "gemini_base_url"
+  val OLLAMA_BASE_URL = "ollama_base_url"
+  
+  // Reserved for future use
+  val INFERENCE_URL = "inference_url"
 
   // Default values
   val DEFAULT_PROVIDER = "openai"
-  val DEFAULT_OPENAI_MODEL = "gpt-3.5-turbo"
+  val DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
   val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+  val DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
+  val DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+  val DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
   val DEFAULT_TEMPERATURE = "0.7"
   val DEFAULT_MAX_TOKENS = "1000"
   val DEFAULT_TIMEOUT_SECONDS = "30"
@@ -200,5 +217,52 @@ object ConfigStore {
     store.set(MAX_TOKENS, DEFAULT_MAX_TOKENS)
     store.set(TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
     store
+  }
+  
+  /**
+   * Get the provider-specific API key constant name
+   * 
+   * @param provider Provider name
+   * @return API key config constant
+   */
+  def getProviderApiKeyName(provider: String): String = {
+    provider.toLowerCase.trim match {
+      case "openai" => OPENAI_API_KEY
+      case "anthropic" => ANTHROPIC_API_KEY
+      case "gemini" => GEMINI_API_KEY
+      case _ => API_KEY
+    }
+  }
+  
+  /**
+   * Get the provider-specific base URL constant name
+   * 
+   * @param provider Provider name
+   * @return Base URL config constant
+   */
+  def getProviderBaseUrlName(provider: String): String = {
+    provider.toLowerCase.trim match {
+      case "openai" => OPENAI_BASE_URL
+      case "anthropic" => ANTHROPIC_BASE_URL
+      case "gemini" => GEMINI_BASE_URL
+      case "ollama" => OLLAMA_BASE_URL
+      case _ => BASE_URL
+    }
+  }
+  
+  /**
+   * Get default base URL for a provider
+   * 
+   * @param provider Provider name
+   * @return Default base URL
+   */
+  def getDefaultBaseUrl(provider: String): String = {
+    provider.toLowerCase.trim match {
+      case "openai" => DEFAULT_OPENAI_BASE_URL
+      case "anthropic" => DEFAULT_ANTHROPIC_BASE_URL
+      case "gemini" => DEFAULT_GEMINI_BASE_URL
+      case "ollama" => DEFAULT_OLLAMA_BASE_URL
+      case _ => ""
+    }
   }
 }

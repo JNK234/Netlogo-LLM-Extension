@@ -1,32 +1,59 @@
 # Installing the LLM Extension
 
-## Installation Steps
+## Quick Install (Recommended)
 
 ### 1. Build the Extension
-
-First, build the extension (see `BUILD.md`):
 
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 sbt clean assembly
 ```
 
-### 2. Create Extension Folder
+### 2. Install to NetLogo
 
-Create the `llm` folder in your NetLogo extensions directory:
-
+**macOS:**
 ```bash
 mkdir -p "/Applications/NetLogo 7.0.0/extensions/llm"
+cp target/scala-3.7.0/llm.jar "/Applications/NetLogo 7.0.0/extensions/llm/"
 ```
 
-**Note**: Adjust the path based on your NetLogo installation location.
+**Windows:**
+```bash
+mkdir "C:\Program Files\NetLogo 7.0.0\extensions\llm"
+copy target\scala-3.7.0\llm.jar "C:\Program Files\NetLogo 7.0.0\extensions\llm\"
+```
 
-### 3. Copy the JAR File
+**Linux:**
+```bash
+mkdir -p "/usr/local/NetLogo-7.0.0/extensions/llm"
+cp target/scala-3.7.0/llm.jar "/usr/local/NetLogo-7.0.0/extensions/llm/"
+```
 
-Copy `llm.jar` to the extension folder:
+## Install from ZIP Package (Alternative)
+
+If you have a pre-built `llm-0.1.0.zip`:
+
+### 1. Extract the ZIP
 
 ```bash
-cp target/scala-3.7.0/llm.jar "/Applications/NetLogo 7.0.0/extensions/llm/"
+unzip llm-0.1.0.zip
+```
+
+### 2. Copy to NetLogo
+
+**macOS:**
+```bash
+cp -r llm-0.1.0 "/Applications/NetLogo 7.0.0/extensions/llm"
+```
+
+**Windows:**
+```bash
+xcopy llm-0.1.0 "C:\Program Files\NetLogo 7.0.0\extensions\llm" /E /I
+```
+
+**Linux:**
+```bash
+cp -r llm-0.1.0 "/usr/local/NetLogo-7.0.0/extensions/llm"
 ```
 
 ## Verify Installation
@@ -82,7 +109,9 @@ end
 
 Click Setup, then run `test-llm` from the Command Center.
 
-## Installation Locations
+## NetLogo Extensions Directory
+
+The extension must be in NetLogo's `extensions/llm/` folder:
 
 **macOS:**
 - `/Applications/NetLogo 7.0.0/extensions/llm/`
@@ -92,6 +121,24 @@ Click Setup, then run `test-llm` from the Command Center.
 
 **Linux:**
 - `/usr/local/NetLogo-7.0.0/extensions/llm/`
+
+**Expected structure:**
+```
+NetLogo 7.0.0/
+└── extensions/
+    └── llm/
+        └── llm.jar          (for Fat JAR install)
+
+OR
+
+NetLogo 7.0.0/
+└── extensions/
+    └── llm/
+        ├── llm.jar
+        ├── cats-core_3-2.9.0.jar
+        ├── circe-yaml_3-0.15.0.jar
+        └── [other JARs]     (for ZIP install)
+```
 
 ## Troubleshooting
 
