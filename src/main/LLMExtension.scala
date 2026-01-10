@@ -44,12 +44,10 @@ class LLMExtension extends DefaultClassManager {
       override def syntax: Syntax = Syntax.reporterSyntax(right = List(), ret = Syntax.StringType)
       
       override def report(context: Context, args: Array[AnyRef]): AnyRef = {
-        val timeoutSeconds = try {
-          configStore.getOrElse(ConfigStore.TIMEOUT_SECONDS, ConfigStore.DEFAULT_TIMEOUT_SECONDS).toInt
-        } catch {
-          case _: NumberFormatException => 30
-        }
-        
+        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
+          .flatMap(s => scala.util.Try(s.toInt).toOption)
+          .getOrElse(30)
+
         try {
           Await.result(future, timeoutSeconds.seconds)
         } catch {
@@ -528,14 +526,10 @@ Response:"""
         
         // Send chat request
         val responseFuture = provider.chat(history.toSeq)
-        val responseMessage = Await.result(responseFuture, {
-          val timeoutSeconds = try {
-            configStore.getOrElse(ConfigStore.TIMEOUT_SECONDS, ConfigStore.DEFAULT_TIMEOUT_SECONDS).toInt
-          } catch {
-            case _: NumberFormatException => 30
-          }
-          timeoutSeconds.seconds
-        })
+        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
+          .flatMap(s => scala.util.Try(s.toInt).toOption)
+          .getOrElse(30)
+        val responseMessage = Await.result(responseFuture, timeoutSeconds.seconds)
         
         // Add response to history
         history += responseMessage
