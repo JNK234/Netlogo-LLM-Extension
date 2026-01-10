@@ -79,6 +79,8 @@ object ConfigLoader {
     }
   }
 
+  private val KVRegex = """^\s*([^=\s]+)\s*=\s*(.*?)\s*$""".r
+
   /**
    * Parse a single configuration line in key=value format
    *
@@ -87,26 +89,11 @@ object ConfigLoader {
    * @return Try containing (key, value) tuple
    */
   private def parseLine(line: String, lineNumber: Int): Try[(String, String)] = {
-    Try {
-      val equalIndex = line.indexOf('=')
-
-      if (equalIndex == -1) {
-        throw new IllegalArgumentException(s"Missing '=' separator in line: $line")
-      }
-
-      if (equalIndex == 0) {
-        throw new IllegalArgumentException(s"Missing key in line: $line")
-      }
-
-      val key = line.substring(0, equalIndex).trim
-      val value = line.substring(equalIndex + 1).trim
-
-      if (key.isEmpty) {
-        throw new IllegalArgumentException(s"Empty key in line: $line")
-      }
-
-      // Allow empty values
-      (key, value)
+    line match {
+      case KVRegex(key, value) => Success((key, value))
+      case _ => Failure(new IllegalArgumentException(
+        s"Invalid format at line $lineNumber: expected 'key=value', got: $line"
+      ))
     }
   }
 
