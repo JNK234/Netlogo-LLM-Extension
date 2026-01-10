@@ -133,24 +133,19 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
   /**
    * Parse Gemini's response format into ChatResponse
-   *
-   * Gemini returns:
-   * - "candidates" array with "content" and "finishReason"
-   * - Content has "parts" array with "text"
    */
   override protected def parseProviderResponse(responseBody: String, model: String): ChatResponse = {
     try {
       val parsed = ujson.read(responseBody)
-
-      val id = s"gemini-${System.currentTimeMillis()}" // Gemini doesn't provide ID
-      val created = System.currentTimeMillis() / 1000
-
-      val candidates = parsed("candidates").arr
-      val candidate = candidates.head
-      val content = candidate("content")
-      val parts = content("parts").arr
-      val text = parts.head("text").str
+      val candidate = parsed("candidates").arr.head
       val finishReason = candidate("finishReason").str
+
+      // Handle cases where parts may be missing (e.g., MAX_TOKENS)
+      val text = try {
+        candidate("content")("parts").arr.head("text").str
+      } catch {
+        case _: Exception => s"[No content - $finishReason]"
+      }
 
       val choices = Array(
         org.nlogo.extensions.llm.models.Choice(
@@ -160,7 +155,7 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
         )
       )
 
-      ChatResponse(id, created, model, choices)
+      ChatResponse(s"gemini-${System.currentTimeMillis()}", System.currentTimeMillis() / 1000, model, choices)
     } catch {
       case e: Exception =>
         throw new RuntimeException(s"Failed to parse Gemini response: ${e.getMessage}\nResponse: $responseBody")
