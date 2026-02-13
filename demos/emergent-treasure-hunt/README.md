@@ -45,23 +45,42 @@ This simulation demonstrates how **no single individual has the complete picture
 
 ## Files
 
-- `emergent-treasure-hunt.nlogo` - Main simulation file
-- `test-treasure-hunt.nlogo` - Basic functionality test
-- `README.md` - This documentation
+- `hunter-model.nlogox` - Enhanced simulation model (recommended)
+- `new-model.nlogox` - Alternative model version
+- `README.md` - This overview document
+- `USAGE_GUIDE.md` - Complete step-by-step usage instructions
+- `IMPLEMENTATION.md` - Technical implementation details
+- `interface-widgets.md` - Widget configuration reference
 
 ## Requirements
 
-- NetLogo 6.0+
-- NetLogo LLM Extension
-- Configured LLM provider (see main extension documentation)
+- NetLogo 7.0+
+- NetLogo LLM Extension (see main README for build instructions)
+- LLM provider - choose one:
+  - **Ollama** (recommended, free, local) - https://ollama.ai
+  - **OpenAI** (GPT-4, requires API key)
+  - **Anthropic Claude** (requires API key)
+  - **Google Gemini** (requires API key)
 
-## Usage
+## Quick Start
 
-1. Configure your LLM provider using `llm:load-config`
-2. Open `emergent-treasure-hunt.nlogo`
-3. Click "setup" to generate the maze and place agents
-4. Click "go" to start the simulation
-5. Watch as agents explore, meet, communicate, and eventually discover the treasure through collective intelligence
+1. **Install an LLM provider** (Ollama is easiest):
+   ```bash
+   # Install Ollama, then:
+   ollama pull llama3.2
+   ```
+
+2. **Configure the extension**: Edit `demos/config` file with your provider settings
+
+3. **Run the simulation**:
+   - Open `hunter-model.nlogox` in NetLogo
+   - Click "Setup"
+   - Click "Go"
+   - Watch the treasure hunt unfold!
+
+4. **Read the guides**:
+   - **[USAGE_GUIDE.md](./USAGE_GUIDE.md)** - Complete instructions, troubleshooting, experiments
+   - **[IMPLEMENTATION.md](./IMPLEMENTATION.md)** - Technical architecture, code walkthrough
 
 ## Educational Value
 
