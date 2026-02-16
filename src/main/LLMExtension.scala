@@ -295,11 +295,9 @@ class LLMExtension extends DefaultClassManager {
       val model = args(0).getString
       val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
       
-      // Validate model against current provider
+      // Warn if model is not in the known list, but allow it anyway
       if (!ModelRegistry.isValidModel(providerName, model)) {
-        throw new ExtensionException(
-          s"Unsupported model '$model' for provider '$providerName'. Supported models: ${ModelRegistry.getModelListForDisplay(providerName)}. Use llm:list-models to see all available models."
-        )
+        System.err.println(s"WARNING: Model '$model' is not in the known model list for '$providerName'. It will be used anyway — if the model name is wrong, the API will return an error.")
       }
       
       configStore.set(ConfigStore.MODEL, model)
