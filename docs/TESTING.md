@@ -58,3 +58,42 @@ These tests do require:
 Suggested usage:
 - run automated tests first (`sbt test`)
 - run manual integration checks before releases or when changing provider adapters
+
+## Git Automation
+
+### CI on every push and pull request
+
+The repository includes `.github/workflows/ci.yml`.
+
+It runs `sbt test` automatically on:
+- every push
+- every pull request
+
+Recommended repository setting:
+- enable branch protection and require the `Core Tests` check before merge
+
+### Optional local push gate
+
+The repository also includes `.githooks/pre-push` to run `sbt test` before each push.
+
+Enable repository hooks once:
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit .githooks/pre-push
+```
+
+Temporarily skip local push-time tests:
+
+```bash
+SKIP_LOCAL_TESTS=1 git push
+```
+
+## Future Live Smoke Tests (API-based)
+
+For cloud-provider smoke tests you will need real API keys in CI secrets.
+
+Typical setup later:
+- separate workflow (manual trigger and/or nightly schedule)
+- secrets like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
+- not required for normal PR merges (to avoid flaky/costly gating)
