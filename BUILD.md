@@ -5,6 +5,20 @@
 - **Java 17** (required for building)
 - **SBT 1.10.6+** (Scala Build Tool)
 
+## Run Tests
+
+```bash
+# Automated core extension tests (deterministic, no API/network required)
+sbt test
+```
+
+What this validates:
+- primitive wiring and behavior via NetLogo headless language tests
+- configuration, chat/history flows, templates, and multi-agent isolation
+
+What this does not validate:
+- live provider API/auth/network behavior (use `demos/tests/tests.nlogox` for manual integration checks)
+
 ## Build Commands
 
 ### For Development (Fat JAR)

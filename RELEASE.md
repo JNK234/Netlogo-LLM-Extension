@@ -24,13 +24,15 @@ sbt clean packageZip
 ### 3. Test the Release
 
 ```bash
-# Extract and test
+# Automated deterministic tests (no API/network required)
+sbt test
+
+# Extract and install release package
 unzip llm-0.2.0.zip
 cp -r llm-0.2.0 "/Applications/NetLogo 7.0.0/extensions/llm"
 
-# Open NetLogo and test
-# Run: extensions [llm]
-# Run: demos/tests/tests.nlogox
+# Optional manual integration checks (real providers)
+# Open NetLogo and run demos/tests/tests.nlogox
 ```
 
 ### 4. Create Git Tag
@@ -57,8 +59,9 @@ git push origin v0.2.0
 
 - [ ] Version updated in `build.sbt`
 - [ ] `sbt clean packageZip` completed successfully
+- [ ] `sbt test` passed
 - [ ] ZIP file tested in NetLogo
-- [ ] All tests pass (`demos/tests/tests.nlogox`)
+- [ ] Optional live-provider checks run (`demos/tests/tests.nlogox`)
 - [ ] Documentation updated if needed
 - [ ] Git tag created
 - [ ] GitHub release published
