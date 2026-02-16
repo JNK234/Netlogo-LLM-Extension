@@ -174,13 +174,11 @@ object ProviderFactory {
       return Failure(new IllegalArgumentException("OpenAI API key should start with 'sk-'"))
     }
 
-    // Validate model if specified
+    // Warn if model is not in the known list, but allow it anyway
     config.get(ConfigStore.MODEL) match {
       case Some(model) =>
         if (!isValidOpenAIModel(model)) {
-          return Failure(new IllegalArgumentException(
-            s"Unsupported OpenAI model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("openai")}"
-          ))
+          System.err.println(s"WARNING: Model '$model' is not in the known model list for 'openai'. It will be used anyway — if the model name is wrong, the API will return an error.")
         }
       case None => // Model is optional, will use default
     }
@@ -206,13 +204,11 @@ object ProviderFactory {
       return Failure(new IllegalArgumentException("Anthropic API key cannot be empty"))
     }
 
-    // Validate model if specified
+    // Warn if model is not in the known list, but allow it anyway
     config.get(ConfigStore.MODEL) match {
       case Some(model) =>
         if (!isValidClaudeModel(model)) {
-          return Failure(new IllegalArgumentException(
-            s"Unsupported Anthropic model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("anthropic")}"
-          ))
+          System.err.println(s"WARNING: Model '$model' is not in the known model list for 'anthropic'. It will be used anyway — if the model name is wrong, the API will return an error.")
         }
       case None => // Model is optional, will use default
     }
@@ -238,13 +234,11 @@ object ProviderFactory {
       return Failure(new IllegalArgumentException("Gemini API key cannot be empty"))
     }
 
-    // Validate model if specified
+    // Warn if model is not in the known list, but allow it anyway
     config.get(ConfigStore.MODEL) match {
       case Some(model) =>
         if (!isValidGeminiModel(model)) {
-          return Failure(new IllegalArgumentException(
-            s"Unsupported Gemini model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("gemini")}"
-          ))
+          System.err.println(s"WARNING: Model '$model' is not in the known model list for 'gemini'. It will be used anyway — if the model name is wrong, the API will return an error.")
         }
       case None => // Model is optional, will use default
     }
@@ -258,13 +252,11 @@ object ProviderFactory {
   private def validateOllamaConfig(config: Map[String, String]): Try[Unit] = {
     // Ollama typically doesn't require API key, just base URL
 
-    // Validate model if specified
+    // Warn if model is not in the known list, but allow it anyway
     config.get(ConfigStore.MODEL) match {
       case Some(model) =>
         if (!isValidOllamaModel(model)) {
-          return Failure(new IllegalArgumentException(
-            s"Unsupported Ollama model: '$model'. Supported models: ${ModelRegistry.getModelListForDisplay("ollama")}"
-          ))
+          System.err.println(s"WARNING: Model '$model' is not in the known model list for 'ollama'. It will be used anyway — if the model name is wrong, the API will return an error.")
         }
       case None => // Model is optional, will use default
     }
