@@ -44,12 +44,10 @@ class LLMExtension extends DefaultClassManager {
       override def syntax: Syntax = Syntax.reporterSyntax(right = List(), ret = Syntax.StringType)
       
       override def report(context: Context, args: Array[AnyRef]): AnyRef = {
-        val timeoutSeconds = try {
-          configStore.getOrElse(ConfigStore.TIMEOUT_SECONDS, ConfigStore.DEFAULT_TIMEOUT_SECONDS).toInt
-        } catch {
-          case _: NumberFormatException => 30
-        }
-        
+        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
+          .flatMap(s => scala.util.Try(s.toInt).toOption)
+          .getOrElse(30)
+
         try {
           Await.result(future, timeoutSeconds.seconds)
         } catch {
@@ -297,11 +295,9 @@ class LLMExtension extends DefaultClassManager {
       val model = args(0).getString
       val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
       
-      // Validate model against current provider
+      // Warn if model is not in the known list, but allow it anyway
       if (!ModelRegistry.isValidModel(providerName, model)) {
-        throw new ExtensionException(
-          s"Unsupported model '$model' for provider '$providerName'. Supported models: ${ModelRegistry.getModelListForDisplay(providerName)}. Use llm:list-models to see all available models."
-        )
+        System.err.println(s"WARNING: Model '$model' is not in the known model list for '$providerName'. It will be used anyway — if the model name is wrong, the API will return an error.")
       }
       
       configStore.set(ConfigStore.MODEL, model)
@@ -484,8 +480,7 @@ class LLMExtension extends DefaultClassManager {
         responseMessage.content
         
       } catch {
-        case e: ExtensionException => throw e
-        case e: Exception =>
+        case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"Template chat failed: ${e.getMessage}")
       }
     }
@@ -529,14 +524,10 @@ Response:"""
         
         // Send chat request
         val responseFuture = provider.chat(history.toSeq)
-        val responseMessage = Await.result(responseFuture, {
-          val timeoutSeconds = try {
-            configStore.getOrElse(ConfigStore.TIMEOUT_SECONDS, ConfigStore.DEFAULT_TIMEOUT_SECONDS).toInt
-          } catch {
-            case _: NumberFormatException => 30
-          }
-          timeoutSeconds.seconds
-        })
+        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
+          .flatMap(s => scala.util.Try(s.toInt).toOption)
+          .getOrElse(30)
+        val responseMessage = Await.result(responseFuture, timeoutSeconds.seconds)
         
         // Add response to history
         history += responseMessage
@@ -567,8 +558,7 @@ Response:"""
         chosenOption
         
       } catch {
-        case e: ExtensionException => throw e
-        case e: Exception =>
+        case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"LLM choice failed: ${e.getMessage}")
       }
     }
@@ -609,8 +599,7 @@ Response:"""
         messageHistory.put(agent, messages)
         
       } catch {
-        case e: ExtensionException => throw e
-        case e: Exception =>
+        case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"Invalid history format: ${e.getMessage}")
       }
     }

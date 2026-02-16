@@ -1,91 +1,52 @@
 // ABOUTME: Anthropic Claude provider implementation for Claude models
-// ABOUTME: Handles API communication with Anthropic's Claude API using the LLMProvider interface
+// ABOUTME: Extends BaseHttpProvider with Claude-specific request/response formatting and authentication
 
 package org.nlogo.extensions.llm.providers
 
 import org.nlogo.extensions.llm.models.{ChatMessage, ChatRequest, ChatResponse}
 import org.nlogo.extensions.llm.config.ConfigStore
 import sttp.client4._
-import sttp.client4.httpclient.HttpClientFutureBackend
-import upickle.default.{read, write}
+import sttp.model.Uri
 import ujson._
-import scala.concurrent.{Future, ExecutionContext}
-import scala.util.{Try, Success, Failure}
+import scala.concurrent.ExecutionContext
 
 /**
  * Anthropic Claude provider implementation for Claude models
+ *
+ * Extends BaseHttpProvider with Claude-specific behavior:
+ * - Uses x-api-key header instead of Bearer token
+ * - Requires anthropic-version header
+ * - Separates system messages from other messages in request format
  */
-class ClaudeProvider(implicit ec: ExecutionContext) extends LLMProvider {
+class ClaudeProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
-  private val configStore = new ConfigStore()
-  private val backend = HttpClientFutureBackend()
+  override def providerName: String = "anthropic"
 
-  // Set default configuration
-  configStore.set(ConfigStore.PROVIDER, "anthropic")
-  configStore.set(ConfigStore.MODEL, defaultModel)
-  configStore.set(ConfigStore.ANTHROPIC_BASE_URL, "https://api.anthropic.com/v1")
-  configStore.set(ConfigStore.TEMPERATURE, ConfigStore.DEFAULT_TEMPERATURE)
-  configStore.set(ConfigStore.MAX_TOKENS, "4000")
+  override def defaultModel: String = ModelRegistry.defaultModel("anthropic")
 
-  override def chat(request: ChatRequest): Future[ChatResponse] = {
-    validateConfig() match {
-      case Success(_) => sendChatRequest(request)
-      case Failure(e) => Future.failed(e)
-    }
+  override protected def defaultBaseUrl: String = ConfigStore.DEFAULT_ANTHROPIC_BASE_URL
+
+  override protected def baseUrlConfigKey: String = ConfigStore.ANTHROPIC_BASE_URL
+
+  override protected def apiKeyConfigKey: String = ConfigStore.ANTHROPIC_API_KEY
+
+  override protected def defaultMaxTokens: String = "4000"
+
+  override protected def requiresApiKey: Boolean = true
+
+  override protected def buildApiUrl(baseUrl: String): Uri = {
+    uri"$baseUrl/messages"
   }
 
-  override def chat(messages: Seq[ChatMessage]): Future[ChatMessage] = {
-    val model = configStore.getOrElse(ConfigStore.MODEL, defaultModel)
-    val temperature = configStore.get(ConfigStore.TEMPERATURE).map(_.toDouble)
-    val maxTokens = configStore.get(ConfigStore.MAX_TOKENS).map(_.toInt)
-
-    val request = ChatRequest(
-      model = model,
-      messages = messages,
-      maxTokens = maxTokens,
-      temperature = temperature
-    )
-
-    chat(request).map(_.firstMessage.getOrElse(
-      throw new RuntimeException("No response message received from Claude")
-    ))
-  }
-
-  private def sendChatRequest(request: ChatRequest): Future[ChatResponse] = {
-    val apiKey = configStore.get(ConfigStore.ANTHROPIC_API_KEY)
-      .orElse(configStore.get(ConfigStore.API_KEY))
-      .getOrElse(throw new IllegalStateException("API key not configured"))
-
-    val baseUrl = configStore.get(ConfigStore.ANTHROPIC_BASE_URL)
-      .getOrElse("https://api.anthropic.com/v1")
-    val apiUrl = uri"$baseUrl/messages"
-
-    val headers = Map(
-      "x-api-key" -> apiKey,
+  override protected def buildHeaders(apiKey: Option[String]): Map[String, String] = {
+    Map(
+      "x-api-key" -> apiKey.getOrElse(throw new IllegalStateException("API key required for Claude")),
       "content-type" -> "application/json",
       "anthropic-version" -> "2023-06-01"
     )
-
-    // Convert our request format to Claude's format
-    val claudeRequest = createClaudeRequest(request)
-    val requestBody = claudeRequest.toString()
-
-    val httpRequest = basicRequest
-      .headers(headers)
-      .body(requestBody)
-      .post(apiUrl)
-
-    httpRequest.send(backend).map { response =>
-      response.body match {
-        case Right(responseBody) =>
-          parseClaudeResponse(responseBody, request.model)
-        case Left(error) =>
-          throw new RuntimeException(s"HTTP request failed: $error")
-      }
-    }
   }
 
-  private def createClaudeRequest(request: ChatRequest): ujson.Value = {
+  override protected def createProviderRequest(request: ChatRequest): ujson.Value = {
     // Claude API expects system message separate from other messages
     val (systemMessage, userMessages) = request.messages.partition(_.role == "system")
 
@@ -116,7 +77,7 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends LLMProvider {
     baseRequest
   }
 
-  private def parseClaudeResponse(responseBody: String, model: String): ChatResponse = {
+  override protected def parseProviderResponse(responseBody: String, model: String): ChatResponse = {
     try {
       val parsed = ujson.read(responseBody)
 
@@ -139,46 +100,5 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends LLMProvider {
       case e: Exception =>
         throw new RuntimeException(s"Failed to parse Claude response: ${e.getMessage}\nResponse: $responseBody")
     }
-  }
-
-  override def setConfig(key: String, value: String): Unit = {
-    configStore.set(key, value)
-  }
-
-  override def getConfig(key: String): Option[String] = {
-    configStore.get(key)
-  }
-
-  override def validateConfig(): Try[Unit] = {
-    val requiredKeys = Set(ConfigStore.API_KEY)
-    configStore.validateRequired(requiredKeys)
-  }
-
-  override def providerName: String = "anthropic"
-
-  override def defaultModel: String = "claude-3-haiku-20240307"
-
-  override def supportsModel(model: String): Boolean = {
-    val supportedModels = Set(
-      "claude-3-opus-20240229",
-      "claude-3-sonnet-20240229",
-      "claude-3-haiku-20240307",
-      "claude-3-5-sonnet-20241022"
-    )
-    supportedModels.contains(model)
-  }
-
-  /**
-   * Load configuration from external map (e.g., from config file)
-   */
-  def loadConfig(config: Map[String, String]): Unit = {
-    configStore.updateFromMap(config)
-  }
-
-  /**
-   * Get configuration summary for debugging
-   */
-  def getConfigSummary: String = {
-    s"Claude Provider - ${configStore.summary}"
   }
 }
