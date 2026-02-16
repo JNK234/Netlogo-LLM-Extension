@@ -305,6 +305,7 @@ print length llm:history  ; 0
 let ready-providers llm:providers
 print ready-providers  ; ["openai" "ollama"] - only providers with keys/reachable
 
+
 ; Check if specific provider is ready
 if member? "ollama" llm:providers [
   print "Ollama is ready for use"

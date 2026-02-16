@@ -320,12 +320,14 @@ class LLMExtension extends DefaultClassManager {
         case Success(config) =>
           configStore.loadFromMap(config)
 
+
           // Load model override file if available
           modelDir.foreach { dir =>
             ModelRegistry.loadOverride(dir).foreach { message =>
               println(message)
             }
           }
+
 
           // Validate provider after loading config
           val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
@@ -633,10 +635,10 @@ Response:"""
       }
     }
   }
-  
+
   object ProvidersAllReporter extends Reporter {
     override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
-    
+
     override def report(args: Array[Argument], context: Context): AnyRef = {
       try {
         val allProviders = ProviderFactory.getSupportedProviders.toList.sorted
@@ -647,10 +649,10 @@ Response:"""
       }
     }
   }
-  
+
   object ProviderStatusReporter extends Reporter {
     override def getSyntax: Syntax = Syntax.reporterSyntax(ret = Syntax.ListType)
-    
+
     override def report(args: Array[Argument], context: Context): AnyRef = {
       try {
         val statusList = ProviderFactory.getSupportedProviders.toList.sorted.map { provider =>
