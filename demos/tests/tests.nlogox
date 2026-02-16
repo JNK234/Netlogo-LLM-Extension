@@ -2,6 +2,23 @@
 <model version="NetLogo 7.0.0-beta2" snapToGrid="false">
   <code><![CDATA[extensions [ llm ]
 
+to test-llm-providers
+  print "Testing Available providers..."
+
+  llm:set-api-key "AIzaSyDbM-TMmsX_tiP790DF6vLjmRHM1dXOwOw"
+
+  llm:set-provider "gemini"
+
+  llm:set-model "gemini-2.5-pro"
+
+  let result llm:chat "Who are you ?"
+  print (word "Sync chat result: " result)
+
+
+
+  print result
+end
+
 to test-extension-loading
   print "Testing extension loading..."
 
@@ -9,7 +26,7 @@ to test-extension-loading
   llm:set-provider "openai"
   print "✓ llm:set-provider works"
 
-  llm:set-model "gpt-3.5-turbo"
+  llm:set-model "gpt-4o-mini"
   print "✓ llm:set-model works"
 
   print "Extension loaded successfully!"
@@ -28,8 +45,7 @@ to test-sync-chat
     llm:set-api-key "your-openai-key-here"
   ]
 
-  print "Q: Who are you ?"
-  let result llm:chat "Who are you ?"
+  let result llm:chat "What is your name ?"
   print (word "Sync chat result: " result)
 end
 
@@ -38,7 +54,7 @@ to test-async-chat
 
   ; Load config or set manually
   carefully [
-    llm:load-config "config.txt"
+    llm:load-config "../config.txt"
     print "Config loaded successfully"
   ] [
     print "Config loading failed, setting manually..."
@@ -135,54 +151,33 @@ to test-provider-help
   print llm:provider-help "gemini"
 end
 
-to test-models-list
-  print "Testing llm:models primitive..."
-
-  ; Test models for different providers
-  llm:set-provider "openai"
-  let openai-models llm:models
-  print (word "OpenAI models: " openai-models)
-
-  llm:set-provider "anthropic"
-  let anthropic-models llm:models
-  print (word "Anthropic models: " anthropic-models)
-
-  llm:set-provider "gemini"
-  let gemini-models llm:models
-  print (word "Gemini models: " gemini-models)
-
-  llm:set-provider "ollama"
-  let ollama-models llm:models
-  print (word "Ollama models: " ollama-models)
-end
-
 to test-provider-switching
   print "Testing provider switching..."
 
   ; Test switching between providers
   print "Switching to OpenAI..."
   llm:set-provider "openai"
-  llm:set-model "gpt-3.5-turbo"
-  let openai-models llm:models
-  print (word "OpenAI models available: " length openai-models)
+  llm:set-model "gpt-4o-mini"
+  let openai-output llm:list-models
+  print "OpenAI models listed"
 
   print "Switching to Anthropic..."
   llm:set-provider "anthropic"
-  llm:set-model "claude-3-haiku-20240307"
-  let claude-models llm:models
-  print (word "Claude models available: " length claude-models)
+  llm:set-model "claude-haiku-4-5-20251001"
+  let claude-output llm:list-models
+  print "Claude models listed"
 
   print "Switching to Gemini..."
   llm:set-provider "gemini"
-  llm:set-model "gemini-1.5-flash"
-  let gemini-models llm:models
-  print (word "Gemini models available: " length gemini-models)
+  llm:set-model "gemini-2.5-flash"
+  let gemini-output llm:list-models
+  print "Gemini models listed"
 
   print "Switching to Ollama..."
   llm:set-provider "ollama"
-  llm:set-model "llama3.2"
-  let ollama-models llm:models
-  print (word "Ollama models available: " length ollama-models)
+  llm:set-model "llama3.3:8b"
+  let ollama-output llm:list-models
+  print "Ollama models listed"
 
   print "✓ Provider switching test completed"
 end
@@ -192,12 +187,13 @@ to test-config-loading
 
   ; Test loading config file
   carefully [
-    llm:load-config "demos/config"
+    llm:load-config "../config.txt"
     print "✓ Config loaded successfully"
 
     ; Check what provider was loaded
-    let current-models llm:models
-    print (word "Current provider models: " current-models)
+    let current-output llm:list-models
+    print "Current provider models output:"
+    print current-output
 
   ] [
     print "✗ Config loading failed"
@@ -359,10 +355,6 @@ to test-multi-provider-complete
   test-providers-list
   print ""
 
-  ; Test 2: List models for each provider
-  test-models-list
-  print ""
-
   ; Test 3: Test provider switching
   test-provider-switching
   print ""
@@ -373,6 +365,243 @@ to test-multi-provider-complete
 
   print "=== Multi-Provider Test Suite Complete ==="
   print "Ready to test with real API keys!"
+end
+
+;; ============================================================================
+;; NEW MODEL MANAGEMENT TESTS
+;; ============================================================================
+
+to test-list-models-format
+  print "=== Testing llm:list-models Output Format ==="
+
+  ; Set a known provider/model
+  llm:set-provider "openai"
+  llm:set-model "gpt-4o-mini"
+
+  let output llm:list-models
+
+  ; Test 1: Header present
+  ifelse member? "=== Available Models ===" output [
+    print "PASS: Header '=== Available Models ===' present"
+  ] [
+    print "FAIL: Missing header"
+  ]
+
+  ; Test 2: All provider sections present
+  ifelse member? "--- openai ---" output [
+    print "PASS: OpenAI section present"
+  ] [
+    print "FAIL: Missing OpenAI section"
+  ]
+
+  ifelse member? "--- anthropic ---" output [
+    print "PASS: Anthropic section present"
+  ] [
+    print "FAIL: Missing Anthropic section"
+  ]
+
+  ifelse member? "--- gemini ---" output [
+    print "PASS: Gemini section present"
+  ] [
+    print "FAIL: Missing Gemini section"
+  ]
+
+  ifelse member? "--- ollama ---" output [
+    print "PASS: Ollama section present"
+  ] [
+    print "FAIL: Missing Ollama section"
+  ]
+
+  ; Test 3: Currently using line present
+  ifelse member? "Currently using:" output [
+    print "PASS: 'Currently using:' line present"
+  ] [
+    print "FAIL: Missing 'Currently using:' line"
+  ]
+
+  ; Test 4: Active marker present for current model
+  ifelse member? "[ACTIVE]" output [
+    print "PASS: [ACTIVE] marker present"
+  ] [
+    print "FAIL: Missing [ACTIVE] marker"
+  ]
+
+  print "=== Format Test Complete ==="
+end
+
+to test-active-marker-changes
+  print "=== Testing [ACTIVE] Marker Updates ==="
+
+  ; Test switching providers changes the active marker
+  llm:set-provider "openai"
+  llm:set-model "gpt-4o"
+  let output1 llm:list-models
+
+  ifelse member? "gpt-4o [ACTIVE]" output1 [
+    print "PASS: gpt-4o marked as [ACTIVE]"
+  ] [
+    print "FAIL: gpt-4o not marked as active"
+  ]
+
+  ; Switch to different provider
+  llm:set-provider "anthropic"
+  llm:set-model "claude-haiku-4-5-20251001"
+  let output2 llm:list-models
+
+  ifelse member? "claude-haiku-4-5-20251001 [ACTIVE]" output2 [
+    print "PASS: claude-haiku-4-5-20251001 marked as [ACTIVE]"
+  ] [
+    print "FAIL: claude model not marked as active"
+  ]
+
+  ; Verify old model no longer marked active
+  ifelse not member? "gpt-4o [ACTIVE]" output2 [
+    print "PASS: gpt-4o no longer marked [ACTIVE] after switch"
+  ] [
+    print "FAIL: gpt-4o still shows [ACTIVE] after switch"
+  ]
+
+  print "=== Active Marker Test Complete ==="
+end
+
+to test-model-validation
+  print "=== Testing Model Validation ==="
+
+  ; Test 1: Valid model should work
+  llm:set-provider "openai"
+  carefully [
+    llm:set-model "gpt-4o"
+    print "PASS: Valid model 'gpt-4o' accepted"
+  ] [
+    print "FAIL: Valid model rejected"
+  ]
+
+  ; Test 2: Invalid model should be rejected
+  carefully [
+    llm:set-model "invalid-model-xyz"
+    print "FAIL: Invalid model should have been rejected"
+  ] [
+    print "PASS: Invalid model 'invalid-model-xyz' correctly rejected"
+  ]
+
+  ; Test 3: Model from wrong provider should be rejected
+  llm:set-provider "anthropic"
+  carefully [
+    llm:set-model "gpt-4o"  ; OpenAI model on Anthropic provider
+    print "FAIL: Wrong provider model should have been rejected"
+  ] [
+    print "PASS: Model from wrong provider correctly rejected"
+  ]
+
+  print "=== Validation Test Complete ==="
+end
+
+to test-provider-all-vs-ready
+  print "=== Testing llm:providers vs llm:providers-all ==="
+
+  let ready-providers llm:providers
+  let all-providers llm:providers-all
+
+  print (word "Ready providers: " ready-providers)
+  print (word "All providers: " all-providers)
+
+  ; All providers should include at least 4
+  ifelse length all-providers >= 4 [
+    print "PASS: At least 4 providers in all-providers list"
+  ] [
+    print "FAIL: Expected at least 4 providers"
+  ]
+
+  ; All providers should be a superset of ready providers
+  let all-ready-in-all? true
+  foreach ready-providers [ p ->
+    if not member? p all-providers [
+      set all-ready-in-all? false
+    ]
+  ]
+
+  ifelse all-ready-in-all? [
+    print "PASS: All ready providers are in all-providers list"
+  ] [
+    print "FAIL: Some ready providers missing from all-providers"
+  ]
+
+  print "=== Provider Lists Test Complete ==="
+end
+
+to test-provider-status
+  print "=== Testing llm:provider-status ==="
+
+  let status llm:provider-status
+  print (word "Provider status: " status)
+
+  ; Check that status is a list
+  ifelse is-list? status [
+    print "PASS: provider-status returns a list"
+  ] [
+    print "FAIL: provider-status should return a list"
+  ]
+
+  ; Check each provider has status info
+  ifelse length status >= 4 [
+    print "PASS: Status for all 4 providers returned"
+  ] [
+    print "FAIL: Expected status for at least 4 providers"
+  ]
+
+  print "=== Provider Status Test Complete ==="
+end
+
+to test-quick-commands
+  print "=== Quick Command Reference ==="
+  print ""
+  print "Run these in Command Center to test the extension:"
+  print ""
+  print "1. List all models (new!):"
+  print "   print llm:list-models"
+  print ""
+  print "2. Check provider status:"
+  print "   print llm:provider-status"
+  print ""
+  print "3. List ready providers:"
+  print "   print llm:providers"
+  print ""
+  print "4. Get current config:"
+  print "   print llm:active"
+  print ""
+  print "5. Switch provider and model:"
+  print "   llm:set-provider \"ollama\""
+  print "   llm:set-model \"llama3.2\""
+  print ""
+  print "6. Test chat (requires working provider):"
+  print "   print llm:chat \"Hello!\""
+  print ""
+end
+
+to run-all-model-management-tests
+  print "========================================"
+  print "  MODEL MANAGEMENT TEST SUITE"
+  print "========================================"
+  print ""
+
+  test-list-models-format
+  print ""
+
+  test-active-marker-changes
+  print ""
+
+  test-model-validation
+  print ""
+
+  test-provider-all-vs-ready
+  print ""
+
+  test-provider-status
+  print ""
+
+  print "========================================"
+  print "  ALL TESTS COMPLETE"
+  print "========================================"
 end
 
 to test-config-validation-complete

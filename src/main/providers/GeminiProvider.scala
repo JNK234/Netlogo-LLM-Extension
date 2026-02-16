@@ -6,66 +6,52 @@ package org.nlogo.extensions.llm.providers
 import org.nlogo.extensions.llm.models.{ChatMessage, ChatRequest, ChatResponse}
 import org.nlogo.extensions.llm.config.ConfigStore
 import sttp.client4._
-import sttp.client4.httpclient.HttpClientFutureBackend
-import upickle.default.{read, write}
+import sttp.model.Uri
 import ujson._
-import scala.concurrent.{Future, ExecutionContext}
-import scala.util.{Try, Success, Failure}
+import scala.concurrent.ExecutionContext
 
 /**
  * Google Gemini provider implementation for Gemini models
+ *
+ * Gemini has unique requirements:
+ * - API key is passed as a query parameter, not in headers
+ * - Model name is included in the URL path
+ * - Uses "contents" array with "parts" for message formatting
+ * - Maps "assistant" role to "model" role
  */
-class GeminiProvider(implicit ec: ExecutionContext) extends LLMProvider {
+class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
-  private val configStore = new ConfigStore()
-  private val backend = HttpClientFutureBackend()
+  override def providerName: String = "gemini"
 
-  // Set default configuration
-  configStore.set(ConfigStore.PROVIDER, "gemini")
-  configStore.set(ConfigStore.MODEL, defaultModel)
-  configStore.set(ConfigStore.BASE_URL, "https://generativelanguage.googleapis.com/v1beta")
-  configStore.set(ConfigStore.TEMPERATURE, ConfigStore.DEFAULT_TEMPERATURE)
-  configStore.set(ConfigStore.MAX_TOKENS, "2048")
+  override def defaultModel: String = ModelRegistry.defaultModel("gemini")
 
-  override def chat(request: ChatRequest): Future[ChatResponse] = {
-    validateConfig() match {
-      case Success(_) => sendChatRequest(request)
-      case Failure(e) => Future.failed(e)
-    }
-  }
+  override protected def defaultBaseUrl: String = ConfigStore.DEFAULT_GEMINI_BASE_URL
 
-  override def chat(messages: Seq[ChatMessage]): Future[ChatMessage] = {
-    val model = configStore.getOrElse(ConfigStore.MODEL, defaultModel)
-    val temperature = configStore.get(ConfigStore.TEMPERATURE).map(_.toDouble)
-    val maxTokens = configStore.get(ConfigStore.MAX_TOKENS).map(_.toInt)
+  override protected def baseUrlConfigKey: String = ConfigStore.GEMINI_BASE_URL
 
-    val request = ChatRequest(
-      model = model,
-      messages = messages,
-      maxTokens = maxTokens,
-      temperature = temperature
-    )
+  override protected def apiKeyConfigKey: String = ConfigStore.GEMINI_API_KEY
 
-    chat(request).map(_.firstMessage.getOrElse(
-      throw new RuntimeException("No response message received from Gemini")
-    ))
-  }
+  override protected def defaultMaxTokens: String = "2048"
 
-  private def sendChatRequest(request: ChatRequest): Future[ChatResponse] = {
-    val apiKey = configStore.get(ConfigStore.API_KEY).getOrElse(
-      throw new IllegalStateException("API key not configured")
-    )
+  override protected def requiresApiKey: Boolean = true
 
-    val baseUrl = configStore.getOrElse(ConfigStore.BASE_URL, "https://generativelanguage.googleapis.com/v1beta")
+  /**
+   * Override sendChatRequest to handle Gemini's unique URL construction
+   *
+   * Gemini requires:
+   * - Model name in the URL path
+   * - API key as a query parameter (not in headers)
+   */
+  override protected def sendChatRequest(request: ChatRequest): scala.concurrent.Future[ChatResponse] = {
+    val apiKey = configStore.get(apiKeyConfigKey)
+      .orElse(configStore.get(ConfigStore.API_KEY))
+      .getOrElse(throw new IllegalStateException("API key not configured"))
+
+    val baseUrl = configStore.get(baseUrlConfigKey).getOrElse(defaultBaseUrl)
     val apiUrl = uri"$baseUrl/models/${request.model}:generateContent?key=$apiKey"
 
-    val headers = Map(
-      "Content-Type" -> "application/json"
-    )
-
-    // Convert our request format to Gemini's format
-    val geminiRequest = createGeminiRequest(request)
-    val requestBody = geminiRequest.toString()
+    val headers = Map("Content-Type" -> "application/json")
+    val requestBody = createProviderRequest(request).toString()
 
     val httpRequest = basicRequest
       .headers(headers)
@@ -75,15 +61,39 @@ class GeminiProvider(implicit ec: ExecutionContext) extends LLMProvider {
     httpRequest.send(backend).map { response =>
       response.body match {
         case Right(responseBody) =>
-          parseGeminiResponse(responseBody, request.model)
+          parseProviderResponse(responseBody, request.model)
         case Left(error) =>
           throw new RuntimeException(s"HTTP request failed: $error")
       }
     }
   }
 
-  private def createGeminiRequest(request: ChatRequest): ujson.Value = {
-    // Gemini expects messages in a different format
+  /**
+   * Build Gemini API URL - not used as we override sendChatRequest
+   */
+  override protected def buildApiUrl(baseUrl: String): Uri = {
+    // Not used - Gemini needs model name which isn't available here
+    throw new UnsupportedOperationException("Use sendChatRequest override instead")
+  }
+
+  /**
+   * Build headers for Gemini - not used as we override sendChatRequest
+   */
+  override protected def buildHeaders(apiKey: Option[String]): Map[String, String] = {
+    // Not used - we override sendChatRequest
+    throw new UnsupportedOperationException("Use sendChatRequest override instead")
+  }
+
+  /**
+   * Convert ChatRequest to Gemini's request format
+   *
+   * Gemini expects:
+   * - "contents" array with "role" and "parts"
+   * - Role mapping: "assistant" → "model", "user" → "user"
+   * - "generationConfig" for optional parameters (temperature, maxOutputTokens)
+   */
+  override protected def createProviderRequest(request: ChatRequest): ujson.Value = {
+    // Convert messages to Gemini's format
     val contents = ujson.Arr(
       request.messages.map { msg =>
         val role = if (msg.role == "assistant") "model" else "user"
@@ -121,19 +131,21 @@ class GeminiProvider(implicit ec: ExecutionContext) extends LLMProvider {
     baseRequest
   }
 
-  private def parseGeminiResponse(responseBody: String, model: String): ChatResponse = {
+  /**
+   * Parse Gemini's response format into ChatResponse
+   */
+  override protected def parseProviderResponse(responseBody: String, model: String): ChatResponse = {
     try {
       val parsed = ujson.read(responseBody)
-
-      val id = s"gemini-${System.currentTimeMillis()}" // Gemini doesn't provide ID
-      val created = System.currentTimeMillis() / 1000
-
-      val candidates = parsed("candidates").arr
-      val candidate = candidates.head
-      val content = candidate("content")
-      val parts = content("parts").arr
-      val text = parts.head("text").str
+      val candidate = parsed("candidates").arr.head
       val finishReason = candidate("finishReason").str
+
+      // Handle cases where parts may be missing (e.g., MAX_TOKENS)
+      val text = try {
+        candidate("content")("parts").arr.head("text").str
+      } catch {
+        case _: Exception => s"[No content - $finishReason]"
+      }
 
       val choices = Array(
         org.nlogo.extensions.llm.models.Choice(
@@ -143,51 +155,10 @@ class GeminiProvider(implicit ec: ExecutionContext) extends LLMProvider {
         )
       )
 
-      ChatResponse(id, created, model, choices)
+      ChatResponse(s"gemini-${System.currentTimeMillis()}", System.currentTimeMillis() / 1000, model, choices)
     } catch {
       case e: Exception =>
         throw new RuntimeException(s"Failed to parse Gemini response: ${e.getMessage}\nResponse: $responseBody")
     }
-  }
-
-  override def setConfig(key: String, value: String): Unit = {
-    configStore.set(key, value)
-  }
-
-  override def getConfig(key: String): Option[String] = {
-    configStore.get(key)
-  }
-
-  override def validateConfig(): Try[Unit] = {
-    val requiredKeys = Set(ConfigStore.API_KEY)
-    configStore.validateRequired(requiredKeys)
-  }
-
-  override def providerName: String = "gemini"
-
-  override def defaultModel: String = "gemini-1.5-flash"
-
-  override def supportsModel(model: String): Boolean = {
-    val supportedModels = Set(
-      "gemini-1.5-pro",
-      "gemini-1.5-flash",
-      "gemini-1.0-pro",
-      "gemini-pro"
-    )
-    supportedModels.contains(model)
-  }
-
-  /**
-   * Load configuration from external map (e.g., from config file)
-   */
-  def loadConfig(config: Map[String, String]): Unit = {
-    configStore.updateFromMap(config)
-  }
-
-  /**
-   * Get configuration summary for debugging
-   */
-  def getConfigSummary: String = {
-    s"Gemini Provider - ${configStore.summary}"
   }
 }

@@ -4,6 +4,30 @@
 
 The NetLogo Multi-LLM Extension provides a unified interface for multiple Large Language Model providers. All primitives are prefixed with `llm:`.
 
+## Quick Command Reference
+
+| Command                              | Category      | Description                                                |
+| ------------------------------------ | ------------- | ---------------------------------------------------------- |
+| `llm:chat text`                    | Chat          | Send synchronous chat message, returns response            |
+| `llm:chat-async text`              | Chat          | Send asynchronous chat message, returns awaitable reporter |
+| `llm:chat-with-template file vars` | Chat          | Send templated prompt with variable substitution           |
+| `llm:choose prompt choices`        | Chat          | Force selection from provided options                      |
+| `llm:history`                      | History       | Get current agent's conversation history                   |
+| `llm:set-history list`             | History       | Set conversation history for current agent                 |
+| `llm:clear-history`                | History       | Clear conversation history for current agent               |
+| `llm:load-config filename`         | Configuration | Load settings from file                                    |
+| `llm:set-provider name`            | Configuration | Set active provider (openai, anthropic, gemini, ollama)    |
+| `llm:set-api-key key`              | Configuration | Set API key for current provider                           |
+| `llm:set-model name`               | Configuration | Set model to use for current provider                      |
+| `llm:providers`                    | Discovery     | List ready providers with configured keys/servers          |
+| `llm:providers-all`                | Discovery     | List all supported providers (ready or not)                |
+| `llm:provider-status`              | Discovery     | Get detailed status of each provider                       |
+| `llm:provider-help name`           | Discovery     | Get setup instructions for a provider                      |
+| `llm:list-models`                  | Discovery     | List all available models for current provider             |
+| `llm:active`                       | Discovery     | Get currently active provider and model                    |
+| `llm:config`                       | Discovery     | Get configuration summary (keys masked for security)       |
+
+
 ## Configuration Primitives
 
 ### llm:load-config
@@ -13,15 +37,18 @@ The NetLogo Multi-LLM Extension provides a unified interface for multiple Large 
 **Description**: Loads configuration from a file (key=value format)
 
 **Parameters**:
+
 - `filename` (string): Path to configuration file
 
 **Example**:
+
 ```netlogo
 llm:load-config "config.txt"
 llm:load-config "models/gpt4-config.txt"
 ```
 
 **Notes**:
+
 - File path is relative to NetLogo model location
 - Overwrites any existing configuration
 - Validates provider readiness after loading (throws error if provider not ready)
@@ -34,15 +61,18 @@ llm:load-config "models/gpt4-config.txt"
 **Description**: Sets the active LLM provider
 
 **Parameters**:
+
 - `provider-name` (string): Provider identifier
 
 **Valid Providers**:
+
 - `"openai"` - OpenAI GPT models
-- `"anthropic"` - Anthropic Claude models  
+- `"anthropic"` - Anthropic Claude models
 - `"gemini"` - Google Gemini models
 - `"ollama"` - Local Ollama models
 
 **Example**:
+
 ```netlogo
 llm:set-provider "openai"
 ; Sets default model (gpt-4o-mini) and validates API key
@@ -52,6 +82,7 @@ llm:set-provider "ollama"
 ```
 
 **Notes**:
+
 - Automatically applies provider defaults (model, base URL, etc.)
 - Validates immediately: requires API key for cloud providers or reachable server for Ollama
 - Throws helpful error with setup instructions if provider not ready
@@ -64,15 +95,18 @@ llm:set-provider "ollama"
 **Description**: Sets the API key for cloud providers
 
 **Parameters**:
+
 - `api-key` (string): API authentication key
 
 **Example**:
+
 ```netlogo
 llm:set-api-key "sk-your-openai-key-here"
 llm:set-api-key "sk-ant-your-claude-key-here"
 ```
 
 **Notes**:
+
 - Stores key for the currently active provider (provider-specific key like `openai_api_key`)
 - Not required for Ollama (local models)
 - Keep API keys secure, avoid hard-coding in models
@@ -85,9 +119,11 @@ llm:set-api-key "sk-ant-your-claude-key-here"
 **Description**: Sets the specific model to use
 
 **Parameters**:
+
 - `model-name` (string): Model identifier
 
 **Example**:
+
 ```netlogo
 llm:set-model "gpt-4o-mini"
 llm:set-model "claude-3-5-haiku-latest"
@@ -95,9 +131,10 @@ llm:set-model "llama3.2"
 ```
 
 **Notes**:
+
 - Validates model against current provider's supported models
 - Throws error with model suggestions if model is invalid
-- Use `llm:models` to see all available models for the current provider
+- Use `llm:list-models` to see all available models across all providers
 
 ## Chat Primitives
 
@@ -108,11 +145,13 @@ llm:set-model "llama3.2"
 **Description**: Sends a message and returns the response (synchronous)
 
 **Parameters**:
+
 - `message` (string): The message to send
 
 **Returns**: String - The LLM's response
 
 **Example**:
+
 ```netlogo
 let response llm:chat "What is 2+2?"
 print response  ; "2+2 equals 4"
@@ -122,6 +161,7 @@ print creative-response
 ```
 
 **Notes**:
+
 - Blocks execution until response received
 - Maintains conversation history per agent
 - Throws error if request fails
@@ -133,11 +173,13 @@ print creative-response
 **Description**: Sends a message and returns an awaitable reporter (asynchronous)
 
 **Parameters**:
+
 - `message` (string): The message to send
 
 **Returns**: AwaitableReporter - Use with `runresult` to get response
 
 **Example**:
+
 ```netlogo
 ; Start async request
 let awaitable-response llm:chat-async "Explain quantum physics"
@@ -152,6 +194,7 @@ print response
 ```
 
 **Notes**:
+
 - Non-blocking - allows other code to run while waiting
 - Use `runresult` to retrieve the actual response
 - Still maintains conversation history per agent
@@ -163,12 +206,14 @@ print response
 **Description**: Ask LLM to select from predefined options
 
 **Parameters**:
+
 - `prompt` (string): The question or context
 - `choices` (list): List of valid options to choose from
 
 **Returns**: String - One of the provided choices
 
 **Example**:
+
 ```netlogo
 let decision llm:choose "What should I do next?" ["move", "turn", "wait"]
 print decision  ; Will be exactly "move", "turn", or "wait"
@@ -179,6 +224,7 @@ set color read-from-string color-choice
 ```
 
 **Notes**:
+
 - Forces LLM to return exactly one of the provided choices
 - Useful for agent decision-making in models
 - Maintains conversation context
@@ -194,6 +240,7 @@ set color read-from-string color-choice
 **Returns**: List - Conversation history as alternating user/assistant messages
 
 **Example**:
+
 ```netlogo
 llm:chat "Hello"
 llm:chat "How are you?"
@@ -209,9 +256,11 @@ print history
 **Description**: Sets the conversation history for current agent
 
 **Parameters**:
+
 - `message-list` (list): List of messages (alternating user/assistant)
 
 **Example**:
+
 ```netlogo
 ; Set up a conversation context
 llm:set-history ["You are a helpful turtle" "I understand, I'm a helpful turtle"]
@@ -220,6 +269,7 @@ print response  ; "I'm a helpful turtle, ready to assist you!"
 ```
 
 **Notes**:
+
 - Messages should alternate between user and assistant
 - Overwrites existing history for this agent
 - Use to prime conversations with context
@@ -231,6 +281,7 @@ print response  ; "I'm a helpful turtle, ready to assist you!"
 **Description**: Clears conversation history for current agent
 
 **Example**:
+
 ```netlogo
 llm:chat "Hello"
 print length llm:history  ; 2 (user + assistant message)
@@ -249,9 +300,11 @@ print length llm:history  ; 0
 **Returns**: List - Provider names that are ready to use
 
 **Example**:
+
 ```netlogo
 let ready-providers llm:providers
 print ready-providers  ; ["openai" "ollama"] - only providers with keys/reachable
+
 
 ; Check if specific provider is ready
 if member? "ollama" llm:providers [
@@ -260,9 +313,19 @@ if member? "ollama" llm:providers [
 ```
 
 **Notes**:
+
 - Only lists providers that have API keys configured (OpenAI, Anthropic, Gemini) or are reachable (Ollama)
 - Use `llm:providers-all` to see all supported providers regardless of readiness
 - Use `llm:provider-status` for detailed status of each provider
+
+**Readiness Checks**:
+
+| Provider  | Check Performed                                     |
+| --------- | --------------------------------------------------- |
+| OpenAI    | Has `openai_api_key` or `api_key` configured        |
+| Anthropic | Has `anthropic_api_key` or `api_key` configured     |
+| Gemini    | Has `gemini_api_key` or `api_key` configured        |
+| Ollama    | Server reachable at `ollama_base_url` (1s timeout)  |
 
 ### llm:providers-all
 
@@ -273,6 +336,7 @@ if member? "ollama" llm:providers [
 **Returns**: List - All supported provider names
 
 **Example**:
+
 ```netlogo
 let all-providers llm:providers-all
 print all-providers  ; ["openai" "anthropic" "gemini" "ollama"]
@@ -282,11 +346,12 @@ print all-providers  ; ["openai" "anthropic" "gemini" "ollama"]
 
 **Syntax**: `llm:provider-status`
 
-**Description**: Returns detailed status information for all providers
+**Description**: Returns detailed status information for all providers. This is a diagnostic tool that shows the current configuration state of each provider without attempting to use them.
 
 **Returns**: List - Nested lists with provider status details
 
 **Example**:
+
 ```netlogo
 let status llm:provider-status
 print status
@@ -305,23 +370,36 @@ foreach llm:provider-status [ provider-info ->
 ]
 ```
 
+**Status Fields by Provider**:
+
+| Provider  | Fields Returned                                  |
+| --------- | ------------------------------------------------ |
+| OpenAI    | `ready` (bool), `has-key` (bool)                 |
+| Anthropic | `ready` (bool), `has-key` (bool)                 |
+| Gemini    | `ready` (bool), `has-key` (bool)                 |
+| Ollama    | `ready` (bool), `reachable` (bool), `base-url`   |
+
 **Notes**:
+
 - For cloud providers (OpenAI, Anthropic, Gemini): shows `ready` and `has-key` status
 - For Ollama: shows `ready`, `reachable`, and `base-url`
 - Use this to diagnose configuration issues
+- The `ready` field indicates whether the provider can be used immediately
 
 ### llm:provider-help
 
 **Syntax**: `llm:provider-help provider-name`
 
-**Description**: Returns setup instructions for a specific provider
+**Description**: Returns setup instructions for a specific provider. The help text is built into the extension and covers the essential setup steps for each provider.
 
 **Parameters**:
-- `provider-name` (string): Provider to get help for
+
+- `provider-name` (string): Provider to get help for (`openai`, `anthropic`, `gemini`, `ollama`)
 
 **Returns**: String - Multi-line setup instructions
 
 **Example**:
+
 ```netlogo
 ; Get Ollama setup instructions
 print llm:provider-help "ollama"
@@ -330,10 +408,21 @@ print llm:provider-help "ollama"
 print llm:provider-help "openai"
 ```
 
+**Help Content by Provider**:
+
+| Provider  | Help Includes                                                    |
+| --------- | ---------------------------------------------------------------- |
+| OpenAI    | API key setup, console URL, config file instructions             |
+| Anthropic | API key setup, console URL, config file instructions             |
+| Gemini    | API key setup, MakerSuite URL, config file instructions          |
+| Ollama    | Installation, server startup, model pulling, custom server URLs  |
+
 **Notes**:
+
 - Provides step-by-step setup instructions
 - Includes installation, configuration, and verification steps
 - Useful when a provider is not ready
+- Returns "Unknown provider" message for unsupported provider names
 
 ### llm:active
 
@@ -344,6 +433,7 @@ print llm:provider-help "openai"
 **Returns**: List - [provider model]
 
 **Example**:
+
 ```netlogo
 let current llm:active
 print current  ; ["openai" "gpt-4o-mini"]
@@ -351,6 +441,7 @@ print (word "Using " item 0 current " with " item 1 current)
 ```
 
 **Notes**:
+
 - Use this to verify your current configuration
 - Helpful for sanity checks before sending chat requests
 
@@ -363,33 +454,73 @@ print (word "Using " item 0 current " with " item 1 current)
 **Returns**: String - Configuration summary
 
 **Example**:
+
 ```netlogo
 print llm:config
 ; Output: provider=openai, model=gpt-4o-mini, openai_api_key=sk-pr...jYzQ, ...
 ```
 
 **Notes**:
+
 - API keys are masked for security (shows first 4 and last 4 characters)
 - Useful for debugging configuration issues
 
-### llm:models
+### llm:list-models
 
-**Syntax**: `llm:models`
+**Syntax**: `llm:list-models`
 
-**Description**: Returns list of available models for current provider
+**Description**: Returns a formatted string showing available models for ALL providers
 
-**Returns**: List - Available model names for active provider
+**Returns**: String - Formatted multi-line string with provider sections, model lists, and status indicators
+
+**Format**:
+
+- Shows all providers grouped with headers
+- Marks active provider and model with `[ACTIVE]`
+- Marks custom models from `models-override.yaml` with `[custom]`
+- Each provider section shows all available models for that provider
 
 **Example**:
-```netlogo
-llm:set-provider "openai"
-let openai-models llm:models
-print openai-models  ; ["gpt-3.5-turbo" "gpt-4" "gpt-4o" "gpt-4o-mini" "o1" ...]
 
-llm:set-provider "ollama"
-let local-models llm:models
-print local-models   ; Models installed locally via ollama
+```netlogo
+print llm:list-models
+
+; Output format:
+; === OpenAI Models ===
+; gpt-4o [ACTIVE]
+; gpt-4o-mini
+; gpt-4-turbo
+; gpt-3.5-turbo
+; o1-preview
+; o1-mini
+;
+; === Anthropic Models ===
+; claude-3-5-sonnet-20241022
+; claude-3-5-haiku-latest
+; claude-3-opus-latest
+;
+; === Gemini Models === [ACTIVE]
+; gemini-2.0-flash-exp [custom] [ACTIVE]
+; gemini-1.5-pro
+; gemini-1.5-flash
+;
+; === Ollama Models ===
+; llama3.2
+; mistral
+; qwen2
+
+; Use it to see what models are available
+llm:set-provider "anthropic"
+print llm:list-models  ; Shows all providers, with Anthropic marked as ACTIVE
 ```
+
+**Notes**:
+
+- Returns a STRING (not a list) with formatted output
+- Shows ALL providers in a single view, not just the active one
+- Use this to discover available models across all providers
+- Custom models added via `models-override.yaml` are marked with `[custom]`
+- The currently active provider and model are marked with `[ACTIVE]`
 
 ## Usage Patterns
 
@@ -465,7 +596,7 @@ to check-responses
   foreach pending-requests [ request ->
     let question first request
     let awaitable last request
-    
+  
     ; Try to get response (non-blocking check would be ideal)
     carefully [
       let response runresult awaitable
@@ -498,10 +629,10 @@ to make-decisions
   ask turtles [
     let context (word "I'm a turtle at position " xcor "," ycor ". ")
     set context (word context "There are " count other turtles in-radius 3 " nearby turtles.")
-    
+  
     let action llm:choose (word context " What should I do?")
                          ["move-forward" "turn-left" "turn-right" "stop"]
-    
+  
     set current-action action
     execute-action action
   ]
@@ -520,16 +651,19 @@ end
 ### Common Errors
 
 **Configuration Errors**:
+
 - `Provider not found` - Check provider name spelling
 - `API key missing` - Set API key for cloud providers
 - `Model not available` - Verify model exists and is accessible
 
 **Request Errors**:
+
 - `Request timeout` - Check network, increase timeout_seconds
 - `Rate limited` - Wait before retrying, check API quotas
 - `Invalid response` - Check model parameters, try different prompt
 
 **Example Error Handling**:
+
 ```netlogo
 to safe-chat [message]
   carefully [
