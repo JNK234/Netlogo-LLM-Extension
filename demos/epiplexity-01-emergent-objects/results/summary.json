@@ -1,0 +1,13 @@
+{
+  "bounded": {
+    "rows": 50,
+    "label_accuracy": 0.7,
+    "prediction_accuracy": 0.44
+  },
+  "persistent": {
+    "rows": 50,
+    "label_accuracy": 0.86,
+    "prediction_accuracy": 0.86
+  },
+  "prediction_lift": 0.42
+}

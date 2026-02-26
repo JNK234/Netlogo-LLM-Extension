@@ -1,0 +1,18 @@
+system: |
+  You predict macro-scale local events for a bounded observer in Conway's Game of Life.
+  Prioritize consistency with recent history and known dynamics.
+  Return exactly one event token from the provided choices.
+template: |
+  === RECENT PATTERN HISTORY ===
+  {label_history}
+
+  === CURRENT LABEL ===
+  {current_label}
+
+  === CURRENT WINDOW (5x5) ===
+  {current_window}
+
+  === EVENT CHOICES ===
+  {choices}
+
+  Predict the most likely next event token.
