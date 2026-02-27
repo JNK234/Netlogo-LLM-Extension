@@ -1,0 +1,57 @@
+{
+  "orderings": [
+    "forward",
+    "reversed",
+    "shuffled"
+  ],
+  "pairwise": [
+    {
+      "left": "forward",
+      "right": "reversed",
+      "jaccard": 0.0333,
+      "sequence": 0.3406,
+      "combined": 0.187
+    },
+    {
+      "left": "forward",
+      "right": "shuffled",
+      "jaccard": 0.0769,
+      "sequence": 0.2899,
+      "combined": 0.1834
+    },
+    {
+      "left": "reversed",
+      "right": "shuffled",
+      "jaccard": 0.0,
+      "sequence": 0.3426,
+      "combined": 0.1713
+    }
+  ],
+  "similarity_matrix": {
+    "forward": {
+      "forward": 1.0,
+      "reversed": 0.187,
+      "shuffled": 0.1834
+    },
+    "reversed": {
+      "forward": 0.187,
+      "reversed": 1.0,
+      "shuffled": 0.1713
+    },
+    "shuffled": {
+      "forward": 0.1834,
+      "reversed": 0.1713,
+      "shuffled": 1.0
+    }
+  },
+  "average_similarity": 0.1806,
+  "order_dependency_score": 0.8194,
+  "threshold": 0.35,
+  "is_order_sensitive": true,
+  "most_divergent_ordering": "shuffled",
+  "confidences": {
+    "forward": 87.0,
+    "reversed": 63.0,
+    "shuffled": 55.0
+  }
+}
