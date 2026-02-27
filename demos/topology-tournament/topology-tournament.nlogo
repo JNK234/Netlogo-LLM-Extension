@@ -1,497 +1,373 @@
-; ABOUTME: Topology tournament where teams of LLM agents in different network structures race to consensus
-; ABOUTME: Compares ring, star, mesh, and tree topologies on information propagation speed
-
 extensions [llm]
 
+breed [mesh-agents mesh-agent]
+breed [hierarchy-agents hierarchy-agent]
+breed [chain-agents chain-agent]
+undirected-link-breed [topology-links topology-link]
+
 globals [
-  ; Team layout offsets (each team occupies a quadrant)
-  team-offsets        ; list of [x y] center positions for each team
-  topology-names      ; list of topology type names
-  team-colors         ; colors for each team
-  consensus-reached   ; list tracking which teams reached consensus
-  round-winner        ; who of the winning team's first agent (or nobody)
-  tournament-running? ; whether the tournament is in progress
-  tick-limit          ; max ticks before declaring a draw
-  round-number        ; current round counter
-  team-scores         ; cumulative scores across rounds
-  consensus-threshold ; fraction of agents that must agree for consensus
+  llm-ready?
+  tournament-running?
+  topology-order
+  convergence-times
+  winner-topology
+  belief-options
 ]
 
-breed [nodes node]
-
-nodes-own [
-  team-id             ; which team (0-3) this node belongs to
-  node-name           ; display name
-  belief              ; current belief string (the agent's position)
-  confidence          ; how confident the agent is (0-1)
-  initial-fragment    ; the partial info this agent started with
-  last-talked-tick    ; tick of last conversation
-  topology-type       ; ring, star, mesh, or tree
-  is-hub?             ; true if this is the hub in a star topology
+turtles-own [
+  belief
+  topology-name
+  last-coordinator-action
 ]
-
-undirected-link-breed [edges edge]
-
-edges-own [
-  team-link-id        ; which team this edge belongs to
-]
-
-;; ============================================================
-;; SETUP
-;; ============================================================
 
 to setup
   clear-all
 
-  ; Load LLM configuration
+  set llm-ready? false
+  set tournament-running? true
+  set topology-order ["mesh" "hierarchy" "chain"]
+  set convergence-times (list -1 -1 -1)
+  set winner-topology "pending"
+  set belief-options ["COLLECT" "EXPLORE" "STABILIZE"]
+
+  load-llm-config
+  build-topologies
+  seed-beliefs
+
+  reset-ticks
+end
+
+to load-llm-config
   carefully [
     llm:load-config llm-config-path
+    set llm-ready? true
   ] [
-    print (word "Config load failed: " error-message ". Using Ollama defaults.")
-    llm:set-provider "ollama"
-    llm:set-model "llama3.2:latest"
+    print (word "LLM config load failed: " error-message)
+    print "Falling back to deterministic coordinator policy."
+    set llm-ready? false
+  ]
+end
+
+to build-topologies
+  build-mesh-topology
+  build-hierarchy-topology
+  build-chain-topology
+
+  ask topology-links [
+    set color gray - 2
+    set thickness 0.1
+  ]
+end
+
+to build-mesh-topology
+  create-mesh-agents agents-per-topology [
+    set topology-name "mesh"
+    set shape "circle"
+    set color blue + 1
+    set size 1.3
+    set last-coordinator-action "INIT"
   ]
 
-  ; Initialize globals
-  set topology-names ["ring" "star" "mesh" "tree"]
-  set team-colors [red blue green orange]
-  set team-offsets [[-12 12] [12 12] [-12 -12] [12 -12]]
-  set consensus-reached [false false false false]
-  set round-winner nobody
-  set tournament-running? false
-  set tick-limit 200
-  set round-number 0
-  set team-scores [0 0 0 0]
-  set consensus-threshold 0.8
+  layout-circle mesh-agents 6
+  ask mesh-agents [
+    set xcor xcor - 16
+    set ycor ycor + 8
+  ]
 
-  ; Build each team's network
-  build-team 0 "ring"
-  build-team 1 "star"
-  build-team 2 "mesh"
-  build-team 3 "tree"
+  let ordered sort mesh-agents
+  let i 0
+  while [i < length ordered] [
+    let source item i ordered
+    let j (i + 1)
+    while [j < length ordered] [
+      let target item j ordered
+      ask source [ create-topology-link-with target ]
+      set j j + 1
+    ]
+    set i i + 1
+  ]
+end
 
-  ; Assign initial knowledge fragments to all agents
-  assign-fragments
+to build-hierarchy-topology
+  create-hierarchy-agents agents-per-topology [
+    set topology-name "hierarchy"
+    set shape "triangle"
+    set color green + 1
+    set size 1.4
+    set last-coordinator-action "INIT"
+  ]
 
-  ; Label setup
-  ask nodes [
-    set label (word node-name)
+  let ordered sort hierarchy-agents
+  let i 0
+  while [i < length ordered] [
+    let level floor (ln (i + 1) / ln 2)
+    let first-at-level ((2 ^ level) - 1)
+    let level-position (i - first-at-level)
+    let level-width (2 ^ level)
+    let x-offset (level-position - ((level-width - 1) / 2)) * 3
+    let y-offset 14 - (level * 4)
+
+    ask item i ordered [
+      setxy x-offset y-offset
+    ]
+
+    if i > 0 [
+      let parent-index floor ((i - 1) / 2)
+      let parent-node item parent-index ordered
+      ask item i ordered [ create-topology-link-with parent-node ]
+    ]
+
+    set i i + 1
+  ]
+end
+
+to build-chain-topology
+  create-chain-agents agents-per-topology [
+    set topology-name "chain"
+    set shape "square"
+    set color orange + 1
+    set size 1.3
+    set last-coordinator-action "INIT"
+  ]
+
+  let ordered sort chain-agents
+  let spacing 2.8
+  let start-x (16 - ((agents-per-topology - 1) * spacing / 2))
+
+  let i 0
+  while [i < length ordered] [
+    ask item i ordered [
+      setxy (start-x + (i * spacing)) -12
+    ]
+
+    if i > 0 [
+      let prev-node item (i - 1) ordered
+      ask item i ordered [ create-topology-link-with prev-node ]
+    ]
+
+    set i i + 1
+  ]
+end
+
+to seed-beliefs
+  assign-beliefs mesh-agents 0
+  assign-beliefs hierarchy-agents 1
+  assign-beliefs chain-agents 2
+
+  ask turtles [
+    set label (word topology-name ":" belief)
     set label-color white
   ]
-
-  reset-ticks
-  print "=== TOPOLOGY TOURNAMENT READY ==="
-  print (word "Teams: " topology-names)
-  print (word "Agents per team: " agents-per-team)
-  print "Click 'Run Round' to start a round."
 end
 
-;; ============================================================
-;; TEAM BUILDING
-;; ============================================================
-
-to build-team [tid topo]
-  let center item tid team-offsets
-  let cx first center
-  let cy last center
-  let tcolor item tid team-colors
-
-  ; Create nodes for this team in a circle layout
-  let angle-step 360 / agents-per-team
-  let radius 6
-
-  create-nodes agents-per-team [
-    set team-id tid
-    set topology-type topo
-    set is-hub? false
-    set belief ""
-    set confidence 0
-    set last-talked-tick -10
-    set node-name (word first topo "-" (who mod agents-per-team))
-
-    ; Place in a circle around the team center
-    let my-index (who mod agents-per-team)
-    let angle my-index * angle-step
-    setxy (cx + radius * sin angle) (cy + radius * cos angle)
-
-    set color tcolor
-    set shape "circle"
-    set size 1.5
-  ]
-
-  ; Get this team's agents
-  let team-nodes nodes with [team-id = tid]
-
-  ; Wire edges based on topology type
-  if topo = "ring" [ wire-ring team-nodes tid ]
-  if topo = "star" [ wire-star team-nodes tid ]
-  if topo = "mesh" [ wire-mesh team-nodes tid ]
-  if topo = "tree" [ wire-tree team-nodes tid ]
-end
-
-to wire-ring [team-nodes tid]
-  ; Each node connects to its two neighbors in the ring
-  let sorted-nodes sort-on [who] team-nodes
-  let n length sorted-nodes
+to assign-beliefs [group shift]
+  let ordered sort group
   let i 0
-  while [i < n] [
-    let current item i sorted-nodes
-    let next-node item ((i + 1) mod n) sorted-nodes
-    ask current [
-      create-edge-with next-node [
-        set team-link-id tid
-        set color item tid team-colors - 2
-      ]
+  while [i < length ordered] [
+    let slot ((i + shift) mod length belief-options)
+    ask item i ordered [
+      set belief item slot belief-options
     ]
     set i i + 1
   ]
-end
-
-to wire-star [team-nodes tid]
-  ; First node is the hub, all others connect to it
-  let sorted-nodes sort-on [who] team-nodes
-  let hub first sorted-nodes
-  ask hub [
-    set is-hub? true
-    set shape "star"
-    set size 2
-  ]
-  foreach but-first sorted-nodes [ spoke ->
-    ask hub [
-      create-edge-with spoke [
-        set team-link-id tid
-        set color item tid team-colors - 2
-      ]
-    ]
-  ]
-end
-
-to wire-mesh [team-nodes tid]
-  ; Every node connects to every other node (complete graph)
-  ask team-nodes [
-    let me self
-    ask other team-nodes [
-      if not edge-neighbor? me [
-        create-edge-with me [
-          set team-link-id tid
-          set color item tid team-colors - 2
-        ]
-      ]
-    ]
-  ]
-end
-
-to wire-tree [team-nodes tid]
-  ; Binary tree: node i connects to nodes 2i+1 and 2i+2
-  let sorted-nodes sort-on [who] team-nodes
-  let n length sorted-nodes
-
-  ; Mark root
-  ask first sorted-nodes [
-    set is-hub? true
-    set shape "triangle"
-    set size 2
-  ]
-
-  let i 0
-  while [i < n] [
-    let parent-node item i sorted-nodes
-    let left-idx (2 * i + 1)
-    let right-idx (2 * i + 2)
-    if left-idx < n [
-      ask parent-node [
-        create-edge-with item left-idx sorted-nodes [
-          set team-link-id tid
-          set color item tid team-colors - 2
-        ]
-      ]
-    ]
-    if right-idx < n [
-      ask parent-node [
-        create-edge-with item right-idx sorted-nodes [
-          set team-link-id tid
-          set color item tid team-colors - 2
-        ]
-      ]
-    ]
-    set i i + 1
-  ]
-end
-
-;; ============================================================
-;; KNOWLEDGE ASSIGNMENT
-;; ============================================================
-
-to assign-fragments
-  ; Each team debates the same question but agents start with different positions
-  let positions (list
-    "Position A: efficiency is most important for success"
-    "Position B: creativity is most important for success"
-    "Position C: collaboration is most important for success"
-    "Position D: persistence is most important for success"
-    "Position E: adaptability is most important for success"
-    "Position F: knowledge is most important for success"
-    "Position G: empathy is most important for success"
-    "Position H: courage is most important for success"
-  )
-
-  ; Assign each agent a different starting position
-  ask nodes [
-    let my-index (who mod agents-per-team)
-    set initial-fragment item (my-index mod length positions) positions
-    set belief initial-fragment
-    set confidence 0.3 + random-float 0.2
-
-    ; Set up LLM context with the agent's role
-    llm:set-history (list
-      (list "system" (word
-        "You are a participant in a group discussion within a " topology-type " network. "
-        "Your name is " node-name ". "
-        "You start with this belief: " initial-fragment ". "
-        "Through discussion with your network neighbors, try to reach a group consensus. "
-        "Be open to persuasion but also advocate for your position. "
-        "When you respond, state your CURRENT position clearly in one sentence."
-      ))
-    )
-  ]
-end
-
-;; ============================================================
-;; MAIN LOOP
-;; ============================================================
-
-to run-round
-  ; Start a new round
-  set round-number round-number + 1
-  set tournament-running? true
-  set consensus-reached [false false false false]
-  set round-winner nobody
-
-  ; Reset beliefs for new round
-  assign-fragments
-
-  print (word "=== ROUND " round-number " START ===")
-  reset-ticks
 end
 
 to go
   if not tournament-running? [ stop ]
 
-  ; Each tick, agents talk to a random connected neighbor
-  ask nodes [
-    if (ticks - last-talked-tick) >= communication-cooldown [
-      let my-neighbors edge-neighbors with [team-id = [team-id] of myself]
-      if any? my-neighbors [
-        let partner one-of my-neighbors
-        discuss-with partner
-        set last-talked-tick ticks
-      ]
-    ]
-  ]
+  coordinate-topology "mesh" mesh-agents
+  coordinate-topology "hierarchy" hierarchy-agents
+  coordinate-topology "chain" chain-agents
 
-  ; Update visuals
-  update-visuals
-
-  ; Check for consensus in each team
-  check-all-consensus
-
-  ; Check if round is over
-  if round-winner != nobody or ticks >= tick-limit [
-    end-round
-  ]
-
+  update-tournament-state
   tick
 end
 
-;; ============================================================
-;; COMMUNICATION
-;; ============================================================
+to coordinate-topology [name group]
+  let idx topology-index name
+  if item idx convergence-times != -1 [ stop ]
 
-to discuss-with [partner]
-  ; Use LLM to have a conversation between two connected agents
-  let my-belief belief
-  let partner-belief [belief] of partner
-  let my-name node-name
-  let partner-name [node-name] of partner
-
-  ; Build the discussion prompt
-  let prompt (word
-    "Your neighbor " partner-name " says: \"" partner-belief "\". "
-    "Your current belief is: \"" my-belief "\". "
-    "Consider their perspective. In one sentence, state what you now believe "
-    "is most important for success. Start with: 'I believe...'"
-  )
-
-  ; Call LLM and update belief
-  carefully [
-    let response llm:chat prompt
-    set belief response
-    ; Increase confidence when beliefs converge
-    if member? "believe" response [
-      set confidence min (list 1.0 (confidence + 0.05))
-    ]
-  ] [
-    ; LLM call failed, keep current belief
-    print (word "LLM error for " node-name ": " error-message)
+  if converged? group [
+    set convergence-times replace-item idx convergence-times ticks
+    stop
   ]
 
-  ; Visual feedback for communication
-  ask edge-with partner [
-    set color yellow
-    set thickness 0.3
-  ]
-end
+  let majority majority-belief group
+  let action "MAJORITY_PUSH"
 
-;; ============================================================
-;; CONSENSUS DETECTION
-;; ============================================================
-
-to check-all-consensus
-  let tid 0
-  while [tid < 4] [
-    if not item tid consensus-reached [
-      check-team-consensus tid
-    ]
-    set tid tid + 1
-  ]
-end
-
-to check-team-consensus [tid]
-  let team-nodes nodes with [team-id = tid]
-  let beliefs-list [belief] of team-nodes
-
-  ; Use LLM to evaluate if the team has reached consensus
-  ; Simple heuristic: check if a majority share similar keywords
-  let agreement-count 0
-  let reference-belief first beliefs-list
-
-  ; Count how many agents hold a similar belief to the first agent
-  ask team-nodes [
-    if approximately-agrees? belief reference-belief [
-      set agreement-count agreement-count + 1
+  if llm-ready? [
+    carefully [
+      let response llm:chat-with-template "demos/topology-tournament/coordinator-template.yaml" (list
+        (list "topology" name)
+        (list "tick" ticks)
+        (list "agent_count" count group)
+        (list "belief_summary" belief-summary group)
+        (list "majority_belief" majority)
+      )
+      set action parse-action response
+    ] [
+      set action "MAJORITY_PUSH"
     ]
   ]
 
-  let agreement-ratio agreement-count / count team-nodes
+  apply-coordinator-action action group majority
 
-  if agreement-ratio >= consensus-threshold [
-    set consensus-reached replace-item tid consensus-reached true
-    if round-winner = nobody [
-      set round-winner one-of team-nodes
-      print (word "*** TEAM " item tid topology-names " reaches consensus at tick " ticks " ***")
+  ask group [
+    set last-coordinator-action action
+    set label (word topology-name ":" belief)
+  ]
+
+  if converged? group [
+    set convergence-times replace-item idx convergence-times ticks
+  ]
+end
+
+to apply-coordinator-action [action group majority]
+  if action = "HOLD" [ stop ]
+
+  if action = "PAIR_SWAP" [
+    if count group > 1 [
+      let selected-pair n-of 2 group
+      let selected-belief [belief] of one-of selected-pair
+      ask selected-pair [ set belief selected-belief ]
+    ]
+    stop
+  ]
+
+  if action = "SPLIT_REBALANCE" [
+    let alternate next-belief majority
+    let ordered sort group
+    let halfway floor (length ordered / 2)
+    let i 0
+    while [i < length ordered] [
+      let node item i ordered
+      ifelse i < halfway
+      [ ask node [ set belief majority ] ]
+      [ ask node [ set belief alternate ] ]
+      set i i + 1
+    ]
+    stop
+  ]
+
+  if action = "BROADCAST_MAJORITY" [
+    ask group [ set belief majority ]
+    stop
+  ]
+
+  let dissenters group with [belief != majority]
+  if any? dissenters [
+    ask one-of dissenters [ set belief majority ]
+  ]
+end
+
+to-report parse-action [response]
+  if not is-string? response [ report "MAJORITY_PUSH" ]
+
+  let normalized uppercase response
+
+  if position "ACTION:BROADCAST_MAJORITY" normalized != false [ report "BROADCAST_MAJORITY" ]
+  if position "ACTION:MAJORITY_PUSH" normalized != false [ report "MAJORITY_PUSH" ]
+  if position "ACTION:PAIR_SWAP" normalized != false [ report "PAIR_SWAP" ]
+  if position "ACTION:SPLIT_REBALANCE" normalized != false [ report "SPLIT_REBALANCE" ]
+  if position "ACTION:HOLD" normalized != false [ report "HOLD" ]
+
+  report "MAJORITY_PUSH"
+end
+
+to-report converged? [group]
+  if not any? group [ report false ]
+  report (length remove-duplicates [belief] of group) = 1
+end
+
+to-report majority-belief [group]
+  let best-belief first belief-options
+  let best-count -1
+
+  foreach belief-options [candidate ->
+    let candidate-count count group with [belief = candidate]
+    if candidate-count > best-count [
+      set best-belief candidate
+      set best-count candidate-count
     ]
   ]
+
+  report best-belief
 end
 
-to-report approximately-agrees? [belief1 belief2]
-  ; Simple agreement check: do both beliefs share a key value keyword?
-  let keywords ["efficiency" "creativity" "collaboration" "persistence"
-                 "adaptability" "knowledge" "empathy" "courage"]
-  let shared-keywords filter [kw -> member? kw belief1 and member? kw belief2] keywords
-  report length shared-keywords > 0
+to-report belief-summary [group]
+  let chunks []
+  foreach belief-options [candidate ->
+    set chunks lput (word candidate ":" count group with [belief = candidate]) chunks
+  ]
+  report reduce [[left right] -> word left ", " right] chunks
 end
 
-;; ============================================================
-;; ROUND MANAGEMENT
-;; ============================================================
+to-report next-belief [current]
+  let idx position current belief-options
+  if idx = false [ report first belief-options ]
+  report item ((idx + 1) mod length belief-options) belief-options
+end
 
-to end-round
-  set tournament-running? false
-
-  ifelse round-winner != nobody [
-    let winning-team [team-id] of round-winner
-    let winning-topo item winning-team topology-names
-    let new-scores replace-item winning-team team-scores (item winning-team team-scores + 1)
-    set team-scores new-scores
-    print (word "=== ROUND " round-number " WINNER: " winning-topo " (tick " ticks ") ===")
-  ] [
-    print (word "=== ROUND " round-number " DRAW (tick limit " tick-limit " reached) ===")
+to update-tournament-state
+  if all? convergence-times [value -> value >= 0] [
+    set tournament-running? false
+    set winner-topology fastest-topology
+    stop
   ]
 
-  print (word "Scores: ring=" item 0 team-scores
-              " star=" item 1 team-scores
-              " mesh=" item 2 team-scores
-              " tree=" item 3 team-scores)
-  print "Click 'Run Round' for next round."
+  if ticks >= max-ticks [
+    set tournament-running? false
+    set winner-topology fastest-topology
+  ]
 end
 
-;; ============================================================
-;; VISUALIZATION
-;; ============================================================
+to-report fastest-topology
+  let best-name "none"
+  let best-time (max-ticks + 1)
+  let i 0
 
-to update-visuals
-  ; Node size reflects confidence
-  ask nodes [
-    set size 1 + confidence
-  ]
-
-  ; Reset edge colors after communication flash
-  ask edges [
-    if color = yellow [
-      set color item team-link-id team-colors - 2
-      set thickness 0
+  while [i < length topology-order] [
+    let result item i convergence-times
+    if result != -1 and result < best-time [
+      set best-time result
+      set best-name item i topology-order
     ]
+    set i i + 1
   ]
 
-  ; Team labels at centers
-  let tid 0
-  while [tid < 4] [
-    let center item tid team-offsets
-    let cx first center
-    let cy last center
-    ask patch cx (cy + 9) [
-      set plabel item tid topology-names
-      set plabel-color item tid team-colors
-    ]
-    ; Show consensus status
-    if item tid consensus-reached [
-      ask patch cx (cy + 8) [
-        set plabel "CONSENSUS!"
-        set plabel-color yellow
-      ]
-    ]
-    set tid tid + 1
-  ]
+  report best-name
 end
 
-;; ============================================================
-;; REPORTERS
-;; ============================================================
-
-to-report team-consensus-pct [tid]
-  let team-nodes nodes with [team-id = tid]
-  if not any? team-nodes [ report 0 ]
-  let beliefs-list [belief] of team-nodes
-  let reference-belief first beliefs-list
-  let agreement-count 0
-  ask team-nodes [
-    if approximately-agrees? belief reference-belief [
-      set agreement-count agreement-count + 1
-    ]
-  ]
-  report (agreement-count / count team-nodes) * 100
+to-report topology-index [name]
+  if name = "mesh" [ report 0 ]
+  if name = "hierarchy" [ report 1 ]
+  report 2
 end
 
-to-report avg-confidence [tid]
-  let team-nodes nodes with [team-id = tid]
-  if not any? team-nodes [ report 0 ]
-  report mean [confidence] of team-nodes
+to-report agreement-pct [group]
+  if not any? group [ report 0 ]
+  let majority majority-belief group
+  report 100 * (count group with [belief = majority]) / count group
 end
 
-to-report score-display
+to-report convergence-time [name]
+  report item (topology-index name) convergence-times
+end
+
+to-report status-summary
   report (word
-    "Ring: " item 0 team-scores
-    "  Star: " item 1 team-scores
-    "  Mesh: " item 2 team-scores
-    "  Tree: " item 3 team-scores
+    "mesh=" convergence-time "mesh"
+    " hierarchy=" convergence-time "hierarchy"
+    " chain=" convergence-time "chain"
+    " winner=" winner-topology
   )
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-822
-623
+820
+620
 -1
 -1
 12.0
@@ -536,23 +412,6 @@ BUTTON
 50
 195
 83
-Run Round
-run-round
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-15
-90
-195
-123
 Go
 go
 T
@@ -567,14 +426,14 @@ NIL
 
 SLIDER
 15
-140
+110
 195
-173
-agents-per-team
-agents-per-team
+143
+agents-per-topology
+agents-per-topology
 3
-8
-5.0
+12
+6.0
 1
 1
 NIL
@@ -582,59 +441,81 @@ HORIZONTAL
 
 SLIDER
 15
-180
+150
 195
-213
-communication-cooldown
-communication-cooldown
+183
+max-ticks
+max-ticks
+20
+400
+150.0
 1
-10
-3.0
 1
-1
-ticks
+NIL
 HORIZONTAL
 
 INPUTBOX
 15
-220
 195
-280
+195
+255
 llm-config-path
-demos/config
+demos/topology-tournament/config.txt
 1
 0
 String
 
 MONITOR
 15
-290
-100
-335
-Round
-round-number
-0
+270
+195
+315
+Winner
+winner-topology
+17
 1
 11
 
 MONITOR
-105
-290
+15
+320
 195
-335
-Tick
-ticks
+365
+Status
+status-summary
+17
+1
+11
+
+MONITOR
+15
+370
+195
+403
+Mesh Convergence
+convergence-time "mesh"
 0
 1
 11
 
 MONITOR
 15
-345
+407
 195
-390
-Scores
-score-display
+440
+Hierarchy Convergence
+convergence-time "hierarchy"
+0
+1
+11
+
+MONITOR
+15
+444
+195
+477
+Chain Convergence
+convergence-time "chain"
 0
 1
 11
@@ -642,96 +523,48 @@ score-display
 PLOT
 830
 10
-1100
-180
-Consensus Progress
+1110
+200
+Agreement by Topology
 Ticks
 Agreement %
 0.0
-50.0
+100.0
 0.0
 100.0
 true
 true
 "" ""
 PENS
-"ring" 1.0 0 -2674135 true "" "if any? nodes with [team-id = 0] [plot team-consensus-pct 0]"
-"star" 1.0 0 -13345367 true "" "if any? nodes with [team-id = 1] [plot team-consensus-pct 1]"
-"mesh" 1.0 0 -10899396 true "" "if any? nodes with [team-id = 2] [plot team-consensus-pct 2]"
-"tree" 1.0 0 -955883 true "" "if any? nodes with [team-id = 3] [plot team-consensus-pct 3]"
-
-PLOT
-830
-190
-1100
-360
-Average Confidence
-Ticks
-Confidence
-0.0
-50.0
-0.0
-1.0
-true
-true
-"" ""
-PENS
-"ring" 1.0 0 -2674135 true "" "if any? nodes with [team-id = 0] [plot avg-confidence 0]"
-"star" 1.0 0 -13345367 true "" "if any? nodes with [team-id = 1] [plot avg-confidence 1]"
-"mesh" 1.0 0 -10899396 true "" "if any? nodes with [team-id = 2] [plot avg-confidence 2]"
-"tree" 1.0 0 -955883 true "" "if any? nodes with [team-id = 3] [plot avg-confidence 3]"
+"mesh" 1.0 0 -13345367 true "" "plot agreement-pct mesh-agents"
+"hierarchy" 1.0 0 -10899396 true "" "plot agreement-pct hierarchy-agents"
+"chain" 1.0 0 -955883 true "" "plot agreement-pct chain-agents"
 
 @#$#@#$#@
 ## WHAT IS IT?
 
-Topology Tournament pits four teams of LLM-powered agents against each other, each arranged in a different network topology: **ring**, **star**, **mesh** (complete), and **tree**. Agents discuss a question with their network neighbors and the first team to reach consensus wins the round.
+This demo compares three communication topologies for collective coordination:
+mesh, hierarchy, and chain.
 
-## HOW IT WORKS
-
-Each agent starts with a different belief about what matters most for success. Agents can only communicate with direct network neighbors. An LLM mediates each conversation, allowing agents to genuinely reason about and respond to each other's arguments. The tournament measures which network structure enables the fastest consensus.
-
-### Topologies
-
-- **Ring**: Each agent connects to exactly 2 neighbors. Information must travel around the ring.
-- **Star**: One central hub connects to all others. Hub becomes a bottleneck or accelerator.
-- **Mesh**: Every agent connects to every other. Maximum connectivity, most communication overhead.
-- **Tree**: Binary tree structure. Information flows up and down through parent-child relationships.
+Each topology has its own breed of agents. Every tick, each topology calls one
+LLM coordinator via `llm:chat-with-template` to decide a collective action.
+Convergence time is measured as the first tick where all agents in a topology
+hold the same belief token.
 
 ## HOW TO USE IT
 
-1. Configure your LLM provider in the `llm-config-path` field
-2. Click **Setup** to build the four team networks
-3. Click **Run Round** to start a consensus round
-4. Click **Go** to run the simulation
-5. Watch the Consensus Progress plot to see which team converges first
-6. Run multiple rounds to see cumulative scores
+1. Set `llm-config-path` to a valid config file.
+2. Click `Setup`.
+3. Click `Go`.
+4. Watch convergence monitors and the agreement plot.
 
-## THINGS TO NOTICE
+## OUTPUT
 
-- Star topology often converges fast because the hub acts as a central coordinator
-- Mesh has the most connections but can be slow due to information overload
-- Ring must propagate beliefs sequentially around the circle
-- Tree balances between star's centralization and ring's distribution
+- `convergence-time "mesh"`
+- `convergence-time "hierarchy"`
+- `convergence-time "chain"`
+- `winner-topology`
 
-## THINGS TO TRY
-
-- Vary `agents-per-team` to see how team size affects each topology
-- Change `communication-cooldown` to simulate fast vs. slow communication
-- Run many rounds to see statistically significant topology advantages
-
-## EXTENDING THE MODEL
-
-- Add more topology types (small-world, scale-free)
-- Implement different debate topics per round
-- Add agent personality traits that affect persuadability
-- Track which specific arguments win out across topologies
-
-## CREDITS AND REFERENCES
-
-Built with the NetLogo LLM Extension. Demonstrates network science concepts from:
-- Watts & Strogatz (1998) - Small-world networks
-- Barabási & Albert (1999) - Scale-free networks
-- DeGroot (1974) - Consensus in social networks
 @#$#@#$#@
 default
 true
@@ -743,10 +576,10 @@ false
 0
 Circle -7500403 true true 0 0 300
 
-star
+square
 false
 0
-Polygon -7500403 true true 151 1 185 108 298 108 207 175 242 282 151 216 59 282 94 175 3 108 116 108
+Rectangle -7500403 true true 30 30 270 270
 
 triangle
 false
