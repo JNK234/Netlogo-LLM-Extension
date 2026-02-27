@@ -1,0 +1,4 @@
+ordering,inferred_rule,confidence
+forward,"Agents prioritize nearby food seeking, deviate when local crowding is high, then stabilize heading with mild stochastic drift.",87
+reversed,"Agents appear to wander first and only later reorient toward goals, suggesting delayed correction and weaker immediate goal pursuit.",63
+shuffled,"Policy seems mostly noisy with intermittent short-range attraction to food and occasional anti-crowding turns.",55

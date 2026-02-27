@@ -1,0 +1,10 @@
+ordering,tick,agent_id,x,y,heading,energy,food_collected
+forward,0,0,-3.1,1.2,44.0,99.2,0
+forward,1,0,-2.2,1.9,41.6,98.3,0
+forward,2,0,-1.0,2.4,37.8,97.5,1
+reversed,2,0,-1.0,2.4,37.8,97.5,1
+reversed,1,0,-2.2,1.9,41.6,98.3,0
+reversed,0,0,-3.1,1.2,44.0,99.2,0
+shuffled,1,0,-2.2,1.9,41.6,98.3,0
+shuffled,0,0,-3.1,1.2,44.0,99.2,0
+shuffled,2,0,-1.0,2.4,37.8,97.5,1
