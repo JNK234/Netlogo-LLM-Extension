@@ -48,6 +48,7 @@ commands/
 # Local config files and secrets (keep demos/ checked in)
 config.txt
 config-*.txt
+!demos/provider-sensitivity/config-multi-provider.txt
 *.env
 *.env.*
 *.secrets*
