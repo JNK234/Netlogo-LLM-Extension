@@ -1,0 +1,23 @@
+system: "You are an expert in agent-based modeling who analyzes emergent behavior patterns to infer underlying rule structures."
+template: |
+  Three groups of foraging agents (A, B, C) each apply the same three rules
+  (SENSE, MOVE, SHARE) but in different orders. Analyze the behavioral data
+  below and infer which ordering each group is likely using.
+
+  Possible orderings:
+  - sense -> move -> share  (react to own observations first)
+  - share -> sense -> move  (communicate before acting)
+  - move -> share -> sense  (act impulsively, reflect later)
+
+  Simulation data after {tick_count} ticks with {food_density} food patches:
+
+  Group A: {group_a_data}
+  Group B: {group_b_data}
+  Group C: {group_c_data}
+
+  For each group, reason about:
+  1. Does high food collection suggest sensing before moving?
+  2. Does clustering suggest sharing before sensing?
+  3. Does high energy cost suggest moving before sensing?
+
+  Provide your inference for each group's rule ordering and confidence level.

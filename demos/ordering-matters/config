@@ -1,0 +1,45 @@
+# Ordering-Matters Demo — LLM Configuration
+# Choose ONE provider by uncommenting the relevant section
+
+# ============================================
+# OPTION 1: Ollama (Local, FREE, No API Key)
+# ============================================
+# Best for: Testing, privacy, no costs
+# Setup: Install Ollama from https://ollama.ai
+# Then run: ollama pull llama3.2
+#provider=ollama
+#model=llama3.2:latest
+#base_url=http://localhost:11434
+#temperature=0.4
+#max_tokens=300
+#timeout_seconds=60
+
+# ============================================
+# OPTION 2: OpenAI (Cloud, Requires API Key)
+# ============================================
+provider=openai
+api_key=YOUR_OPENAI_API_KEY_HERE
+model=gpt-4o-mini
+temperature=0.4
+max_tokens=300
+timeout_seconds=30
+
+# ============================================
+# OPTION 3: Anthropic Claude (Cloud, API Key)
+# ============================================
+#provider=anthropic
+#api_key=YOUR_ANTHROPIC_API_KEY_HERE
+#model=claude-3-5-sonnet-20241022
+#temperature=0.4
+#max_tokens=300
+#timeout_seconds=30
+
+# ============================================
+# OPTION 4: Google Gemini (Cloud, API Key)
+# ============================================
+#provider=gemini
+#api_key=YOUR_GEMINI_API_KEY_HERE
+#model=gemini-1.5-flash
+#temperature=0.4
+#max_tokens=300
+#timeout_seconds=30
