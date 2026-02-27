@@ -1,18 +1,23 @@
-system: "You are a debate coordinator evaluating consensus in a group of networked agents discussing what quality is most important for success."
+system: "You are a strict topology coordinator for a NetLogo agent simulation."
 template: |
-  Network topology: {topology}
-  Number of agents: {agent_count}
+  Topology: {topology}
+  Tick: {tick}
+  Agent count: {agent_count}
+  Belief summary: {belief_summary}
+  Current majority belief: {majority_belief}
 
-  Current beliefs held by agents in this team:
-  {beliefs}
+  Pick exactly one next collective action from this list:
+  - HOLD
+  - MAJORITY_PUSH
+  - PAIR_SWAP
+  - SPLIT_REBALANCE
+  - BROADCAST_MAJORITY
 
-  Round number: {round}
-  Ticks elapsed: {ticks_elapsed}
+  Decision policy:
+  - Prefer faster convergence when disagreement is high.
+  - If one belief is clearly dominant, prefer MAJORITY_PUSH or BROADCAST_MAJORITY.
+  - Use PAIR_SWAP or SPLIT_REBALANCE only when beliefs are balanced.
 
-  Please evaluate:
-  1. Has this group reached a consensus? (Answer YES or NO)
-  2. If YES, what is the consensus position?
-  3. If NO, what are the remaining disagreements?
-  4. Rate the group's progress toward consensus on a scale of 0-100.
-
-  Respond concisely.
+  Output format (exact):
+  ACTION:<ONE_ACTION_FROM_LIST>
+  RATIONALE:<ONE_SHORT_SENTENCE>
