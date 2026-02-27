@@ -1,0 +1,18 @@
+system: "You are a debate coordinator evaluating consensus in a group of networked agents discussing what quality is most important for success."
+template: |
+  Network topology: {topology}
+  Number of agents: {agent_count}
+
+  Current beliefs held by agents in this team:
+  {beliefs}
+
+  Round number: {round}
+  Ticks elapsed: {ticks_elapsed}
+
+  Please evaluate:
+  1. Has this group reached a consensus? (Answer YES or NO)
+  2. If YES, what is the consensus position?
+  3. If NO, what are the remaining disagreements?
+  4. Rate the group's progress toward consensus on a scale of 0-100.
+
+  Respond concisely.

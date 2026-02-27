@@ -1,0 +1,40 @@
+# Topology Tournament LLM Configuration
+# Copy this file or edit demos/config with your provider settings
+
+# ============================================
+# OPTION 1: Ollama (Local, FREE, No API Key)
+# ============================================
+# Recommended for this demo — fast local inference keeps the tournament responsive
+#provider=ollama
+#model=llama3.2:latest
+#base_url=http://localhost:11434
+#temperature=0.7
+#max_tokens=150
+#timeout_seconds=30
+
+# ============================================
+# OPTION 2: OpenAI
+# ============================================
+provider=openai
+api_key=YOUR_OPENAI_API_KEY_HERE
+model=gpt-4o-mini
+temperature=0.7
+max_tokens=150
+timeout_seconds=30
+
+# ============================================
+# OPTION 3: Anthropic Claude
+# ============================================
+#provider=anthropic
+#api_key=YOUR_ANTHROPIC_API_KEY_HERE
+#model=claude-3-5-sonnet-20241022
+#temperature=0.7
+#max_tokens=150
+#timeout_seconds=30
+
+# ============================================
+# Notes
+# ============================================
+# max_tokens is set low (150) because agents exchange short belief statements.
+# Lower values reduce cost and latency for the many per-tick LLM calls.
+# temperature=0.7 balances consistency with enough variation for natural debate.
