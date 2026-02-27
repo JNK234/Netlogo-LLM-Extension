@@ -1,54 +1,77 @@
-# Provider Sensitivity Demo
+# Demo 3: Provider Sensitivity
 
-Compares how different LLM providers respond to identical prompts. Reveals differences in response style, length, reasoning approach, and decision-making across OpenAI, Anthropic, Gemini, and Ollama.
+Compare OpenAI, Anthropic, Gemini, and Ollama on the same prompts from NetLogo.
 
-## Files
+## Demo Artifacts
 
-- `provider-sensitivity.nlogo` - Main comparison model
-- `tests.nlogo` - Test suite for config, provider switching, and comparison logic
-- `config` - Multi-provider configuration (set your API keys here)
+- `provider-sensitivity.nlogo`: Main interactive demo with runtime provider switching.
+- `test-harness.nlogo`: Same-task benchmark harness with repeated runs.
+- `config-multi-provider.txt`: Multi-provider config template.
+- `tests/`: Provider comparison tests (`provider-comparison-tests.nlogo`).
 
-## Features
+## What This Demo Compares
 
-- Sends identical prompts to all ready providers and displays results side-by-side
-- Four prompt categories: factual, creative, reasoning, decision
-- `llm:choose` comparison to test constrained decision-making across providers
-- Custom prompt input for ad-hoc comparisons
-- Per-provider average response length statistics
-- Graceful handling of unavailable providers
+For each provider/model pair, the demo records:
+
+- `quality`: heuristic task score in `[0,1]` (prompt-dependent).
+- `latency-ms`: wall-clock response time measured in NetLogo.
+- `est-cost-usd`: approximate token-based cost estimate.
+- `length`: response character count.
 
 ## Setup
 
-1. Edit `config` with API keys for every provider you want to compare
-2. For Ollama, ensure the server is running (`ollama serve`)
-3. At minimum, configure **two** providers to see meaningful comparisons
+1. Open `config-multi-provider.txt`.
+2. Fill API keys for cloud providers you want to benchmark.
+3. For Ollama, run `ollama serve` and pull the target model (for example `ollama pull llama3.2`).
+4. Open either `provider-sensitivity.nlogo` or `test-harness.nlogo` in NetLogo 6.3+.
 
-## Running the Demo
+## Run the Main Demo (`provider-sensitivity.nlogo`)
 
-1. Open `provider-sensitivity.nlogo` in NetLogo
-2. Click **setup** to load config and detect ready providers
-3. Select a **prompt-category** from the chooser
-4. Click **go** (one prompt at a time) or **go-all** (run through all prompts)
-5. Click **Show Results** for a formatted comparison table with length stats
-6. Click **Compare Choose** to test `llm:choose` across providers
-7. Type a custom prompt and click **Compare Custom** for one-off tests
-8. Click **Provider Status** to inspect configuration state
+1. Click **setup**.
+2. Use runtime buttons to switch active provider:
+   - **Use OpenAI**
+   - **Use Anthropic**
+   - **Use Gemini**
+   - **Use Ollama**
+   - **Cycle Provider**
+3. Choose a prompt category.
+4. Click **go** or **go-all**.
+5. Click **Show Results** for side-by-side summary output.
 
-## Running Tests
+## Run the Benchmark Harness (`test-harness.nlogo`)
 
-1. Open `tests.nlogo` in NetLogo
-2. Click **setup** then **Run All Tests**
-3. Tests cover: config loading, provider discovery, switching, status reporting, active config, sync chat, choose, history isolation, and multi-provider comparison
+Use this model when you need repeatable same-task comparisons.
 
-## Configuration
+1. Click **setup**.
+2. Set `benchmark-task` to one task used for all providers.
+3. Set `runs-per-provider`.
+4. Optionally enable `include-choose-test?`.
+5. Click **Run Benchmark**.
+6. Click **Show Summary**.
 
-The demo uses provider-specific API keys so all providers can be configured simultaneously:
+## Compare Results: Cost, Latency, Quality
 
-| Key | Provider |
-|-----|----------|
-| `openai_api_key` | OpenAI |
-| `anthropic_api_key` | Anthropic |
-| `gemini_api_key` | Gemini |
-| `ollama_base_url` | Ollama (local) |
+Use these checks when reading summary output:
 
-Only providers with valid keys (or a reachable Ollama server) will appear as "ready" during setup.
+1. Latency-first: pick providers with the lowest `latency-ms` for real-time agent loops.
+2. Cost-first: compare `est-cost-usd` across the same task and run count.
+3. Quality floor: reject providers below your minimum quality threshold.
+4. Pareto choice: among providers meeting quality floor, pick the cheapest/fastest.
+
+## Testing
+
+Open `tests/provider-comparison-tests.nlogo` and run **Run All Tests**.
+
+Coverage includes:
+
+- provider discovery (`llm:providers`, `llm:providers-all`)
+- runtime provider switching
+- same-task response comparison
+- metric capture (latency and estimated cost)
+- `llm:choose` validity checks
+
+## Notes
+
+- Cost values are estimates based on token heuristics and static per-provider pricing assumptions.
+- Quality scoring is heuristic by design; tune scoring logic for your domain tasks.
+- Providers without valid keys/connectivity are automatically skipped by ready-provider checks.
