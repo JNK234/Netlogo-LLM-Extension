@@ -1,64 +1,57 @@
-# Topology Tournament
+# Demo 1: Topology Tournament
 
-Four teams of LLM-powered agents, each wired in a different network topology, race to reach consensus on a shared question. The tournament reveals how network structure shapes collective reasoning.
+This demo compares how quickly three communication structures coordinate a shared decision:
+- `mesh`: everyone connected to everyone
+- `hierarchy`: tree-like command structure
+- `chain`: linear neighbor-to-neighbor communication
 
-## Topologies
+Each topology has its own NetLogo breed and its own coordinator decision each tick.
 
-| Topology | Structure | Edges (n=5) | Character |
-|----------|-----------|-------------|-----------|
-| **Ring** | Each node connects to 2 neighbors | 5 | Sequential propagation; slow but fair |
-| **Star** | One hub connects to all others | 4 | Centralized; hub is bottleneck or accelerator |
-| **Mesh** | Every node connects to every other | 10 | Maximum connectivity; high communication load |
-| **Tree** | Binary tree with root | 4 | Hierarchical; information flows through levels |
+## Hypothesis
 
-## Quick Start
-
-1. **Configure LLM provider** — edit `demos/config` (or `config` in this folder)
-2. **Open** `topology-tournament.nlogo` in NetLogo 7.0+
-3. **Click Setup** to build the four team networks
-4. **Click Run Round**, then **Go** to start
-
-## Interface Controls
-
-- `agents-per-team` — number of agents per topology (3–8)
-- `communication-cooldown` — minimum ticks between conversations per agent
-- `llm-config-path` — path to LLM configuration file
+Given equal team size and identical starting beliefs:
+- `mesh` should converge fastest because information can propagate in one hop.
+- `hierarchy` should converge in the middle because coordination is centralized but bottlenecked by parent-child edges.
+- `chain` should converge slowest because influence can only move locally along the line.
 
 ## How It Works
 
-Each agent starts with a different belief about what quality is most important for success (efficiency, creativity, collaboration, etc.). Agents only communicate with their direct network neighbors. The LLM mediates each conversation — agents genuinely reason about their partner's argument and update their belief accordingly. The first team where a supermajority agrees on the same position wins the round.
+1. `setup` builds three groups (`mesh-agents`, `hierarchy-agents`, `chain-agents`) and their topology-specific links.
+2. Agents are seeded with mixed initial belief tokens (`COLLECT`, `EXPLORE`, `STABILIZE`).
+3. On each `go` tick, each topology invokes:
+   - `llm:chat-with-template "demos/topology-tournament/coordinator-template.yaml" ...`
+4. The LLM returns one structured action (`HOLD`, `MAJORITY_PUSH`, `PAIR_SWAP`, `SPLIT_REBALANCE`, `BROADCAST_MAJORITY`).
+5. The action is applied to that topology's agents.
+6. Convergence time is recorded per topology when all agents in that topology share one belief.
 
-## What to Watch
+## Why NetLogo + Python
 
-- **Consensus Progress** plot tracks agreement percentage per team over time
-- **Average Confidence** plot shows how certain each team's agents become
-- **Scores** monitor tallies cumulative round wins
-
-## Experiments
-
-- Run 10+ rounds with default settings to see which topology wins most often
-- Increase `agents-per-team` to 8 — does mesh slow down? Does star hold up?
-- Set `communication-cooldown` to 1 (fast) vs 10 (slow) — who benefits?
-- Compare Ollama (local) vs OpenAI (cloud) for response quality differences
+- NetLogo is used for agent-based topology simulation, repeatable scheduling (`ticks`), and direct LLM extension integration.
+- Python unit tests provide fast static validation in CI without requiring NetLogo GUI/headless runtime.
+- This pairing gives quick feedback for model structure while keeping simulation logic in NetLogo.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `topology-tournament.nlogo` | Main NetLogo model |
-| `coordinator-template.yaml` | LLM prompt template for consensus evaluation |
-| `config` | LLM provider configuration (or use `demos/config`) |
-| `README.md` | This file |
+- `topology-tournament.nlogo`: main simulation model
+- `coordinator-template.yaml`: coordinator prompt contract
+- `config.txt`: provider/model/runtime settings
+- `tests/test_topology_tournament.py`: unit tests for model/template/config structure
 
-## Requirements
+## Run Instructions
 
-- NetLogo 7.0+
-- NetLogo LLM Extension (see root BUILD.md)
-- An LLM provider: Ollama (free, local), OpenAI, Anthropic, or Gemini
+1. Add a real API key in `demos/topology-tournament/config.txt`.
+2. Open `demos/topology-tournament/topology-tournament.nlogo` in NetLogo.
+3. Click `Setup`, then `Go`.
+4. Watch convergence monitors:
+   - `convergence-time "mesh"`
+   - `convergence-time "hierarchy"`
+   - `convergence-time "chain"`
+   - `winner-topology`
 
-## Educational Value
+## Test Instructions
 
-- **Network Science**: how topology constrains information flow
-- **Consensus Dynamics**: emergence of agreement from diverse starting positions
-- **LLM-Agent Interaction**: AI-mediated reasoning in multi-agent systems
-- **Comparative Analysis**: controlled experiments across network structures
+From repository root:
+
+```bash
+python3 -m unittest discover demos/topology-tournament/tests -p "test_*.py"
+```
