@@ -1,23 +1,26 @@
-system: "You are an expert in agent-based modeling who analyzes emergent behavior patterns to infer underlying rule structures."
+system: |
+  You are an expert in inverse behavior modeling.
+  Infer an agent policy from observed trajectories.
+
 template: |
-  Three groups of foraging agents (A, B, C) each apply the same three rules
-  (SENSE, MOVE, SHARE) but in different orders. Analyze the behavioral data
-  below and infer which ordering each group is likely using.
+  You are given trajectory rows from a 2D foraging simulation.
 
-  Possible orderings:
-  - sense -> move -> share  (react to own observations first)
-  - share -> sense -> move  (communicate before acting)
-  - move -> share -> sense  (act impulsively, reflect later)
+  Ordering label: {ordering_label}
+  Ticks observed: {tick_count}
+  Agent count: {agent_count}
+  Initial food patches: {food_count}
 
-  Simulation data after {tick_count} ticks with {food_density} food patches:
+  Trajectory rows:
+  {trajectory_text}
 
-  Group A: {group_a_data}
-  Group B: {group_b_data}
-  Group C: {group_c_data}
+  Task:
+  Infer the most likely behavioral rule set that generated these trajectories.
 
-  For each group, reason about:
-  1. Does high food collection suggest sensing before moving?
-  2. Does clustering suggest sharing before sensing?
-  3. Does high energy cost suggest moving before sensing?
+  Return exactly these fields:
+  - inferred_rule: short plain-English rule (1-2 sentences)
+  - evidence: 2-4 bullet points tied to trajectory patterns
+  - confidence: a number from 0 to 100
 
-  Provide your inference for each group's rule ordering and confidence level.
+  Constraints:
+  - Do not mention ordering artifacts unless needed as uncertainty.
+  - Focus on motion regularities (goal-seeking, avoidance, momentum, randomness).
