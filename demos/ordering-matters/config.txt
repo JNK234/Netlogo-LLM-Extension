@@ -1,0 +1,34 @@
+# Ordering Matters demo LLM config
+# Use exactly one provider block.
+
+# --- OpenAI ---
+provider=openai
+api_key=YOUR_OPENAI_API_KEY_HERE
+model=gpt-4o-mini
+temperature=0.2
+max_tokens=400
+timeout_seconds=45
+
+# --- Anthropic ---
+#provider=anthropic
+#api_key=YOUR_ANTHROPIC_API_KEY_HERE
+#model=claude-3-5-sonnet-20241022
+#temperature=0.2
+#max_tokens=400
+#timeout_seconds=45
+
+# --- Gemini ---
+#provider=gemini
+#api_key=YOUR_GEMINI_API_KEY_HERE
+#model=gemini-1.5-flash
+#temperature=0.2
+#max_tokens=400
+#timeout_seconds=45
+
+# --- Ollama (local) ---
+#provider=ollama
+#model=llama3.2:latest
+#base_url=http://localhost:11434
+#temperature=0.2
+#max_tokens=400
+#timeout_seconds=90
