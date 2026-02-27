@@ -1,76 +1,92 @@
-# Ordering Matters Demo
+# Demo 5: Ordering Matters
 
-Demonstrates that applying identical rules in different orders produces measurably different emergent behavior in agent-based models.
+This demo tests whether LLM rule learning depends on **trajectory row ordering**.
 
-## Concept
+The same underlying trajectory log is shown to the LLM in three views:
+- `forward`: chronological order
+- `reversed`: reverse chronological order
+- `shuffled`: random permutation
 
-Three groups of foraging agents each have the same three behavioral rules:
-
-| Rule | Description |
-|------|-------------|
-| **SENSE** | Detect nearest food within sensor range |
-| **MOVE** | Navigate toward food, follow advice, or random walk |
-| **SHARE** | Communicate food locations with nearby agents |
-
-The groups differ **only** in execution order:
-
-| Group | Color | Order | Tendency |
-|-------|-------|-------|----------|
-| A | Red circles | sense → move → share | Reacts to own observations first |
-| B | Blue squares | share → sense → move | Communicates before acting |
-| C | Green triangles | move → share → sense | Acts impulsively, reflects later |
+The LLM is asked to infer the behavioral rule that generated the trajectories.
+`analysis.py` then measures how much inferred rules diverge across orderings.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `ordering-matters.nlogo` | NetLogo model with interface and BehaviorSpace experiment |
-| `rule-inference-template.yaml` | LLM prompt template for inferring rule orderings from data |
-| `config` | LLM provider configuration (OpenAI, Anthropic, Gemini, Ollama) |
-| `analysis.py` | Python script to analyze exported simulation data |
-| `tests/test_analysis.py` | Pytest suite for the analysis script |
+- `ordering-matters.nlogo`: NetLogo simulation + ordering/inference/export workflow
+- `rule-inference-template.yaml`: prompt template used for rule inference
+- `config.txt`: LLM provider settings
+- `analysis.py`: rule-divergence analysis + JSON/plot output
+- `tests/test_analysis.py`: validation for loader/scoring/report/plot logic
+- `results/`: sample inference data, summaries, and plot outputs
 
-## Quick Start
+## Model Workflow
 
-1. Edit `config` with your LLM provider credentials (or disable `use-llm?` in the model)
-2. Open `ordering-matters.nlogo` in NetLogo 6.4+
-3. Click **setup** then **go-forever**
-4. Watch the plot diverge as rule ordering drives different outcomes
-5. Click **export-data** to save CSV, then analyze:
+1. `setup`
+- Initializes food and agents.
+- Agents follow one hidden policy: seek food, avoid local crowding, preserve momentum.
 
-```bash
-python3 analysis.py ordering-matters-output.csv --plot results.png
-```
+2. `go` / `go-forever`
+- Runs simulation and logs trajectory rows: `tick, agent, x, y, heading, energy, food`.
 
-## Running Without LLM
+3. `infer-rules`
+- Builds 3 trajectory presentations: forward/reversed/shuffled.
+- Sends each to the same YAML template.
+- Stores one inferred rule per ordering.
 
-The model works without any LLM provider. Turn off the `use-llm?` switch and agents will share raw coordinates instead of natural-language messages. This mode is useful for fast batch experiments via BehaviorSpace.
+4. `export-data`
+- Writes trajectories to `results/<run>-trajectories.csv`.
+- Writes inferred rules to `results/<run>-inference.csv`.
+
+## Configure LLM
+
+Edit `config.txt` and choose one provider block.
+
+Default file includes examples for:
+- OpenAI
+- Anthropic
+- Gemini
+- Ollama
+
+If you disable `use-llm?` in NetLogo, inference uses a deterministic baseline text (useful for dry runs).
 
 ## Analysis
 
-The `analysis.py` script reads exported CSV data and produces:
-
-- Per-group metrics (food collected, food rate, energy efficiency)
-- Pairwise effect sizes between groups
-- Summary report identifying the best-performing ordering
-- Optional comparison plot (`--plot output.png`)
-
-### Running Tests
+Run analysis on any exported inference CSV:
 
 ```bash
 cd demos/ordering-matters
-python3 -m pytest tests/ -v
+python3 analysis.py results/sample-inference.csv \
+  --json results/analysis-summary.json \
+  --plot results/rule-similarity.png
 ```
 
-## Parameters
+### Metrics
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `num-agents` | 18 | Total agents (divided into 3 equal groups) |
-| `food-count` | 80 | Initial food patches |
-| `sensor-range` | 4 | How far agents can detect food |
-| `speed` | 1.0 | Distance agents move per tick |
-| `comm-range` | 6 | Range for sharing information |
-| `share-interval` | 5 | Ticks between communication attempts |
-| `respawn-food?` | on | Whether food regenerates periodically |
-| `respawn-interval` | 20 | Ticks between food respawn waves |
+- `jaccard`: token overlap of normalized inferred rules
+- `sequence`: string-order similarity (SequenceMatcher)
+- `combined`: mean of jaccard + sequence
+- `order_dependency_score`: `1 - average(combined_pairwise_similarity)`
+
+Interpretation:
+- Higher `order_dependency_score` => stronger dependence on ordering
+- `is_order_sensitive` is true when score exceeds threshold (`--threshold`, default `0.35`)
+
+## Tests
+
+```bash
+cd demos/ordering-matters
+python3 -m pytest tests -q
+```
+
+## Suggested Experiment Protocol
+
+1. Run 20+ simulation seeds.
+2. Export one inference CSV per run.
+3. Analyze each run via `analysis.py`.
+4. Aggregate `order_dependency_score` distributions.
+5. Compare across model families (e.g., GPT/Claude/Gemini/Ollama).
+
+## Notes
+
+- This demo measures **inference sensitivity**, not simulator sensitivity.
+- Forward/reversed/shuffled use identical trajectory content; only row order changes.
