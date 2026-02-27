@@ -1,14 +1,15 @@
-; ABOUTME: Demonstrates how different LLM providers respond to identical prompts.
-; ABOUTME: Compares response style, length, and decision patterns across OpenAI, Anthropic, Gemini, and Ollama.
+; ABOUTME: Demonstrates provider sensitivity by comparing OpenAI, Anthropic, Gemini, and Ollama on the same prompts.
+; ABOUTME: Includes runtime provider switching and side-by-side latency/cost/quality reporting.
 
 extensions [llm]
 
 globals [
-  prompt-bank              ; list of test prompts
-  current-prompt-index     ; index into prompt-bank
-  comparison-results       ; list of [provider model prompt response length] results
-  ready-providers-list     ; cached list of ready providers
-  run-complete?            ; whether all prompts have been tested
+  prompt-bank
+  current-prompt-index
+  comparison-results      ; [provider model prompt response length latency-ms estimated-cost-usd quality-score]
+  ready-providers-list
+  run-complete?
+  active-provider
 ]
 
 ;; ===== SETUP =====
@@ -18,35 +19,45 @@ to setup
   set run-complete? false
   set comparison-results []
   set current-prompt-index 0
+  set active-provider "none"
 
-  ; Load multi-provider config
   carefully [
-    llm:load-config "config"
-    print "Config loaded successfully."
+    llm:load-config "config-multi-provider.txt"
+    print "Loaded config-multi-provider.txt."
   ] [
-    print (word "Config load failed: " error-message)
-    print "Set provider keys manually or edit config."
+    print (word "Primary config load failed: " error-message)
+    carefully [
+      llm:load-config "config"
+      print "Loaded fallback config."
+    ] [
+      print (word "Fallback config load failed: " error-message)
+      print "Update config-multi-provider.txt with your provider keys."
+    ]
   ]
 
-  ; Discover which providers are ready
-  set ready-providers-list llm:providers
-  print (word "Ready providers: " ready-providers-list)
-
+  refresh-ready-providers
   if empty? ready-providers-list [
-    print "WARNING: No providers are ready. Configure at least one provider in config."
-    print "Run llm:provider-help \"openai\" (or another provider) for setup instructions."
+    print "WARNING: No providers are ready."
+    print "Run llm:provider-help \"openai\" (or another provider) for setup guidance."
     stop
   ]
 
-  ; Build prompt bank from chooser selection
   set prompt-bank build-prompt-bank
-  print (word "Loaded " length prompt-bank " test prompts in category: " prompt-category)
+  print (word "Loaded " length prompt-bank " prompts from category: " prompt-category)
+
+  if not empty? ready-providers-list [
+    activate-provider (first ready-providers-list)
+  ]
 
   reset-ticks
 end
 
+to refresh-ready-providers
+  set ready-providers-list sort llm:providers
+  print (word "Ready providers: " ready-providers-list)
+end
+
 to-report build-prompt-bank
-  ; Returns a list of prompts based on the selected category
   if prompt-category = "factual" [
     report (list
       "What is the capital of France? Answer in one sentence."
@@ -57,7 +68,7 @@ to-report build-prompt-bank
   if prompt-category = "creative" [
     report (list
       "Write a haiku about a turtle crossing a road."
-      "Invent a name for a café that serves only desserts. Give only the name."
+      "Invent a name for a cafe that serves only desserts. Give only the name."
       "Describe a sunset in exactly ten words."
     )
   ]
@@ -75,7 +86,6 @@ to-report build-prompt-bank
       "Should a self-driving car prioritize passengers or pedestrians? State your position in one sentence."
     )
   ]
-  ; Default fallback
   report (list
     "What is the capital of France? Answer in one sentence."
     "Write a haiku about a turtle crossing a road."
@@ -87,14 +97,14 @@ end
 
 to go
   if run-complete? [
-    print "All prompts tested. Click 'show-results' to view comparison."
+    print "All prompts tested. Click 'show-results' for the full summary."
     stop
   ]
 
   if current-prompt-index >= length prompt-bank [
     set run-complete? true
     print "=== Comparison complete ==="
-    print (word "Total results: " length comparison-results)
+    print (word "Total result rows: " length comparison-results)
     show-results
     stop
   ]
@@ -105,7 +115,6 @@ to go
   print (word "Prompt: " current-prompt)
   print ""
 
-  ; Send the same prompt to each ready provider
   foreach ready-providers-list [ provider-name ->
     run-single-provider provider-name current-prompt
   ]
@@ -115,37 +124,33 @@ to go
 end
 
 to run-single-provider [provider-name current-prompt]
-  ; Switch to the target provider, send the prompt, record the result
   carefully [
     llm:set-provider provider-name
-
-    ; Use a consistent model per provider for fair comparison
     let model-name get-default-model provider-name
     llm:set-model model-name
-
-    ; Clear history so each prompt is independent
     llm:clear-history
 
+    reset-timer
     let response llm:chat current-prompt
+    let latency-ms precision (timer * 1000) 0
     let resp-length length response
+    let estimated-cost-usd estimate-cost-usd provider-name current-prompt response
+    let quality-score score-response current-prompt response
 
-    ; Store result
-    let result (list provider-name model-name current-prompt response resp-length)
+    let result (list provider-name model-name current-prompt response resp-length latency-ms estimated-cost-usd quality-score)
     set comparison-results lput result comparison-results
 
-    ; Print inline
-    print (word "  [" provider-name "/" model-name "] (" resp-length " chars)")
+    print (word "  [" provider-name "/" model-name "] len=" resp-length
+           " latency=" latency-ms "ms est-cost=$" estimated-cost-usd " quality=" quality-score)
     print (word "    " truncate-string response 120)
-
   ] [
     print (word "  [" provider-name "] ERROR: " error-message)
-    let result (list provider-name "n/a" current-prompt (word "ERROR: " error-message) 0)
-    set comparison-results lput result comparison-results
+    let failed-result (list provider-name "n/a" current-prompt (word "ERROR: " error-message) 0 0 0 0)
+    set comparison-results lput failed-result comparison-results
   ]
 end
 
 to-report get-default-model [provider-name]
-  ; Returns a sensible default model for comparison per provider
   if provider-name = "openai"    [ report "gpt-4o-mini" ]
   if provider-name = "anthropic" [ report "claude-3-5-haiku-latest" ]
   if provider-name = "gemini"    [ report "gemini-2.0-flash" ]
@@ -153,59 +158,101 @@ to-report get-default-model [provider-name]
   report "unknown"
 end
 
+;; ===== RUNTIME PROVIDER SWITCHING =====
+
+to activate-provider [provider-name]
+  carefully [
+    llm:set-provider provider-name
+    llm:set-model (get-default-model provider-name)
+    set active-provider provider-name
+    print (word "Active provider set to: " provider-name " / " (get-default-model provider-name))
+  ] [
+    print (word "Provider switch failed for " provider-name ": " error-message)
+  ]
+end
+
+to use-openai
+  activate-provider "openai"
+end
+
+to use-anthropic
+  activate-provider "anthropic"
+end
+
+to use-gemini
+  activate-provider "gemini"
+end
+
+to use-ollama
+  activate-provider "ollama"
+end
+
+to cycle-provider
+  if empty? ready-providers-list [
+    print "No ready providers to cycle."
+    stop
+  ]
+  let idx position active-provider ready-providers-list
+  if idx = false [
+    activate-provider (first ready-providers-list)
+    stop
+  ]
+  let next-idx ((idx + 1) mod (length ready-providers-list))
+  activate-provider (item next-idx ready-providers-list)
+end
+
 ;; ===== RESULTS DISPLAY =====
 
 to show-results
   print ""
-  print "╔══════════════════════════════════════════════════════════════╗"
-  print "║              PROVIDER SENSITIVITY RESULTS                   ║"
-  print "╠══════════════════════════════════════════════════════════════╣"
+  print "==============================================================="
+  print "Provider Sensitivity Results"
+  print "==============================================================="
 
   let prompt-idx 0
   foreach prompt-bank [ p ->
     print ""
-    print (word "── Prompt " (prompt-idx + 1) ": " truncate-string p 55)
-    print ""
-
-    ; Filter results for this prompt
+    print (word "Prompt " (prompt-idx + 1) ": " truncate-string p 70)
     foreach comparison-results [ result ->
       let r-provider item 0 result
-      let r-model    item 1 result
-      let r-prompt   item 2 result
+      let r-model item 1 result
+      let r-prompt item 2 result
       let r-response item 3 result
-      let r-length   item 4 result
-
+      let r-length item 4 result
+      let r-latency item 5 result
+      let r-cost item 6 result
+      let r-quality item 7 result
       if r-prompt = p [
-        print (word "  ▸ " r-provider " (" r-model ") — " r-length " chars")
+        print (word "  - " r-provider " (" r-model ") len=" r-length
+               " latency=" r-latency "ms cost=$" r-cost " quality=" r-quality)
         print (word "    " truncate-string r-response 100)
       ]
     ]
-
     set prompt-idx prompt-idx + 1
   ]
 
   print ""
-  print "╠══════════════════════════════════════════════════════════════╣"
-  print "║                    LENGTH SUMMARY                           ║"
-  print "╠══════════════════════════════════════════════════════════════╣"
-
-  ; Per-provider average length
+  print "Summary by provider (avg over successful responses):"
   foreach ready-providers-list [ provider-name ->
     let provider-results filter [ r -> item 0 r = provider-name and item 4 r > 0 ] comparison-results
     if not empty? provider-results [
-      let total-len sum map [ r -> item 4 r ] provider-results
-      let avg-len total-len / length provider-results
-      print (word "  " provider-name ": avg " precision avg-len 0 " chars across " length provider-results " responses")
+      let avg-len precision (mean map [ r -> item 4 r ] provider-results) 1
+      let avg-latency precision (mean map [ r -> item 5 r ] provider-results) 1
+      let avg-cost precision (mean map [ r -> item 6 r ] provider-results) 6
+      let avg-quality precision (mean map [ r -> item 7 r ] provider-results) 2
+      print (word "  " provider-name
+        " | length=" avg-len
+        " | latency-ms=" avg-latency
+        " | est-cost-usd=" avg-cost
+        " | quality=" avg-quality
+        " | n=" length provider-results)
     ]
   ]
-
-  print "╚══════════════════════════════════════════════════════════════╝"
 end
 
 ;; ===== CHOOSE COMPARISON =====
 
 to compare-choose
-  ; Tests llm:choose across providers with the same prompt and options
   let choose-prompt "You are a turtle in a simulation. Which direction should you move?"
   let choices ["north" "south" "east" "west"]
 
@@ -218,23 +265,22 @@ to compare-choose
   foreach ready-providers-list [ provider-name ->
     carefully [
       llm:set-provider provider-name
-      llm:set-model get-default-model provider-name
+      llm:set-model (get-default-model provider-name)
       llm:clear-history
-
+      reset-timer
       let chosen llm:choose choose-prompt choices
-      print (word "  " provider-name " chose: " chosen)
+      let latency-ms precision (timer * 1000) 0
+      print (word "  " provider-name " chose: " chosen " (" latency-ms "ms)")
     ] [
       print (word "  " provider-name " ERROR: " error-message)
     ]
   ]
-
   print ""
 end
 
-;; ===== SINGLE-PROMPT QUICK TEST =====
+;; ===== SINGLE PROMPT QUICK TEST =====
 
 to compare-single
-  ; Send the text from the input box to all ready providers
   if custom-prompt = "" or custom-prompt = "Type a prompt here..." [
     print "Enter a prompt in the input box first."
     stop
@@ -259,10 +305,11 @@ to show-provider-status
     print (word "  " info)
   ]
   print ""
-  print (word "Ready: " llm:providers)
-  print (word "All:   " llm:providers-all)
+  print (word "Ready:  " llm:providers)
+  print (word "All:    " llm:providers-all)
+  print (word "Active: " active-provider)
   let active llm:active
-  print (word "Active: " item 0 active " / " item 1 active)
+  print (word "Engine: " item 0 active " / " item 1 active)
 end
 
 ;; ===== UTILITIES =====
@@ -273,6 +320,68 @@ to-report truncate-string [s max-len]
   ] [
     report s
   ]
+end
+
+to-report contains-text? [haystack needle]
+  report position needle haystack != false
+end
+
+to-report estimate-tokens [text]
+  report max (list 1 (round (length text / 4)))
+end
+
+to-report provider-pricing [provider-name]
+  ; Approximate USD costs per 1K tokens [input output].
+  if provider-name = "openai"    [ report (list 0.00015 0.0006) ]
+  if provider-name = "anthropic" [ report (list 0.00025 0.00125) ]
+  if provider-name = "gemini"    [ report (list 0.000075 0.0003) ]
+  if provider-name = "ollama"    [ report (list 0 0) ]
+  report (list 0 0)
+end
+
+to-report estimate-cost-usd [provider-name prompt response]
+  let pricing provider-pricing provider-name
+  let in-rate item 0 pricing
+  let out-rate item 1 pricing
+  let in-tokens estimate-tokens prompt
+  let out-tokens estimate-tokens response
+  let total-cost ((in-tokens / 1000) * in-rate) + ((out-tokens / 1000) * out-rate)
+  report precision total-cost 6
+end
+
+to-report score-response [prompt response]
+  ; Simple heuristic quality score in [0,1] for quick provider comparison.
+  let p lowercase prompt
+  let r lowercase response
+  let checks 0
+  let hits 0
+
+  if contains-text? p "capital of france" [
+    set checks checks + 1
+    if contains-text? r "paris" [ set hits hits + 1 ]
+  ]
+  if contains-text? p "photosynthesis" [
+    set checks checks + 1
+    if ((contains-text? r "sunlight") or (contains-text? r "chlorophyll")) [ set hits hits + 1 ]
+  ]
+  if contains-text? p "ocean tides" [
+    set checks checks + 1
+    if contains-text? r "moon" [ set hits hits + 1 ]
+  ]
+  if contains-text? p "bat and a ball" [
+    set checks checks + 1
+    if ((contains-text? r "0.05") or (contains-text? r "5 cents") or (contains-text? r "five cents")) [ set hits hits + 1 ]
+  ]
+  if contains-text? p "wallet" [
+    set checks checks + 1
+    if ((contains-text? r "return") or (contains-text? r "owner")) [ set hits hits + 1 ]
+  ]
+
+  if checks = 0 [
+    ifelse length response > 0 [ report 1 ] [ report 0 ]
+  ]
+
+  report precision (hits / checks) 2
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -414,6 +523,91 @@ NIL
 NIL
 1
 
+BUTTON
+205
+55
+335
+88
+Use OpenAI
+use-openai
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+205
+90
+335
+123
+Use Anthropic
+use-anthropic
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+205
+125
+335
+158
+Use Gemini
+use-gemini
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+205
+160
+335
+193
+Use Ollama
+use-ollama
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+205
+195
+335
+228
+Cycle Provider
+cycle-provider
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
 INPUTBOX
 15
 250
@@ -447,7 +641,7 @@ TEXTBOX
 365
 405
 460
-Provider Sensitivity Demo\nCompares how different LLM providers respond to identical prompts.\n1. Edit config with your API keys\n2. Click SETUP to detect ready providers\n3. Pick a prompt category and click GO\n4. Use Compare Choose for decision tests\n5. Use the input box for custom prompts
+Provider Sensitivity Demo\nSwitch providers at runtime and compare quality, latency, and estimated cost.\n1. Configure keys in config-multi-provider.txt\n2. Click SETUP, then use provider buttons to switch\n3. Run GO / GO-ALL for side-by-side comparisons\n4. Use Compare Choose and Compare Custom for focused checks
 11
 0.0
 1
@@ -459,37 +653,42 @@ A demo that compares how different LLM providers (OpenAI, Anthropic, Gemini, Oll
 
 ## HOW IT WORKS
 
-The model maintains a bank of test prompts organized by category (factual, creative, reasoning, decision). On each tick it takes the next prompt and sends it to every ready provider, recording each response. Results are displayed with per-provider length statistics.
+The model maintains a bank of test prompts organized by category (factual, creative, reasoning, decision). On each tick it sends the next prompt to every ready provider and records response length, latency, estimated cost, and a heuristic quality score.
+
+The interface also supports runtime provider switching with dedicated buttons (`Use OpenAI`, `Use Anthropic`, `Use Gemini`, `Use Ollama`, `Cycle Provider`).
 
 ## HOW TO USE IT
 
-1. Edit `config` with API keys for the providers you want to compare
+1. Edit `config-multi-provider.txt` with API keys for the providers you want to compare
 2. Click **setup** to load configuration and detect ready providers
-3. Select a **prompt-category** from the chooser
-4. Click **go** (single step) or **go-all** (run through all prompts)
-5. Click **Show Results** to see the formatted comparison table
-6. Use **Compare Choose** to test constrained decisions across providers
-7. Type a custom prompt in the input box and click **Compare Custom**
+3. Use provider buttons to switch active provider at runtime if desired
+4. Select a **prompt-category** from the chooser
+5. Click **go** (single step) or **go-all** (run through all prompts)
+6. Click **Show Results** to inspect quality, latency, cost, and response differences
+7. Use **Compare Choose** to test constrained decisions across providers
+8. Type a custom prompt in the input box and click **Compare Custom**
 
 ## THINGS TO NOTICE
 
 - Response length varies significantly across providers
-- Creative prompts show the most stylistic divergence
-- Reasoning prompts may reveal different logical approaches
-- The llm:choose test shows whether providers have directional biases
+- Latency and estimated cost can move independently from quality
+- Creative prompts usually show the most stylistic divergence
+- Reasoning prompts reveal different error patterns and confidence styles
+- `llm:choose` can expose directional bias between providers/models
 
 ## THINGS TO TRY
 
 - Run the same category multiple times to observe consistency
 - Compare a local Ollama model against cloud providers
 - Use custom prompts to test domain-specific sensitivity
+- Compare an inexpensive fast model against a slower stronger model
 
 ## EXTENDING THE MODEL
 
-- Add response-time tracking per provider
-- Implement automated similarity scoring between responses
+- Replace heuristic quality scoring with rubric-based evaluation prompts
+- Add export to CSV for plotting cost/latency/quality tradeoffs
 - Add a turtle-per-provider visualization
-- Log results to a file for offline analysis
+- Add repeated trials and confidence intervals for each metric
 @#$#@#$#@
 default
 true
