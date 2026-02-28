@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE experiments SYSTEM "behaviorspace.dtd">
+<experiments>
+  <experiment name="flocking-boids-sweep" repetitions="5" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="300"/>
+    <metric>avg-speed</metric>
+    <metric>flock-size</metric>
+    <metric>count boids</metric>
+
+    <enumeratedValueSet variable="num-boids">
+      <value value="60"/>
+      <value value="120"/>
+      <value value="180"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="max-speed">
+      <value value="1.0"/>
+      <value value="1.4"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="separation-radius">
+      <value value="1.0"/>
+      <value value="1.5"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="alignment-radius">
+      <value value="4.0"/>
+      <value value="6.0"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="cohesion-radius">
+      <value value="7.0"/>
+      <value value="9.0"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="separation-weight">
+      <value value="1.0"/>
+      <value value="1.2"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="alignment-weight">
+      <value value="0.4"/>
+      <value value="0.5"/>
+    </enumeratedValueSet>
+
+    <enumeratedValueSet variable="cohesion-weight">
+      <value value="0.3"/>
+      <value value="0.4"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
