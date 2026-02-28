@@ -1,0 +1,18 @@
+<experiments>
+  <experiment name="schelling-segregation-sweep" repetitions="5" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>settled?</exitCondition>
+    <metric>ticks</metric>
+    <metric>segregation-index</metric>
+    <metric>happy-count</metric>
+    <metric>empty-patches</metric>
+    <steppedValueSet variable="similar-wanted" first="10" step="5" last="50"/>
+    <enumeratedValueSet variable="num-agents">
+      <value value="400"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="empty-rate">
+      <value value="40"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
