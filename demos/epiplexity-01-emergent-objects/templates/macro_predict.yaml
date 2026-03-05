@@ -3,7 +3,7 @@ system: |
   Prioritize consistency with recent history and known dynamics.
   Return exactly one event token from the provided choices.
 template: |
-  === RECENT PATTERN HISTORY ===
+  === RECENT WINDOW HISTORY (with grids) ===
   {label_history}
 
   === CURRENT LABEL ===
