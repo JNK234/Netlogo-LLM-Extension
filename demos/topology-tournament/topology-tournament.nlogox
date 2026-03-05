@@ -61,8 +61,8 @@ to build-topologies
   build-chain-topology
 
   ask topology-links [
-    set color gray - 2
-    set thickness 0.1
+    set color gray + 1
+    set thickness 0.2
   ]
 end
 
@@ -70,14 +70,15 @@ to build-mesh-topology
   create-mesh-agents agents-per-topology [
     set topology-name "mesh"
     set shape "circle"
-    set color blue + 1
-    set size 1.3
+    set color blue + 2
+    set size 2
   ]
 
-  layout-circle mesh-agents 6
+  ;; Top-left quadrant
+  layout-circle mesh-agents 8
   ask mesh-agents [
-    set xcor xcor - 16
-    set ycor ycor + 8
+    set xcor xcor - 13
+    set ycor ycor + 10
   ]
 
   let ordered sort mesh-agents
@@ -94,18 +95,19 @@ to build-hierarchy-topology
   create-hierarchy-agents agents-per-topology [
     set topology-name "hierarchy"
     set shape "triangle"
-    set color green + 1
-    set size 1.4
+    set color green + 2
+    set size 2
   ]
 
+  ;; Top-right quadrant
   let ordered sort hierarchy-agents
   foreach (range length ordered) [i ->
     let level floor (ln (i + 1) / ln 2)
     let first-at-level ((2 ^ level) - 1)
     let level-position (i - first-at-level)
     let level-width (2 ^ level)
-    let x-offset (level-position - ((level-width - 1) / 2)) * 3
-    let y-offset 14 - (level * 4)
+    let x-offset 13 + (level-position - ((level-width - 1) / 2)) * 5
+    let y-offset 20 - (level * 6)
 
     ask item i ordered [
       setxy x-offset y-offset
@@ -123,17 +125,18 @@ to build-chain-topology
   create-chain-agents agents-per-topology [
     set topology-name "chain"
     set shape "square"
-    set color orange + 1
-    set size 1.3
+    set color orange + 2
+    set size 2
   ]
 
+  ;; Bottom row, centered
   let ordered sort chain-agents
-  let spacing 2.8
-  let start-x (16 - ((agents-per-topology - 1) * spacing / 2))
+  let spacing 4
+  let start-x (0 - ((agents-per-topology - 1) * spacing / 2))
 
   foreach (range length ordered) [i ->
     ask item i ordered [
-      setxy (start-x + (i * spacing)) -12
+      setxy (start-x + (i * spacing)) -18
     ]
 
     if i > 0 [
@@ -149,7 +152,7 @@ to seed-beliefs
   assign-beliefs chain-agents 2
 
   ask turtles [
-    set label (word topology-name ":" belief)
+    set label belief
     set label-color white
   ]
 end
@@ -202,26 +205,33 @@ to decide-belief
   [ set rounds-unchanged rounds-unchanged + 1 ]
   [ set rounds-unchanged 0 ]
 
-  set label (word topology-name ":" belief)
+  set label belief
 end
 
 to decide-belief-llm [neighbor-beliefs]
   carefully [
-    ;; Reset history each tick to prevent unbounded token growth
+    ;; Every agent calls the LLM every tick — topology constrains what it sees
     llm:set-history (list
       (list "system" (word
-        "You are agent " who " in a " topology-name " network. "
-        "Choose the belief that will help your group reach consensus fastest. "
-        "Prefer the majority belief among your neighbors if one exists."
+        "You are agent " who " in a " topology-name " network with " length neighbor-beliefs " neighbors. "
+        "Your group is trying to reach consensus on one belief. "
+        "You can ONLY see your direct neighbors — you cannot see the whole group. "
+        "Consider what your neighbors believe and decide strategically. "
+        "If most neighbors agree, joining them speeds up consensus. "
+        "If neighbors are split, use your judgment about which belief is gaining momentum."
       ))
     )
     let prompt (word
-      "Your belief: " belief ". "
-      "Neighbor beliefs: " belief-count-summary neighbor-beliefs ". "
-      "Which belief?"
+      "Your current belief: " belief ". "
+      "Your " length neighbor-beliefs " neighbor(s) believe: " belief-count-summary neighbor-beliefs ". "
+      "What belief do you choose?"
     )
-    set belief llm:choose prompt belief-options
+    let chosen llm:choose prompt belief-options
+    print (word "Agent " who " (" topology-name ", " length neighbor-beliefs " nbrs): "
+      belief " -> " chosen " [neighbors: " belief-count-summary neighbor-beliefs "]")
+    set belief chosen
   ] [
+    print (word "Agent " who " LLM failed: " error-message ". Using deterministic.")
     decide-belief-deterministic neighbor-beliefs
   ]
 end
@@ -231,8 +241,12 @@ to decide-belief-deterministic [neighbor-beliefs]
   let best belief
   let best-count 0
   foreach belief-options [candidate ->
-    let cnt length filter [b -> b = candidate] all-local
+    let cnt length (filter [b -> b = candidate] all-local)
     if cnt > best-count [ set best candidate  set best-count cnt ]
+  ]
+  ;; Small random chance to break symmetry and prevent oscillation
+  if best = belief and length neighbor-beliefs > 0 and random 100 < 10 [
+    set best one-of neighbor-beliefs
   ]
   set belief best
 end
@@ -240,11 +254,11 @@ end
 to-report belief-count-summary [belief-list]
   let chunks []
   foreach belief-options [candidate ->
-    let cnt length filter [b -> b = candidate] belief-list
+    let cnt length (filter [b -> b = candidate] belief-list)
     if cnt > 0 [ set chunks lput (word candidate ":" cnt) chunks ]
   ]
   ifelse empty? chunks [ report "none" ]
-  [ report reduce [[a b] -> word a ", " b] chunks ]
+  [ report (reduce [[a b] -> (word a ", " b)] chunks) ]
 end
 
 to check-all-convergence
@@ -286,11 +300,11 @@ to-report belief-summary [group]
   foreach belief-options [candidate ->
     set chunks lput (word candidate ":" count group with [belief = candidate]) chunks
   ]
-  report reduce [[left right] -> word left ", " right] chunks
+  report (reduce [[a b] -> (word a ", " b)] chunks)
 end
 
 to update-tournament-state
-  if all? convergence-times [value -> value >= 0] [
+  if not member? -1 convergence-times [
     set tournament-running? false
     set winner-topology fastest-topology
     stop
@@ -300,6 +314,12 @@ to update-tournament-state
     set tournament-running? false
     set winner-topology fastest-topology
   ]
+end
+
+to stop-tournament
+  set tournament-running? false
+  set winner-topology fastest-topology
+  print "Tournament stopped by user."
 end
 
 to-report fastest-topology
@@ -342,57 +362,42 @@ to-report llm-status
   [ report "Deterministic" ]
 end]]></code>
   <widgets>
-    <view x="210" y="10" width="820" height="620"
-          minPxcor="-25" maxPxcor="25" minPycor="-25" maxPycor="25"
-          patchSize="12.0" wrappingAllowedX="false" wrappingAllowedY="false"
-          fontSize="10" updateMode="1" showTickCounter="true" tickCounterLabel="ticks" frameRate="30.0"></view>
-    <button x="15" y="10" width="90" height="33"
-            display="Setup" source="observer" forever="false">setup</button>
-    <button x="15" y="50" width="90" height="33"
-            display="Go" source="observer" forever="true">go</button>
-    <button x="110" y="50" width="90" height="33"
-            display="Step" source="observer" forever="false">go</button>
-    <slider x="15" y="110" width="195" height="33"
-            display="agents-per-topology" variable="agents-per-topology"
-            min="3" max="12" default="6.0" step="1" units="" direction="horizontal"></slider>
-    <slider x="15" y="150" width="195" height="33"
-            display="max-ticks" variable="max-ticks"
-            min="20" max="400" default="150.0" step="1" units="" direction="horizontal"></slider>
-    <inputBox x="15" y="195" width="195" height="60"
-              variable="llm-config-path" multiline="false" type="String">demos/topology-tournament/config.txt</inputBox>
-    <switch x="830" y="210" width="280" height="33"
-            display="use-llm?" variable="use-llm?" on="true"></switch>
-    <monitor x="830" y="250" width="280" height="33"
-             display="LLM Status" source="observer" precision="17">llm-status</monitor>
-    <monitor x="15" y="270" width="195" height="33"
-             display="Winner" source="observer" precision="17">winner-topology</monitor>
-    <monitor x="15" y="310" width="195" height="33"
-             display="Status" source="observer" precision="17">status-summary</monitor>
-    <monitor x="15" y="350" width="195" height="33"
-             display="Mesh Convergence" source="observer" precision="0">convergence-time "mesh"</monitor>
-    <monitor x="15" y="390" width="195" height="33"
-             display="Hierarchy Convergence" source="observer" precision="0">convergence-time "hierarchy"</monitor>
-    <monitor x="15" y="430" width="195" height="33"
-             display="Chain Convergence" source="observer" precision="0">convergence-time "chain"</monitor>
-    <monitor x="830" y="290" width="280" height="33"
-             display="Mesh Agreement %" source="observer" precision="1">agreement-pct mesh-agents</monitor>
-    <monitor x="830" y="330" width="280" height="33"
-             display="Hierarchy Agreement %" source="observer" precision="1">agreement-pct hierarchy-agents</monitor>
-    <monitor x="830" y="370" width="280" height="33"
-             display="Chain Agreement %" source="observer" precision="1">agreement-pct chain-agents</monitor>
-    <plot x="830" y="10" width="280" height="190"
-          display="Agreement by Topology" xAxis="Ticks" yAxis="Agreement %"
-          xMin="0.0" xMax="100.0" yMin="0.0" yMax="100.0"
-          autoPlotOn="true" legendOn="true" setupCode="" updateCode="">
-      <pen name="mesh" interval="1.0" mode="0" color="-13345367" inLegend="true"
-           setupCode="" updateCode="plot agreement-pct mesh-agents"></pen>
-      <pen name="hierarchy" interval="1.0" mode="0" color="-10899396" inLegend="true"
-           setupCode="" updateCode="plot agreement-pct hierarchy-agents"></pen>
-      <pen name="chain" interval="1.0" mode="0" color="-955883" inLegend="true"
-           setupCode="" updateCode="plot agreement-pct chain-agents"></pen>
+    <view x="220" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-25" height="745" showTickCounter="true" patchSize="14.53" fontSize="10" wrappingAllowedY="false" width="745" tickCounterLabel="ticks" maxPycor="25" updateMode="1" maxPxcor="25" minPxcor="-25"></view>
+    <button x="15" y="55" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="90" display="Go">go</button>
+    <button x="110" y="55" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Step">go</button>
+    <button x="110" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Stop">stop-tournament</button>
+    <slider x="15" step="1" y="110" max="12" width="195" display="agents-per-topology" height="50" min="3" direction="Horizontal" default="6.0" variable="agents-per-topology"></slider>
+    <slider x="15" step="1" y="165" max="400" width="195" display="max-ticks" height="50" min="20" direction="Horizontal" default="150.0" variable="max-ticks"></slider>
+    <input x="15" multiline="false" y="220" height="60" variable="llm-config-path" type="string" width="195">config.txt</input>
+    <monitor x="15" precision="17" y="290" height="60" fontSize="11" width="195" display="Winner">winner-topology</monitor>
+    <monitor x="15" precision="17" y="340" height="60" fontSize="11" width="195" display="Status">status-summary</monitor>
+    <monitor x="15" precision="0" y="390" height="60" fontSize="11" width="195" display="Mesh Convergence">convergence-time "mesh"</monitor>
+    <monitor x="15" precision="0" y="440" height="60" fontSize="11" width="195" display="Hierarchy Convergence">convergence-time "hierarchy"</monitor>
+    <monitor x="15" precision="0" y="490" height="60" fontSize="11" width="195" display="Chain Convergence">convergence-time "chain"</monitor>
+    <switch x="1250" y="525" height="40" on="false" variable="use-llm?" width="280" display="use-llm?"></switch>
+    <monitor x="1415" precision="1" y="630" height="60" fontSize="11" width="280" display="Hierarchy Agreement %">agreement-pct hierarchy-agents</monitor>
+    <monitor x="1415" precision="1" y="570" height="60" fontSize="11" width="280" display="Chain Agreement %">agreement-pct chain-agents</monitor>
+    <monitor x="1135" precision="1" y="630" height="60" fontSize="11" width="280" display="Mesh Agreement %">agreement-pct mesh-agents</monitor>
+    <monitor x="1135" precision="17" y="570" height="60" fontSize="11" width="280" display="LLM Status">llm-status</monitor>
+    <plot x="995" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="Agreement %" y="50" xMin="0.0" height="435" legend="true" xMax="100.0" yMin="0.0" width="900" xAxis="Ticks" display="Agreement by Topology">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="mesh" color="-13345367" legend="true">
+        <setup></setup>
+        <update>plot agreement-pct mesh-agents</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="hierarchy" color="-10899396" legend="true">
+        <setup></setup>
+        <update>plot agreement-pct hierarchy-agents</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="chain" color="-955883" legend="true">
+        <setup></setup>
+        <update>plot agreement-pct chain-agents</update>
+      </pen>
     </plot>
+    <button x="15" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Setup">setup</button>
   </widgets>
-  <info><![CDATA[## WHAT IS IT?
+  <info>## WHAT IS IT?
 
 This model compares three communication topologies — **mesh**, **hierarchy**, and **chain** — in a collective coordination task. Each agent independently observes only its `link-neighbors` and uses `llm:choose` (or a deterministic local-majority fallback) to pick a belief. Topology genuinely constrains information flow, replicating the MARBLE paper's core finding that network structure affects convergence speed.
 
@@ -460,7 +465,7 @@ The tournament ends when all three topologies have converged, or `max-ticks` is 
 
 ## CREDITS AND REFERENCES
 
-Inspired by the MARBLE paper (arXiv:2503.01935) on how network topology affects multi-agent LLM convergence. Part of the NetLogo LLM Extension demo suite. See the [extension README](../../README.md) for setup and API documentation.]]></info>
+Inspired by the MARBLE paper (arXiv:2503.01935) on how network topology affects multi-agent LLM convergence. Part of the NetLogo LLM Extension demo suite. See the [extension README](../../README.md) for setup and API documentation.</info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">

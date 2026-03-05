@@ -1,7 +1,7 @@
 # Topology Tournament LLM settings
-provider=openai
-api_key=YOUR_OPENAI_API_KEY_HERE
-model=gpt-4o-mini
+provider=ollama
+model=qwen3:4b
+base_url=http://localhost:11434
 temperature=0.3
 max_tokens=120
 timeout_seconds=30
