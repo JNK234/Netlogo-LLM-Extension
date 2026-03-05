@@ -1,4 +1,6 @@
-extensions [ llm ]
+<?xml version="1.0" encoding="utf-8"?>
+<model version="NetLogo 7.0.3" snapToGrid="true">
+  <code><![CDATA[extensions [ llm ]
 
 globals [
   llm-ready?
@@ -56,8 +58,8 @@ to setup
 
   setup-llm
   setup-responders
-  create-initial-cases seeded-crises
   reset-ticks
+  create-initial-cases seeded-crises
 end
 
 to setup-llm
@@ -175,10 +177,10 @@ to perform-triage
   if llm-ready? [
     carefully [
       set llm-response llm:chat-with-template triage-template-path (list
-        ["incident" incident-summary]
-        ["impact" reported-impact]
-        ["elapsed_ticks" (word ticks)]
-        ["known_context" "Municipal crisis operations center with three response tiers"]
+        (list "incident" incident-summary)
+        (list "impact" reported-impact)
+        (list "elapsed_ticks" (word ticks))
+        (list "known_context" "Municipal crisis operations center with three response tiers")
       )
     ] [
       set llm-response ""
@@ -297,11 +299,11 @@ to-report dispatch-recommendation [target-case]
   let llm-response ""
   carefully [
     set llm-response llm:chat-with-template dispatcher-template-path (list
-      ["severity" [severity-band] of target-case]
-      ["incident" [incident-summary] of target-case]
-      ["basic_load" (word count cases with [queue-state = "assigned" and assigned-tier = "basic"])]
-      ["expert_load" (word count cases with [queue-state = "assigned" and assigned-tier = "expert"])]
-      ["coordinator_load" (word count cases with [queue-state = "assigned" and assigned-tier = "coordinator"])]
+      (list "severity" [severity-band] of target-case)
+      (list "incident" [incident-summary] of target-case)
+      (list "basic_load" (word count cases with [queue-state = "assigned" and assigned-tier = "basic"]))
+      (list "expert_load" (word count cases with [queue-state = "assigned" and assigned-tier = "expert"]))
+      (list "coordinator_load" (word count cases with [queue-state = "assigned" and assigned-tier = "coordinator"]))
     )
   ] [
     set llm-response ""
@@ -497,176 +499,22 @@ to-report resolve-existing-path [primary fallback]
   if file-exists? fallback [ report fallback ]
   report primary
 end
-
-@#$#@#$#@
-GRAPHICS-WINDOW
-230
-10
-747
-528
--1
--1
-15.0
-1
-10
-1
-1
-1
-0
-1
-1
-1
--16
-16
--16
-16
-1
-1
-1
-ticks
-30.0
-
-BUTTON
-20
-20
-88
-53
-setup
-setup
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-96
-20
-164
-53
-go
-go
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-20
-60
-164
-93
-new-case
-spawn-random-case
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-MONITOR
-20
-110
-163
-155
-LLM Active
-llm-ready?
-17
-1
-11
-
-MONITOR
-20
-160
-164
-205
-New Queue
-count cases with [queue-state = "new"]
-17
-1
-11
-
-MONITOR
-20
-210
-164
-255
-Triaged Queue
-count cases with [queue-state = "triaged"]
-17
-1
-11
-
-MONITOR
-20
-260
-164
-305
-Assigned Queue
-count cases with [queue-state = "assigned"]
-17
-1
-11
-
-MONITOR
-20
-310
-164
-355
-Escalations
-escalated-count
-17
-1
-11
-
-MONITOR
-20
-360
-164
-405
-Done by Basic
-processed-basic
-17
-1
-11
-
-MONITOR
-20
-410
-164
-455
-Done by Expert
-processed-expert
-17
-1
-11
-
-MONITOR
-20
-460
-164
-505
-Done by Coordinator
-processed-coordinator
-17
-1
-11
-
-@#$#@#$#@
-## Crisis Triage with Tiered Intelligence Coordination
+]]></code>
+  <widgets>
+    <view x="230" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="518" showTickCounter="true" patchSize="15.0" fontSize="10" wrappingAllowedY="true" width="517" tickCounterLabel="ticks" maxPycor="16" updateMode="1" maxPxcor="16" minPxcor="-16"></view>
+    <button x="20" y="20" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="setup" width="68" sizeVersion="0">setup</button>
+    <button x="96" y="20" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="go" width="68" sizeVersion="0">go</button>
+    <button x="20" y="60" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="new-case" width="144" sizeVersion="0">spawn-random-case</button>
+    <monitor x="20" precision="17" y="110" height="45" fontSize="11" display="LLM Active" width="143" sizeVersion="0">llm-ready?</monitor>
+    <monitor x="20" precision="17" y="160" height="45" fontSize="11" display="New Queue" width="144" sizeVersion="0">count cases with [queue-state = "new"]</monitor>
+    <monitor x="20" precision="17" y="210" height="45" fontSize="11" display="Triaged Queue" width="144" sizeVersion="0">count cases with [queue-state = "triaged"]</monitor>
+    <monitor x="20" precision="17" y="260" height="45" fontSize="11" display="Assigned Queue" width="144" sizeVersion="0">count cases with [queue-state = "assigned"]</monitor>
+    <monitor x="20" precision="17" y="310" height="45" fontSize="11" display="Escalations" width="144" sizeVersion="0">escalated-count</monitor>
+    <monitor x="20" precision="17" y="360" height="45" fontSize="11" display="Done by Basic" width="144" sizeVersion="0">processed-basic</monitor>
+    <monitor x="20" precision="17" y="410" height="45" fontSize="11" display="Done by Expert" width="144" sizeVersion="0">processed-expert</monitor>
+    <monitor x="20" precision="17" y="460" height="45" fontSize="11" display="Done by Coordinator" width="144" sizeVersion="0">processed-coordinator</monitor>
+  </widgets>
+  <info>## Crisis Triage with Tiered Intelligence Coordination
 
 This demo simulates emergency incident flow through three responder tiers:
 
@@ -684,34 +532,43 @@ Routing then uses `dispatcher-template.yaml` and capacity-aware fallback logic.
 3. Click `go`.
 4. Use `new-case` to inject incidents manually.
 
-If LLM config is unavailable, the model automatically uses deterministic heuristic triage.
-@#$#@#$#@
-default
-true
-0
-Polygon -7500403 true true 150 5 40 250 150 205 260 250
-
-circle
-false
-0
-Circle -7500403 true true 0 0 300
-@#$#@#$#@
-NetLogo 6.4.0
-@#$#@#$#@
-@#$#@#$#@
-@#$#@#$#@
-@#$#@#$#@
-@#$#@#$#@
-default
-0.0
--0.2 0 0.0 1.0
-0.0 1 1.0 0.0
-0.2 0 0.0 1.0
-link direction
-true
-0
-Line -7500403 true 150 150 90 180
-Line -7500403 true 150 150 210 180
-@#$#@#$#@
-1
-@#$#@#$#@
+If LLM config is unavailable, the model automatically uses deterministic heuristic triage.</info>
+  <turtleShapes>
+    <shape name="default" rotatable="true" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="5"></point>
+        <point x="40" y="250"></point>
+        <point x="150" y="205"></point>
+        <point x="260" y="250"></point>
+      </polygon>
+    </shape>
+    <shape name="circle" rotatable="false" editableColorIndex="0">
+      <circle x="0" y="0" marked="true" color="-1920102913" diameter="300" filled="true"></circle>
+    </shape>
+  </turtleShapes>
+  <linkShapes>
+    <shape name="default" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+        </shape>
+      </indicator>
+    </shape>
+  </linkShapes>
+  <previewCommands>setup repeat 75 [ go ]</previewCommands>
+</model>

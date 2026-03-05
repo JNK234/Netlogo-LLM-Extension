@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 DEMO_DIR = Path(__file__).resolve().parents[1]
-MODEL_PATH = DEMO_DIR / "crisis-triage.nlogo"
+MODEL_PATH = DEMO_DIR / "crisis-triage.nlogox"
 TRIAGE_TEMPLATE_PATH = DEMO_DIR / "triage-template.yaml"
 DISPATCHER_TEMPLATE_PATH = DEMO_DIR / "dispatcher-template.yaml"
 CONFIG_PATH = DEMO_DIR / "config.txt"
@@ -16,8 +16,11 @@ def read(path: Path) -> str:
 
 
 def model_code_only() -> str:
-    # NetLogo source code appears before the first section delimiter.
-    return read(MODEL_PATH).split("@#$#@#$#@")[0]
+    xml = read(MODEL_PATH)
+    match = re.search(r"<code><!\[CDATA\[(.*?)\]\]></code>", xml, re.DOTALL)
+    if not match:
+        raise AssertionError("unable to parse <code><![CDATA[...]]></code> from model")
+    return match.group(1)
 
 
 def parse_config(path: Path) -> dict[str, str]:

@@ -2,6 +2,8 @@
 
 This demo models a municipal crisis desk where incidents are triaged by an LLM, routed to one of three response tiers, and dynamically escalated when capacity or risk changes.
 
+Target runtime: NetLogo 7.0.3 (`.nlogox` model format).
+
 ## What it demonstrates
 
 - Tiered responders: `basic`, `expert`, `coordinator`
@@ -13,7 +15,7 @@ This demo models a municipal crisis desk where incidents are triaged by an LLM, 
 
 ## Deliverables
 
-- `crisis-triage.nlogo`: NetLogo simulation model
+- `crisis-triage.nlogox`: NetLogo 7 simulation model (canonical)
 - `triage-template.yaml`: Severity prompt template
 - `dispatcher-template.yaml`: Routing prompt template
 - `config.txt`: LLM extension configuration
@@ -56,12 +58,17 @@ The NetLogo model loads these by relative path:
 
 ## Run instructions
 
-1. Ensure NetLogo has the `llm` extension available.
-2. Configure provider settings in `config.txt`.
-3. Open `crisis-triage.nlogo` in NetLogo.
+1. Ensure NetLogo 7.0.3 has the `llm` extension available.
+2. Configure provider settings in `config.txt` (default is local Ollama).
+3. Open `crisis-triage.nlogox` in NetLogo.
 4. Click `setup`.
 5. Click `go`.
 6. Optionally click `new-case` to inject additional incidents.
+
+## NetLogo 7 validation guidance
+
+- Primary validation should be GUI-based in NetLogo 7.0.3 (`setup`, then run `go` for multiple ticks).
+- Headless checks can be useful for smoke testing, but GUI validation is recommended as the canonical check due known NetLogo 7 headless/BehaviorSpace limitations.
 
 ## LLM behavior
 
@@ -80,6 +87,12 @@ If LLM config fails to load or provider calls fail:
 - Routing uses severity-to-tier defaults + capacity fallback
 
 This keeps the simulation functional offline.
+
+## Provider configuration notes
+
+- Default `config.txt` is safe and local-first (`provider=ollama`) with no secrets.
+- Optional cloud examples are commented in `config.txt` for OpenAI, Claude, and Gemini.
+- Never commit real API keys into demo configs.
 
 ## Test suite
 
