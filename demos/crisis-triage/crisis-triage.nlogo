@@ -42,6 +42,9 @@ to setup
   set config-path "demos/crisis-triage/config.txt"
   set triage-template-path "demos/crisis-triage/triage-template.yaml"
   set dispatcher-template-path "demos/crisis-triage/dispatcher-template.yaml"
+  set config-path resolve-existing-path config-path "config.txt"
+  set triage-template-path resolve-existing-path triage-template-path "triage-template.yaml"
+  set dispatcher-template-path resolve-existing-path dispatcher-template-path "dispatcher-template.yaml"
 
   set processed-basic 0
   set processed-expert 0
@@ -256,7 +259,9 @@ to dispatch-case [target-case]
 
   if final-tier = "hold" [
     ask target-case [
-      set handling-notes (word handling-notes " | waiting-capacity")
+      if position "waiting-capacity" handling-notes = false [
+        set handling-notes (word handling-notes " | waiting-capacity")
+      ]
     ]
     stop
   ]
@@ -485,6 +490,12 @@ to-report color-for-tier [tier-name]
   if tier-name = "basic" [ report 57 ]
   if tier-name = "expert" [ report 15 ]
   report 105
+end
+
+to-report resolve-existing-path [primary fallback]
+  if file-exists? primary [ report primary ]
+  if file-exists? fallback [ report fallback ]
+  report primary
 end
 
 @#$#@#$#@
