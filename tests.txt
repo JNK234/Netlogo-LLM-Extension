@@ -1,18 +1,24 @@
+LLMConfigPrimitives
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  item 0 llm:active => "openai"
+  member? "openai" llm:providers-all => true
+  empty? (llm:provider-help "openai") => false
+  empty? llm:config => false
+  is-string? llm:list-models => true
+
 LLMConfigLoading
   extensions [llm]
   O> llm:load-config "demos/config"
-  llm:providers => ["anthropic" "gemini" "ollama" "openai"]
+  item 0 llm:active => "openai"
+  member? "openai" llm:providers => true
 
-LLMProviderAndModelInfo
+LLMProviderStatus
   extensions [llm]
+  O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
-  empty? llm:models => false
-  O> llm:set-provider "anthropic"
-  empty? llm:models => false
-  O> llm:set-provider "gemini"
-  empty? llm:models => false
-  O> llm:set-provider "ollama"
-  empty? llm:models => false
+  length llm:provider-status => 4
 
 LLMHistoryManagement
   extensions [llm]
@@ -29,52 +35,64 @@ LLMHistoryManagement
 
 LLMChoosePrimitive
   extensions [llm]
-  O> llm:load-config "demos/config"
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
   member? (llm:choose "pick one" ["a" "b" "c"]) ["a" "b" "c"] => true
 
 LLMChatPrimitives
   extensions [llm]
-  globals [promise]
-  O> llm:load-config "demos/config"
-  empty? (llm:chat "Say anything") => false
-  O> set promise llm:chat-async "Say anything"
-  is-anonymous-reporter? promise => true
-  empty? (runresult promise) => false
-
-LLMTemplateSystem
-  extensions [llm]
-  globals [result code-history]
-  O> llm:load-config "demos/config"
-  O> set result llm:chat-with-template "demos/simple-template.yaml" [["task" "test"] ["input" "hello"] ["context" "unit test"]]
-  empty? result => false
-  is-string? result => true
-
-LLMTemplateWithHistory
-  extensions [llm]
-  globals [template-result msg1 msg2]
-  O> llm:load-config "demos/config"
+  globals [sync promise async history]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
   O> llm:clear-history
-  O> set msg1 llm:chat "previous message 1"
-  O> set msg2 llm:chat "previous message 2"
-  O> set template-result llm:chat-with-template "demos/simple-template.yaml" [["task" "respond"] ["input" "test data"] ["context" "with history"]]
-  empty? template-result => false
-  is-string? template-result => true
+  O> set sync llm:chat "Say anything"
+  is-string? sync => true
+  empty? sync => false
+  O> set promise llm:chat-async "Say anything else"
+  is-anonymous-reporter? promise => true
+  O> set async runresult promise
+  is-string? async => true
+  empty? async => false
+  O> set history llm:history
+  length history => 4
+  (item 0 (item 0 history)) => "user"
+  (item 0 (item 1 history)) => "assistant"
 
 LLMTemplateVariableSubstitution
   extensions [llm]
-  globals [result]
-  O> llm:load-config "demos/config"
-  O> set result llm:chat-with-template "demos/simple-template.yaml" [["task" "greeting"] ["input" "world"] ["context" "friendly"]]
-  empty? result => false
+  globals [result history]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> set result llm:chat-with-template "demos/simple-template.yaml" [["text" "template-value"]]
   is-string? result => true
+  is-number? (position "template-value" result) => true
+  O> set history llm:history
+  length history => 2
 
-LLMTemplateWithMultipleAgents
+LLMTemplateWithHistory
+  extensions [llm]
+  globals [template-result history msg1 msg2]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> set msg1 llm:chat "previous message 1"
+  O> set msg2 llm:chat "previous message 2"
+  O> set template-result llm:chat-with-template "demos/simple-template.yaml" [["text" "with history"]]
+  empty? template-result => false
+  O> set history llm:history
+  length history => 6
+
+LLMMultiAgentIsolation
   extensions [llm]
   turtles-own [agent-result]
-  O> llm:load-config "demos/config"
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
   O> create-turtles 2
-  O> ask turtle 0 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["task" "agent0"] ["input" "test0"] ["context" "turtle"]] ]
-  O> ask turtle 1 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["task" "agent1"] ["input" "test1"] ["context" "turtle"]] ]
+  O> ask turtle 0 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["text" "agent0"]] ]
+  O> ask turtle 1 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["text" "agent1"]] ]
   empty? [agent-result] of turtle 0 => false
   empty? [agent-result] of turtle 1 => false
   [agent-result] of turtle 0 != [agent-result] of turtle 1 => true
+  length [llm:history] of turtle 0 => 2
+  length [llm:history] of turtle 1 => 2

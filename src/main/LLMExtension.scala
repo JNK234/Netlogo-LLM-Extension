@@ -15,6 +15,30 @@ import io.circe.{Json, HCursor}
 import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
 
+object LLMExtension {
+  @volatile private var providerFactoryOverride:
+    Option[(ConfigStore, ExecutionContext) => Try[LLMProvider]] = None
+
+  def setProviderFactoryOverride(
+    factory: (ConfigStore, ExecutionContext) => Try[LLMProvider]
+  ): Unit = {
+    providerFactoryOverride = Some(factory)
+  }
+
+  def clearProviderFactoryOverride(): Unit = {
+    providerFactoryOverride = None
+  }
+
+  private[llm] def createProvider(configStore: ConfigStore)(
+    implicit ec: ExecutionContext
+  ): Try[LLMProvider] = {
+    providerFactoryOverride match {
+      case Some(factory) => factory(configStore, ec)
+      case None => ProviderFactory.createProviderFromConfig(configStore)
+    }
+  }
+}
+
 /**
  * Main extension class for NetLogo Multi-LLM Extension
  * 
@@ -103,7 +127,7 @@ class LLMExtension extends DefaultClassManager {
     currentProvider match {
       case Some(provider) => provider
       case None =>
-        ProviderFactory.createProviderFromConfig(configStore) match {
+        LLMExtension.createProvider(configStore) match {
           case Success(provider) =>
             currentProvider = Some(provider)
             provider
@@ -460,11 +484,10 @@ class LLMExtension extends DefaultClassManager {
         // Substitute variables in template
         val processedTemplate = substituteVariables(template.template, variables)
         
-        // Create a temporary history with system message if provided
-        val tempHistory = if (template.system.nonEmpty) {
-          ArrayBuffer(ChatMessage.system(template.system)) ++ history
-        } else {
-          history
+        // Build a copy so temporary prompt assembly never mutates permanent history.
+        val tempHistory = ArrayBuffer.from(history)
+        if (template.system.nonEmpty) {
+          tempHistory.prepend(ChatMessage.system(template.system))
         }
         
         // Add user message with processed template
