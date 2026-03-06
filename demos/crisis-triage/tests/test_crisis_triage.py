@@ -1,5 +1,6 @@
 import re
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -15,12 +16,18 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def parse_model() -> ET.Element:
+    """Parse the .nlogox model file as XML and return the root element."""
+    return ET.parse(MODEL_PATH).getroot()
+
+
 def model_code_only() -> str:
-    xml = read(MODEL_PATH)
-    match = re.search(r"<code><!\[CDATA\[(.*?)\]\]></code>", xml, re.DOTALL)
-    if not match:
-        raise AssertionError("unable to parse <code><![CDATA[...]]></code> from model")
-    return match.group(1)
+    """Extract the NetLogo code from the <code> CDATA section using XML parsing."""
+    root = parse_model()
+    code_elem = root.find("code")
+    if code_elem is None or code_elem.text is None:
+        raise AssertionError("unable to extract <code> content from model XML")
+    return code_elem.text
 
 
 def parse_config(path: Path) -> dict[str, str]:
@@ -113,6 +120,156 @@ class TestCrisisTriageArtifacts(unittest.TestCase):
             "Test suite",
         ]:
             self.assertIn(text, readme)
+
+
+class TestModelXmlParsing(unittest.TestCase):
+    """Validate the .nlogox file using proper XML parsing instead of regex."""
+
+    def setUp(self) -> None:
+        self.root = parse_model()
+
+    def test_model_parses_as_valid_xml(self) -> None:
+        self.assertEqual(self.root.tag, "model")
+
+    def test_code_element_contains_cdata_content(self) -> None:
+        code_elem = self.root.find("code")
+        self.assertIsNotNone(code_elem, "missing <code> element")
+        self.assertIsNotNone(code_elem.text, "<code> element has no text content")
+        self.assertIn("extensions [ llm ]", code_elem.text)
+
+    def test_raw_file_preserves_cdata_wrapping(self) -> None:
+        raw = read(MODEL_PATH)
+        self.assertIn("<code><![CDATA[", raw)
+        self.assertIn("]]></code>", raw)
+
+    def test_widgets_section_has_expected_children(self) -> None:
+        widgets = self.root.find("widgets")
+        self.assertIsNotNone(widgets, "missing <widgets> section")
+        child_tags = [child.tag for child in widgets]
+        self.assertIn("view", child_tags)
+        self.assertIn("button", child_tags)
+        self.assertIn("monitor", child_tags)
+
+    def test_widgets_button_count(self) -> None:
+        widgets = self.root.find("widgets")
+        buttons = widgets.findall("button")
+        self.assertEqual(len(buttons), 3, "expected 3 buttons: setup, go, new-case")
+
+    def test_widgets_monitor_count(self) -> None:
+        widgets = self.root.find("widgets")
+        monitors = widgets.findall("monitor")
+        self.assertGreaterEqual(len(monitors), 7, "expected at least 7 monitors")
+
+    def test_turtle_shapes_defined(self) -> None:
+        shapes = self.root.find("turtleShapes")
+        self.assertIsNotNone(shapes, "missing <turtleShapes> section")
+        shape_names = [s.get("name") for s in shapes.findall("shape")]
+        self.assertIn("default", shape_names)
+        self.assertIn("circle", shape_names)
+
+
+class TestModelStructure(unittest.TestCase):
+    """Structural assertions on the NetLogo 7.x .nlogox format."""
+
+    def setUp(self) -> None:
+        self.root = parse_model()
+
+    def test_netlogo_version_is_7_0_3(self) -> None:
+        version = self.root.get("version")
+        self.assertEqual(version, "NetLogo 7.0.3")
+
+    def test_required_top_level_sections_exist(self) -> None:
+        required_sections = [
+            "code", "widgets", "info", "turtleShapes", "linkShapes",
+            "previewCommands",
+        ]
+        present = {child.tag for child in self.root}
+        for section in required_sections:
+            self.assertIn(section, present, f"missing top-level section: {section}")
+
+    def test_info_section_not_empty(self) -> None:
+        info = self.root.find("info")
+        self.assertIsNotNone(info, "missing <info> section")
+        self.assertTrue(
+            info.text and len(info.text.strip()) > 0,
+            "<info> section is empty",
+        )
+
+    def test_preview_commands_present(self) -> None:
+        preview = self.root.find("previewCommands")
+        self.assertIsNotNone(preview)
+        self.assertIn("setup", preview.text)
+
+    def test_link_shapes_has_default(self) -> None:
+        link_shapes = self.root.find("linkShapes")
+        self.assertIsNotNone(link_shapes, "missing <linkShapes>")
+        names = [s.get("name") for s in link_shapes.findall("shape")]
+        self.assertIn("default", names)
+
+
+class TestBehaviorRegression(unittest.TestCase):
+    """Catch regressions in model syntax and LLM extension usage patterns."""
+
+    def setUp(self) -> None:
+        self.code = model_code_only()
+
+    def test_extensions_declaration_present(self) -> None:
+        self.assertIn("extensions [ llm ]", self.code)
+
+    def test_chat_with_template_uses_list_syntax(self) -> None:
+        """Ensure llm:chat-with-template uses (list ...) not [...] for variables."""
+        lines = self.code.splitlines()
+        for line in lines:
+            stripped = line.strip()
+            if "llm:chat-with-template" not in stripped:
+                continue
+            # The template call should be followed by (list on the same or next
+            # logical line.  It must NOT use bracket syntax like [["key" val]].
+            self.assertNotRegex(
+                stripped,
+                r'llm:chat-with-template\s+\S+\s+\[\[',
+                f"bracket syntax found instead of (list ...): {stripped}",
+            )
+
+    def test_no_inline_provider_setup_in_procedures(self) -> None:
+        """Model should use llm:load-config, not manual set-provider/set-api-key."""
+        for deprecated in ["llm:set-provider", "llm:set-api-key", "llm:set-model"]:
+            self.assertNotIn(
+                deprecated,
+                self.code,
+                f"deprecated inline primitive found: {deprecated}",
+            )
+
+    def test_all_procedure_blocks_are_closed(self) -> None:
+        """Every 'to' or 'to-report' must have a matching 'end'."""
+        opens = len(re.findall(r"^to(?:-report)?\s", self.code, re.MULTILINE))
+        closes = len(re.findall(r"^end\s*$", self.code, re.MULTILINE))
+        self.assertEqual(
+            opens,
+            closes,
+            f"mismatched procedure blocks: {opens} opens vs {closes} ends",
+        )
+
+    def test_no_deprecated_primitives(self) -> None:
+        """Guard against usage of removed or renamed LLM extension primitives."""
+        deprecated = [
+            "llm:ask",
+            "llm:send",
+            "llm:query",
+            "llm:prompt",
+        ]
+        for prim in deprecated:
+            self.assertNotIn(prim, self.code, f"deprecated primitive: {prim}")
+
+    def test_globals_declared(self) -> None:
+        self.assertIn("globals [", self.code)
+        for g in ["llm-ready?", "config-path", "triage-template-path",
+                   "dispatcher-template-path"]:
+            self.assertIn(g, self.code, f"missing global: {g}")
+
+    def test_breed_owns_blocks_present(self) -> None:
+        self.assertIn("turtles-own [", self.code)
+        self.assertIn("cases-own [", self.code)
 
 
 if __name__ == "__main__":
