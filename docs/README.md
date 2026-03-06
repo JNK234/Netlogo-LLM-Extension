@@ -7,6 +7,7 @@ Unified LLM capabilities for NetLogo with multi-provider support (OpenAI, Anthro
 - Configuration Guide: `docs/CONFIGURATION.md`
 - API Reference: `docs/API-REFERENCE.md`
 - Provider Guide: `docs/PROVIDER-GUIDE.md`
+- Testing Guide: `docs/TESTING.md`
 - Demos: `demos/`
 - Full Reference Doc: `NetLogo-LLM-Extension-Documentation.md`
 
