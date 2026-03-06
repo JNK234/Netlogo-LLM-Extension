@@ -2,6 +2,17 @@
 <model version="NetLogo 7.0.0" snapToGrid="true">
   <code><![CDATA[breed [boids boid]
 
+globals [
+  num-boids
+  max-speed
+  separation-radius
+  alignment-radius
+  cohesion-radius
+  separation-weight
+  alignment-weight
+  cohesion-weight
+]
+
 boids-own [
   vx
   vy
@@ -21,9 +32,8 @@ to setup
     let initial-heading random-float 360
     let initial-speed minimum-speed + random-float (max-speed - minimum-speed)
 
-    set heading initial-heading
-    set vx initial-speed * dx
-    set vy initial-speed * dy
+    set vx initial-speed * sin initial-heading
+    set vy initial-speed * cos initial-heading
     set next-vx vx
     set next-vy vy
   ]
@@ -65,8 +75,8 @@ to-report boids-separation  ;; turtle procedure
   ]
 
   ; Close neighbors contribute stronger repulsion than distant ones.
-  let force-x sum [sin (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
-  let force-y sum [cos (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
+  let force-x sum [-sin (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
+  let force-y sum [-cos (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
 
   report (list (force-x * separation-weight) (force-y * separation-weight))
 end
@@ -91,8 +101,8 @@ to-report boids-cohesion  ;; turtle procedure
   ]
 
   ; Average the directions toward neighbors to pull the local flock together.
-  let force-x mean [sin (towards myself + 180)] of nearby-boids
-  let force-y mean [cos (towards myself + 180)] of nearby-boids
+  let force-x mean [sin (towards myself)] of nearby-boids
+  let force-y mean [cos (towards myself)] of nearby-boids
 
   report (list (force-x * cohesion-weight) (force-y * cohesion-weight))
 end
