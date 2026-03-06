@@ -1,17 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<model version="NetLogo 7.0.0" snapToGrid="true">
+<model version="NetLogo 7.0.3" snapToGrid="true">
   <code><![CDATA[breed [boids boid]
-
-globals [
-  num-boids
-  max-speed
-  separation-radius
-  alignment-radius
-  cohesion-radius
-  separation-weight
-  alignment-weight
-  cohesion-weight
-]
 
 boids-own [
   vx
@@ -75,8 +64,8 @@ to-report boids-separation  ;; turtle procedure
   ]
 
   ; Close neighbors contribute stronger repulsion than distant ones.
-  let force-x sum [-sin (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
-  let force-y sum [-cos (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
+  let force-x sum [sin (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
+  let force-y sum [cos (towards myself) / ((distance myself + 0.05) ^ 2)] of nearby-boids
 
   report (list (force-x * separation-weight) (force-y * separation-weight))
 end
@@ -101,8 +90,8 @@ to-report boids-cohesion  ;; turtle procedure
   ]
 
   ; Average the directions toward neighbors to pull the local flock together.
-  let force-x mean [sin (towards myself)] of nearby-boids
-  let force-y mean [cos (towards myself)] of nearby-boids
+  let force-x mean [sin (towards myself + 180)] of nearby-boids
+  let force-y mean [cos (towards myself + 180)] of nearby-boids
 
   report (list (force-x * cohesion-weight) (force-y * cohesion-weight))
 end
@@ -168,175 +157,22 @@ to-report flock-size
   report max [count other boids in-radius cohesion-radius + 1] of boids
 end]]></code>
   <widgets>
-    <widget type="view" tag="graphics-window">
-      <location>
-        <xmin>230</xmin>
-        <ymin>10</ymin>
-        <xmax>735</xmax>
-        <ymax>515</ymax>
-      </location>
-      <scale>12.0</scale>
-      <world>
-        <minpxcor>-20</minpxcor>
-        <maxpxcor>20</maxpxcor>
-        <minpycor>-20</minpycor>
-        <maxpycor>20</maxpycor>
-      </world>
-      <wallMode>torus</wallMode>
-      <tickRate>30.0</tickRate>
-    </widget>
-    <widget type="button" tag="setup-button">
-      <location>
-        <x>15</x>
-        <y>15</y>
-        <width>85</width>
-        <height>33</height>
-      </location>
-      <label>setup</label>
-      <commands>setup</commands>
-    </widget>
-    <widget type="button" tag="go-button">
-      <location>
-        <x>110</x>
-        <y>15</y>
-        <width>85</width>
-        <height>33</height>
-      </location>
-      <label>go</label>
-      <commands>go</commands>
-      <forever>true</forever>
-    </widget>
-    <widget type="slider" tag="num-boids-slider">
-      <location>
-        <x>15</x>
-        <y>65</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>num-boids</varname>
-      <value>120</value>
-      <min>10</min>
-      <max>300</max>
-      <step>5</step>
-    </widget>
-    <widget type="slider" tag="max-speed-slider">
-      <location>
-        <x>15</x>
-        <y>105</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>max-speed</varname>
-      <value>1.4</value>
-      <min>0.2</min>
-      <max>3</max>
-      <step>0.1</step>
-    </widget>
-    <widget type="slider" tag="separation-radius-slider">
-      <location>
-        <x>15</x>
-        <y>145</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>separation-radius</varname>
-      <value>1.5</value>
-      <min>0.5</min>
-      <max>5</max>
-      <step>0.1</step>
-    </widget>
-    <widget type="slider" tag="alignment-radius-slider">
-      <location>
-        <x>15</x>
-        <y>185</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>alignment-radius</varname>
-      <value>5</value>
-      <min>1</min>
-      <max>12</max>
-      <step>0.5</step>
-    </widget>
-    <widget type="slider" tag="cohesion-radius-slider">
-      <location>
-        <x>15</x>
-        <y>225</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>cohesion-radius</varname>
-      <value>9</value>
-      <min>1</min>
-      <max>15</max>
-      <step>0.5</step>
-    </widget>
-    <widget type="slider" tag="separation-weight-slider">
-      <location>
-        <x>15</x>
-        <y>265</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>separation-weight</varname>
-      <value>1.2</value>
-      <min>0</min>
-      <max>3</max>
-      <step>0.1</step>
-    </widget>
-    <widget type="slider" tag="alignment-weight-slider">
-      <location>
-        <x>15</x>
-        <y>305</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>alignment-weight</varname>
-      <value>0.5</value>
-      <min>0</min>
-      <max>2</max>
-      <step>0.05</step>
-    </widget>
-    <widget type="slider" tag="cohesion-weight-slider">
-      <location>
-        <x>15</x>
-        <y>345</y>
-        <width>200</width>
-        <height>33</height>
-      </location>
-      <varname>cohesion-weight</varname>
-      <value>0.4</value>
-      <min>0</min>
-      <max>2</max>
-      <step>0.05</step>
-    </widget>
-    <widget type="monitor" tag="avg-speed-monitor">
-      <location>
-        <x>15</x>
-        <y>395</y>
-        <width>95</width>
-        <height>45</height>
-      </location>
-      <label>avg-speed</label>
-      <commands>avg-speed</commands>
-      <decimals>2</decimals>
-    </widget>
-    <widget type="monitor" tag="flock-size-monitor">
-      <location>
-        <x>120</x>
-        <y>395</y>
-        <width>95</width>
-        <height>45</height>
-      </location>
-      <label>flock-size</label>
-      <commands>flock-size</commands>
-    </widget>
+    <view x="230" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-20" height="505" showTickCounter="true" patchSize="12.0" fontSize="10" wrappingAllowedY="true" width="505" tickCounterLabel="ticks" maxPycor="20" updateMode="1" maxPxcor="20" minPxcor="-20"></view>
+    <button x="15" y="15" height="33" disableUntilTicks="false" forever="false" kind="Observer" width="85">setup</button>
+    <button x="110" y="15" height="33" disableUntilTicks="true" forever="true" kind="Observer" width="85">go</button>
+    <slider x="15" step="5" y="65" max="300.0" width="200" display="num-boids" height="50" min="10.0" direction="Horizontal" default="120.0" variable="num-boids"></slider>
+    <slider x="15" step="0.1" y="120" max="3.0" width="200" display="max-speed" height="50" min="0.2" direction="Horizontal" default="1.4" variable="max-speed"></slider>
+    <slider x="15" step="0.1" y="175" max="5.0" width="200" display="separation-radius" height="50" min="0.5" direction="Horizontal" default="1.5" variable="separation-radius"></slider>
+    <slider x="15" step="0.5" y="230" max="12.0" width="200" display="alignment-radius" height="50" min="1.0" direction="Horizontal" default="5.0" variable="alignment-radius"></slider>
+    <slider x="15" step="0.5" y="285" max="15.0" width="200" display="cohesion-radius" height="50" min="1.0" direction="Horizontal" default="9.0" variable="cohesion-radius"></slider>
+    <slider x="15" step="0.1" y="340" max="3.0" width="200" display="separation-weight" height="50" min="0.0" direction="Horizontal" default="1.2" variable="separation-weight"></slider>
+    <slider x="15" step="0.05" y="395" max="2.0" width="200" display="alignment-weight" height="50" min="0.0" direction="Horizontal" default="0.5" variable="alignment-weight"></slider>
+    <slider x="15" step="0.05" y="450" max="2.0" width="200" display="cohesion-weight" height="50" min="0.0" direction="Horizontal" default="0.4" variable="cohesion-weight"></slider>
+    <monitor x="15" precision="2" y="510" height="50" fontSize="11" width="95" display="avg-speed">avg-speed</monitor>
+    <monitor x="120" precision="0" y="510" height="50" fontSize="11" width="95" display="flock-size">flock-size</monitor>
   </widgets>
-  <previewCommands>
-    <command>set num-boids 120</command>
-    <command>setup</command>
-    <command>repeat 200 [ go ]</command>
-  </previewCommands>
+  <previewCommands>setup
+repeat 200 [ go ]</previewCommands>
   <info><![CDATA[## WHAT IS IT?
 
 This model simulates a classic boids flock in NetLogo. Each boid follows local separation, alignment, and cohesion rules, and coordinated motion emerges without any leader.
@@ -362,29 +198,44 @@ Each boid measures nearby flockmates within three configurable radii. Separation
 
 This model follows the classic boids idea introduced in Reynolds, C. W. (1986). "Flocks, herds and schools: A distributed behavioral model." SIGGRAPH '86.]]></info>
   <turtleShapes>
-    <turtleShape>
-      <name>default</name>
-      <outlineColor>-7500403</outlineColor>
-      <inFillColor>true</inFillColor>
-      <marked>true</marked>
-      <polygon>
-        <point x="150" y="5"/>
-        <point x="40" y="250"/>
-        <point x="150" y="205"/>
-        <point x="260" y="250"/>
+    <shape name="default" rotatable="true" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="5"></point>
+        <point x="40" y="250"></point>
+        <point x="150" y="205"></point>
+        <point x="260" y="250"></point>
       </polygon>
-    </turtleShape>
-    <turtleShape>
-      <name>triangle</name>
-      <outlineColor>-7500403</outlineColor>
-      <inFillColor>true</inFillColor>
-      <marked>true</marked>
-      <polygon>
-        <point x="150" y="30"/>
-        <point x="15" y="255"/>
-        <point x="285" y="255"/>
+    </shape>
+    <shape name="triangle" rotatable="true" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="30"></point>
+        <point x="15" y="255"></point>
+        <point x="285" y="255"></point>
       </polygon>
-    </turtleShape>
+    </shape>
   </turtleShapes>
-  <linkShapes/>
+  <linkShapes>
+    <shape name="default" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+        </shape>
+      </indicator>
+    </shape>
+  </linkShapes>
 </model>

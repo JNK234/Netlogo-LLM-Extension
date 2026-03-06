@@ -6,17 +6,13 @@ With the default parameters, the population settles into coordinated swarms, cur
 
 ## How To Run
 
-1. Open `flocking-boids.nlogo` in NetLogo.
+1. Open `flocking-boids.nlogox` in NetLogo 7.0.3+.
 2. Click `setup`.
 3. Click `go`.
 
 ## What Emerges
 
 The flock self-organizes into coordinated swarms, arcing lanes, and occasional V-like formations. `avg-speed` reports the mean boid speed, and `flock-size` reports the largest local flock detected within the cohesion radius.
-
-## BehaviorSpace
-
-`BehaviorSpace/experiment.xml` defines a parameter sweep over population, speed, radii, and rule weights.
 
 ## Reference
 
