@@ -4,10 +4,9 @@ Compare OpenAI, Anthropic, Gemini, and Ollama on the same prompts from NetLogo.
 
 ## Demo Artifacts
 
-- `provider-sensitivity.nlogo`: Main interactive demo with runtime provider switching.
-- `test-harness.nlogo`: Same-task benchmark harness with repeated runs.
+- `provider-sensitivity.nlogox`: Main interactive demo with runtime provider switching.
 - `config-multi-provider.txt`: Multi-provider config template.
-- `tests/`: Provider comparison tests (`provider-comparison-tests.nlogo`).
+- `tests/test_provider_sensitivity.py`: Python test suite.
 
 ## What This Demo Compares
 
@@ -23,9 +22,9 @@ For each provider/model pair, the demo records:
 1. Open `config-multi-provider.txt`.
 2. Fill API keys for cloud providers you want to benchmark.
 3. For Ollama, run `ollama serve` and pull the target model (for example `ollama pull llama3.2`).
-4. Open either `provider-sensitivity.nlogo` or `test-harness.nlogo` in NetLogo 6.3+.
+4. Open `provider-sensitivity.nlogox` in NetLogo 7.0.3.
 
-## Run the Main Demo (`provider-sensitivity.nlogo`)
+## Run the Main Demo (`provider-sensitivity.nlogox`)
 
 1. Click **setup**.
 2. Use runtime buttons to switch active provider:
@@ -38,17 +37,6 @@ For each provider/model pair, the demo records:
 4. Click **go** or **go-all**.
 5. Click **Show Results** for side-by-side summary output.
 
-## Run the Benchmark Harness (`test-harness.nlogo`)
-
-Use this model when you need repeatable same-task comparisons.
-
-1. Click **setup**.
-2. Set `benchmark-task` to one task used for all providers.
-3. Set `runs-per-provider`.
-4. Optionally enable `include-choose-test?`.
-5. Click **Run Benchmark**.
-6. Click **Show Summary**.
-
 ## Compare Results: Cost, Latency, Quality
 
 Use these checks when reading summary output:
@@ -58,17 +46,20 @@ Use these checks when reading summary output:
 3. Quality floor: reject providers below your minimum quality threshold.
 4. Pareto choice: among providers meeting quality floor, pick the cheapest/fastest.
 
-## Testing
+## Test suite
 
-Open `tests/provider-comparison-tests.nlogo` and run **Run All Tests**.
+Run the Python test suite:
+
+```bash
+python -m pytest demos/provider-sensitivity/tests/test_provider_sensitivity.py -v
+```
 
 Coverage includes:
 
-- provider discovery (`llm:providers`, `llm:providers-all`)
-- runtime provider switching
-- same-task response comparison
-- metric capture (latency and estimated cost)
-- `llm:choose` validity checks
+- File artifact and config validation
+- XML structure and widget parsing
+- NetLogo 7.0.3 format compliance
+- Behavior regression checks (deprecated primitives, procedure closure, provider switching)
 
 ## Notes
 
