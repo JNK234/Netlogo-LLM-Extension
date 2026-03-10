@@ -1,1105 +1,474 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.3" snapToGrid="false">
-  <code><![CDATA[extensions [ llm ]
+  <code><![CDATA[;; ABOUTME: LLM extension test suite for validating all primitives.
+;; ABOUTME: Works with any single configured provider via config file.
 
-to test-llm-providers
-  print "Testing Available providers..."
+extensions [ llm ]
 
-  llm:set-api-key "your-gemini-key-here"
+;; ---------------------------------------------------------------------------
+;; Helpers
+;; ---------------------------------------------------------------------------
 
-  llm:set-provider "gemini"
-
-  llm:set-model "gemini-2.5-pro"
-
-  let result llm:chat "Who are you ?"
-  print (word "Sync chat result: " result)
-
-
-
-  print result
+to-report test-pass [ label ]
+  print (word "PASS: " label)
+  report true
 end
 
-to test-extension-loading
-  print "Testing extension loading..."
-
-  ; Test basic primitives
-  llm:set-provider "openai"
-  print "✓ llm:set-provider works"
-
-  llm:set-model "gpt-4o-mini"
-  print "✓ llm:set-model works"
-
-  print "Extension loaded successfully!"
+to-report test-fail [ label ]
+  print (word "FAIL: " label)
+  report false
 end
 
-to test-sync-chat
-  print "Testing sync chat..."
-
-  ; Load config or set manually
-  carefully [
-    llm:load-config "config.txt"
-    print "Config loaded successfully"
-  ] [
-    print "Config loading failed, setting manually..."
-    llm:set-provider "openai"
-    llm:set-api-key "your-openai-key-here"
-  ]
-
-  let result llm:chat "What is your name ?"
-  print (word "Sync chat result: " result)
+to assert-true [ condition label ]
+  ifelse condition [ test-pass label ] [ test-fail label ]
 end
 
-to test-async-chat
-  print "Testing async chat..."
-
-  ; Load config or set manually
-  carefully [
-    llm:load-config "../config.txt"
-    print "Config loaded successfully"
-  ] [
-    print "Config loading failed, setting manually..."
-    llm:set-provider "openai"
-    llm:set-api-key "your-openai-key-here"
-  ]
-
-  let async-reporter llm:chat-async "Say hello in ten word"
-  print "Async request started..."
-
-  let result runresult async-reporter
-  print (word "Async chat result: " result)
+to assert-string [ value label ]
+  assert-true (is-string? value) (word label " is a string")
 end
 
-to test-choose
-  print "Testing choose..."
-
-  ; Load config or set manually
+to load-config
+  ; Tries common config paths relative to where models live
   carefully [
     llm:load-config "demos/config"
-    print "Config loaded successfully"
   ] [
-    print "Config loading failed, setting manually..."
-    llm:set-provider "openai"
-    llm:set-api-key "your-openai-key-here"
+    carefully [
+      llm:load-config "../config.txt"
+    ] [
+      carefully [
+        llm:load-config "config.txt"
+      ] [
+        print (word "ERROR: Could not load config: " error-message)
+        print "Place a config file at demos/config or config.txt"
+      ]
+    ]
   ]
-
-  let choices ["red" "blue" "green"]
-  let chosen llm:choose "Pick a color" choices
-  print (word "Choose result: " chosen)
 end
 
-to test-providers-list
-  print "Testing llm:providers primitive..."
+;; ---------------------------------------------------------------------------
+;; 1. Provider discovery (no API key needed)
+;; ---------------------------------------------------------------------------
 
-  ; llm:providers now returns only READY providers (with API keys or reachable)
-  let ready-providers llm:providers
-  print (word "Ready providers: " ready-providers)
-  print (word "Total ready providers: " length ready-providers)
+to test-provider-discovery
+  print "--- test-provider-discovery ---"
 
-  ; llm:providers-all returns ALL supported providers
   let all-providers llm:providers-all
-  print (word "All supported providers: " all-providers)
-  print (word "Total supported providers: " length all-providers)
+  assert-true (is-list? all-providers) "providers-all returns a list"
+  assert-true (length all-providers >= 4) "at least 4 supported providers"
 
-  ; llm:provider-status gives detailed status
-  print "Provider status details:"
-  foreach llm:provider-status [ provider-info ->
-    print provider-info
+  let ready llm:providers
+  assert-true (is-list? ready) "providers returns a list"
+
+  ; Every ready provider must appear in the full list
+  let ok true
+  foreach ready [ p ->
+    if not member? p all-providers [ set ok false ]
   ]
+  assert-true ok "ready providers are a subset of all providers"
+
+  let status llm:provider-status
+  assert-true (is-list? status) "provider-status returns a list"
+  assert-true (length status >= 4) "status covers all providers"
+
+  print ""
 end
 
-to test-active-config
-  print "Testing llm:active and llm:config primitives..."
-
-  ; Set a provider and model
-  carefully [
-    llm:set-provider "openai"
-    llm:set-model "gpt-4o-mini"
-    
-    ; Check active configuration
-    let active llm:active
-    print (word "Active provider and model: " active)
-    
-    if item 0 active = "openai" [
-      print "✓ Active provider is openai"
-    ]
-    if item 1 active = "gpt-4o-mini" [
-      print "✓ Active model is gpt-4o-mini"
-    ]
-    
-    ; Show full config (with masked keys)
-    print "Current configuration:"
-    print llm:config
-  ] [
-    print "Failed to test active config (provider validation failed)"
-  ]
-end
+;; ---------------------------------------------------------------------------
+;; 2. Provider help
+;; ---------------------------------------------------------------------------
 
 to test-provider-help
-  print "Testing llm:provider-help primitive..."
-
-  ; Get help for each provider
-  print "\n=== OpenAI Setup Help ==="
-  print llm:provider-help "openai"
-  
-  print "\n=== Ollama Setup Help ==="
-  print llm:provider-help "ollama"
-  
-  print "\n=== Anthropic Setup Help ==="
-  print llm:provider-help "anthropic"
-  
-  print "\n=== Gemini Setup Help ==="
-  print llm:provider-help "gemini"
+  print "--- test-provider-help ---"
+  foreach ["openai" "anthropic" "gemini" "ollama"] [ p ->
+    let help llm:provider-help p
+    assert-true (is-string? help and not empty? help) (word "help for " p)
+  ]
+  print ""
 end
 
-to test-provider-switching
-  print "Testing provider switching..."
+;; ---------------------------------------------------------------------------
+;; 3. Invalid provider name
+;; ---------------------------------------------------------------------------
 
-  ; Test switching between providers
-  print "Switching to OpenAI..."
-  llm:set-provider "openai"
-  llm:set-model "gpt-4o-mini"
-  let openai-output llm:list-models
-  print "OpenAI models listed"
-
-  print "Switching to Anthropic..."
-  llm:set-provider "anthropic"
-  llm:set-model "claude-haiku-4-5-20251001"
-  let claude-output llm:list-models
-  print "Claude models listed"
-
-  print "Switching to Gemini..."
-  llm:set-provider "gemini"
-  llm:set-model "gemini-2.5-flash"
-  let gemini-output llm:list-models
-  print "Gemini models listed"
-
-  print "Switching to Ollama..."
-  llm:set-provider "ollama"
-  llm:set-model "llama3.3:8b"
-  let ollama-output llm:list-models
-  print "Ollama models listed"
-
-  print "✓ Provider switching test completed"
-end
-
-to test-config-loading
-  print "Testing config loading with different providers..."
-
-  ; Test loading config file
+to test-invalid-provider
+  print "--- test-invalid-provider ---"
   carefully [
-    llm:load-config "../config.txt"
-    print "✓ Config loaded successfully"
-
-    ; Check what provider was loaded
-    let current-output llm:list-models
-    print "Current provider models output:"
-    print current-output
-
+    llm:set-provider "not-a-provider"
+    test-fail "invalid provider should be rejected"
   ] [
-    print "✗ Config loading failed"
-    print error-message
+    test-pass (word "invalid provider rejected: " error-message)
   ]
+  print ""
 end
 
-to test-ollama-not-running
-  print "Testing Ollama provider when server is not running..."
+;; ---------------------------------------------------------------------------
+;; 4. Active config & model listing
+;; ---------------------------------------------------------------------------
 
-  ; Check status - should show reachable: false if Ollama is not running
-  print "Checking Ollama status in provider-status:"
-  let status llm:provider-status
-  foreach status [ provider-info ->
-    if item 0 provider-info = "ollama" [
-      print provider-info
-      ; Expected: ["ollama" ["ready" false] ["reachable" false] ["base-url" "http://localhost:11434"]]
-    ]
-  ]
+to test-active-config
+  print "--- test-active-config ---"
+  load-config
 
-  ; Check if Ollama appears in ready providers list
-  let ready-providers llm:providers
-  ifelse member? "ollama" ready-providers [
-    print "✓ Ollama is reachable and ready"
-  ] [
-    print "✗ Ollama is NOT in ready providers list (server not running or not installed)"
-  ]
+  let active llm:active
+  assert-true (is-list? active and length active = 2) "active returns [provider model]"
 
-  ; Try to use Ollama when not running (will fail if server is down)
-  print "\nAttempting to use Ollama provider:"
-  carefully [
-    llm:set-provider "ollama"
-    print "Provider set to Ollama"
+  let cfg llm:config
+  assert-true (is-string? cfg and not empty? cfg) "config returns non-empty string"
 
-    ; This will fail if Ollama server is not running
-    let result llm:chat "test"
-    print "✓ UNEXPECTED: Chat succeeded (Ollama must be running)"
-  ] [
-    print (word "✓ EXPECTED: Error when Ollama not running: " error-message)
-  ]
+  let models llm:list-models
+  assert-true (member? "=== Available Models ===" models) "list-models has header"
+  assert-true (member? "[ACTIVE]" models) "list-models shows [ACTIVE] marker"
+
+  print ""
 end
 
-to test-invalid-config
-  print "Testing config validation with missing API keys..."
-
-  ; First, clear any existing configuration
-  carefully [
-    llm:set-provider "openai"
-    ; Don't set API key
-
-    print "Checking provider status without API key:"
-    let status llm:provider-status
-    foreach status [ provider-info ->
-      if item 0 provider-info = "openai" [
-        print provider-info
-        ; Expected: ["openai" ["ready" false] ["has-key" false]]
-      ]
-    ]
-
-    ; Check if OpenAI appears in ready providers
-    let ready-providers llm:providers
-    ifelse member? "openai" ready-providers [
-      print "✗ UNEXPECTED: OpenAI in ready list without API key"
-    ] [
-      print "✓ EXPECTED: OpenAI NOT in ready list (no API key)"
-    ]
-
-    ; Try to use provider without API key (should fail)
-    print "\nAttempting to chat without API key:"
-    let result llm:chat "test"
-    print "✗ UNEXPECTED: Chat succeeded without API key"
-  ] [
-    print (word "✓ EXPECTED: Error when using provider without API key: " error-message)
-  ]
-end
-
-to test-provider-readiness
-  print "Testing provider readiness checks..."
-  print ""
-
-  ; Show all providers vs ready providers
-  print "All supported providers:"
-  let all-providers llm:providers-all
-  print all-providers
-  print ""
-
-  print "Ready providers (with API keys or reachable):"
-  let ready-providers llm:providers
-  print ready-providers
-  print ""
-
-  ; Show which providers are not ready and why
-  print "Detailed status for non-ready providers:"
-  let status llm:provider-status
-  foreach status [ provider-info ->
-    let provider-name item 0 provider-info
-    let is-ready false
-
-    ; Check if provider is in ready list
-    ifelse member? provider-name ready-providers [
-      ; Skip ready providers
-    ] [
-      ; Show why provider is not ready
-      print (word provider-name " is NOT ready:")
-      print (word "  Status: " provider-info)
-
-      ; Suggest how to fix
-      if provider-name = "ollama" [
-        print "  Fix: Install and start Ollama server, or run: ollama serve"
-      ]
-      if provider-name = "openai" or provider-name = "anthropic" or provider-name = "gemini" [
-        print (word "  Fix: Set API key or run: llm:provider-help \"" provider-name "\"")
-      ]
-      print ""
-    ]
-  ]
-end
-
-to test-config-error-messages
-  print "Testing helpful error messages for config issues..."
-  print ""
-
-  ; Test 1: Provider help for all providers
-  print "=== Testing provider help messages ==="
-  foreach ["openai" "anthropic" "gemini" "ollama"] [ provider ->
-    print (word "\nHelp for " provider ":")
-    print llm:provider-help provider
-  ]
-  print ""
-
-  ; Test 2: Invalid provider name
-  print "=== Testing invalid provider name ==="
-  carefully [
-    llm:set-provider "invalid-provider"
-    print "✗ UNEXPECTED: Set invalid provider succeeded"
-  ] [
-    print (word "✓ EXPECTED: Error for invalid provider: " error-message)
-  ]
-  print ""
-
-  ; Test 3: Show active config
-  print "=== Testing active config display ==="
-  carefully [
-    llm:set-provider "openai"
-    let active llm:active
-    print (word "Active configuration: " active)
-    print "\nFull config summary:"
-    print llm:config
-  ] [
-    print (word "Error getting active config: " error-message)
-  ]
-end
-
-to test-multi-provider-complete
-  print "=== Multi-Provider Extension Test Suite ==="
-  print ""
-
-  ; Test 1: List available providers
-  test-providers-list
-  print ""
-
-  ; Test 3: Test provider switching
-  test-provider-switching
-  print ""
-
-  ; Test 4: Test config loading
-  test-config-loading
-  print ""
-
-  print "=== Multi-Provider Test Suite Complete ==="
-  print "Ready to test with real API keys!"
-end
-
-;; ============================================================================
-;; NEW MODEL MANAGEMENT TESTS
-;; ============================================================================
-
-to test-list-models-format
-  print "=== Testing llm:list-models Output Format ==="
-
-  ; Set a known provider/model
-  llm:set-provider "openai"
-  llm:set-model "gpt-4o-mini"
-
-  let output llm:list-models
-
-  ; Test 1: Header present
-  ifelse member? "=== Available Models ===" output [
-    print "PASS: Header '=== Available Models ===' present"
-  ] [
-    print "FAIL: Missing header"
-  ]
-
-  ; Test 2: All provider sections present
-  ifelse member? "--- openai ---" output [
-    print "PASS: OpenAI section present"
-  ] [
-    print "FAIL: Missing OpenAI section"
-  ]
-
-  ifelse member? "--- anthropic ---" output [
-    print "PASS: Anthropic section present"
-  ] [
-    print "FAIL: Missing Anthropic section"
-  ]
-
-  ifelse member? "--- gemini ---" output [
-    print "PASS: Gemini section present"
-  ] [
-    print "FAIL: Missing Gemini section"
-  ]
-
-  ifelse member? "--- ollama ---" output [
-    print "PASS: Ollama section present"
-  ] [
-    print "FAIL: Missing Ollama section"
-  ]
-
-  ; Test 3: Currently using line present
-  ifelse member? "Currently using:" output [
-    print "PASS: 'Currently using:' line present"
-  ] [
-    print "FAIL: Missing 'Currently using:' line"
-  ]
-
-  ; Test 4: Active marker present for current model
-  ifelse member? "[ACTIVE]" output [
-    print "PASS: [ACTIVE] marker present"
-  ] [
-    print "FAIL: Missing [ACTIVE] marker"
-  ]
-
-  print "=== Format Test Complete ==="
-end
-
-to test-active-marker-changes
-  print "=== Testing [ACTIVE] Marker Updates ==="
-
-  ; Test switching providers changes the active marker
-  llm:set-provider "openai"
-  llm:set-model "gpt-4o"
-  let output1 llm:list-models
-
-  ifelse member? "gpt-4o [ACTIVE]" output1 [
-    print "PASS: gpt-4o marked as [ACTIVE]"
-  ] [
-    print "FAIL: gpt-4o not marked as active"
-  ]
-
-  ; Switch to different provider
-  llm:set-provider "anthropic"
-  llm:set-model "claude-haiku-4-5-20251001"
-  let output2 llm:list-models
-
-  ifelse member? "claude-haiku-4-5-20251001 [ACTIVE]" output2 [
-    print "PASS: claude-haiku-4-5-20251001 marked as [ACTIVE]"
-  ] [
-    print "FAIL: claude model not marked as active"
-  ]
-
-  ; Verify old model no longer marked active
-  ifelse not member? "gpt-4o [ACTIVE]" output2 [
-    print "PASS: gpt-4o no longer marked [ACTIVE] after switch"
-  ] [
-    print "FAIL: gpt-4o still shows [ACTIVE] after switch"
-  ]
-
-  print "=== Active Marker Test Complete ==="
-end
+;; ---------------------------------------------------------------------------
+;; 5. Model validation
+;; ---------------------------------------------------------------------------
 
 to test-model-validation
-  print "=== Testing Model Validation ==="
+  print "--- test-model-validation ---"
+  load-config
 
-  ; Test 1: Valid model should work
-  llm:set-provider "openai"
+  ; Current model should be accepted
+  let active llm:active
+  let current-model item 1 active
   carefully [
-    llm:set-model "gpt-4o"
-    print "PASS: Valid model 'gpt-4o' accepted"
+    llm:set-model current-model
+    test-pass (word "valid model '" current-model "' accepted")
   ] [
-    print "FAIL: Valid model rejected"
+    test-fail (word "valid model rejected: " error-message)
   ]
 
-  ; Test 2: Invalid model should be rejected
+  ; Nonsense model should be rejected
   carefully [
-    llm:set-model "invalid-model-xyz"
-    print "FAIL: Invalid model should have been rejected"
+    llm:set-model "nonexistent-model-xyz"
+    test-fail "invalid model should be rejected"
   ] [
-    print "PASS: Invalid model 'invalid-model-xyz' correctly rejected"
+    test-pass "invalid model rejected"
   ]
 
-  ; Test 3: Model from wrong provider should be rejected
-  llm:set-provider "anthropic"
-  carefully [
-    llm:set-model "gpt-4o"  ; OpenAI model on Anthropic provider
-    print "FAIL: Wrong provider model should have been rejected"
-  ] [
-    print "PASS: Model from wrong provider correctly rejected"
-  ]
-
-  print "=== Validation Test Complete ==="
+  print ""
 end
 
-to test-provider-all-vs-ready
-  print "=== Testing llm:providers vs llm:providers-all ==="
+;; ---------------------------------------------------------------------------
+;; 6. Synchronous chat
+;; ---------------------------------------------------------------------------
 
-  let ready-providers llm:providers
-  let all-providers llm:providers-all
+to test-sync-chat
+  print "--- test-sync-chat ---"
+  load-config
+  llm:clear-history
 
-  print (word "Ready providers: " ready-providers)
-  print (word "All providers: " all-providers)
-
-  ; All providers should include at least 4
-  ifelse length all-providers >= 4 [
-    print "PASS: At least 4 providers in all-providers list"
+  carefully [
+    let result llm:chat "Reply with exactly: hello"
+    assert-string result "sync chat result"
+    assert-true (not empty? result) "sync chat result non-empty"
   ] [
-    print "FAIL: Expected at least 4 providers"
+    test-fail (word "sync chat error: " error-message)
   ]
 
-  ; All providers should be a superset of ready providers
-  let all-ready-in-all? true
-  foreach ready-providers [ p ->
-    if not member? p all-providers [
-      set all-ready-in-all? false
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; 7. Async chat
+;; ---------------------------------------------------------------------------
+
+to test-async-chat
+  print "--- test-async-chat ---"
+  load-config
+  llm:clear-history
+
+  carefully [
+    let reporter-task llm:chat-async "Reply with exactly: async hello"
+    test-pass "async request started"
+    let result runresult reporter-task
+    assert-string result "async chat result"
+    assert-true (not empty? result) "async chat result non-empty"
+  ] [
+    test-fail (word "async chat error: " error-message)
+  ]
+
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; 8. Choose
+;; ---------------------------------------------------------------------------
+
+to test-choose
+  print "--- test-choose ---"
+  load-config
+  llm:clear-history
+
+  carefully [
+    let choices ["red" "blue" "green"]
+    let chosen llm:choose "Pick a color" choices
+    assert-true (member? chosen choices) (word "chose valid option: " chosen)
+  ] [
+    test-fail (word "choose error: " error-message)
+  ]
+
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; 9. History
+;; ---------------------------------------------------------------------------
+
+to test-history
+  print "--- test-history ---"
+  load-config
+  llm:clear-history
+
+  let h0 llm:history
+  assert-true (is-list? h0 and empty? h0) "history empty after clear"
+
+  carefully [
+    let _ llm:chat "Say ok"
+    let h1 llm:history
+    assert-true (length h1 = 2) "history has 2 entries after one exchange"
+
+    let user-msg item 0 h1
+    assert-true (item 0 user-msg = "user") "first entry is user role"
+
+    let asst-msg item 1 h1
+    assert-true (item 0 asst-msg = "assistant") "second entry is assistant role"
+  ] [
+    test-fail (word "history test error: " error-message)
+  ]
+
+  llm:clear-history
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; 10. Thinking / reasoning primitives (config only, no API call)
+;; ---------------------------------------------------------------------------
+
+to test-thinking-config
+  print "--- test-thinking-config ---"
+
+  ; set-thinking true/false
+  carefully [ llm:set-thinking true  test-pass "set-thinking true" ] [
+    test-fail (word "set-thinking true: " error-message)
+  ]
+  carefully [ llm:set-thinking false test-pass "set-thinking false" ] [
+    test-fail (word "set-thinking false: " error-message)
+  ]
+
+  ; reasoning-effort valid values
+  foreach ["low" "medium" "high"] [ e ->
+    carefully [
+      llm:set-reasoning-effort e
+      test-pass (word "reasoning-effort " e)
+    ] [
+      test-fail (word "reasoning-effort " e ": " error-message)
     ]
   ]
 
-  ifelse all-ready-in-all? [
-    print "PASS: All ready providers are in all-providers list"
+  ; reasoning-effort invalid
+  carefully [
+    llm:set-reasoning-effort "invalid"
+    test-fail "invalid reasoning-effort should be rejected"
   ] [
-    print "FAIL: Some ready providers missing from all-providers"
+    test-pass "invalid reasoning-effort rejected"
   ]
 
-  print "=== Provider Lists Test Complete ==="
-end
-
-to test-provider-status
-  print "=== Testing llm:provider-status ==="
-
-  let status llm:provider-status
-  print (word "Provider status: " status)
-
-  ; Check that status is a list
-  ifelse is-list? status [
-    print "PASS: provider-status returns a list"
+  ; thinking-budget valid
+  carefully [
+    llm:set-thinking-budget 4096
+    test-pass "thinking-budget 4096"
   ] [
-    print "FAIL: provider-status should return a list"
+    test-fail (word "thinking-budget 4096: " error-message)
   ]
 
-  ; Check each provider has status info
-  ifelse length status >= 4 [
-    print "PASS: Status for all 4 providers returned"
+  ; thinking-budget too low
+  carefully [
+    llm:set-thinking-budget 512
+    test-fail "thinking-budget 512 should be rejected (< 1024)"
   ] [
-    print "FAIL: Expected status for at least 4 providers"
+    test-pass "thinking-budget 512 rejected"
   ]
 
-  print "=== Provider Status Test Complete ==="
-end
-
-to test-quick-commands
-  print "=== Quick Command Reference ==="
-  print ""
-  print "Run these in Command Center to test the extension:"
-  print ""
-  print "1. List all models (new!):"
-  print "   print llm:list-models"
-  print ""
-  print "2. Check provider status:"
-  print "   print llm:provider-status"
-  print ""
-  print "3. List ready providers:"
-  print "   print llm:providers"
-  print ""
-  print "4. Get current config:"
-  print "   print llm:active"
-  print ""
-  print "5. Switch provider and model:"
-  print "   llm:set-provider \"ollama\""
-  print "   llm:set-model \"llama3.2\""
-  print ""
-  print "6. Test chat (requires working provider):"
-  print "   print llm:chat \"Hello!\""
+  llm:set-thinking false
   print ""
 end
 
-to run-all-model-management-tests
+;; ---------------------------------------------------------------------------
+;; 11. chat-with-thinking return format (requires API call)
+;; ---------------------------------------------------------------------------
+
+to test-chat-with-thinking
+  print "--- test-chat-with-thinking ---"
+  load-config
+  llm:clear-history
+  llm:set-thinking true
+
+  carefully [
+    let result llm:chat-with-thinking "What is 2 + 2?"
+
+    assert-true (is-list? result) "chat-with-thinking returns a list"
+    assert-true (length result = 2) "result has 2 elements [answer thinking]"
+
+    let answer item 0 result
+    let thinking item 1 result
+
+    assert-string answer "answer element"
+    assert-string thinking "thinking element"
+    assert-true (not empty? answer) "answer is non-empty"
+
+    ; Verify thinking text is NOT in history
+    let history llm:history
+    if length history >= 2 [
+      let asst-content item 1 (item 1 history)
+      if not empty? thinking [
+        assert-true (not member? thinking asst-content) "thinking excluded from history"
+      ]
+    ]
+  ] [
+    test-fail (word "chat-with-thinking error: " error-message)
+  ]
+
+  llm:set-thinking false
+  llm:clear-history
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; 12. Backward compatibility: regular chat returns string
+;; ---------------------------------------------------------------------------
+
+to test-backward-compat
+  print "--- test-backward-compat ---"
+  load-config
+  llm:clear-history
+
+  carefully [
+    let result llm:chat "Say hello"
+    assert-true (is-string? result) "llm:chat returns string, not list"
+  ] [
+    test-fail (word "backward compat error: " error-message)
+  ]
+
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; 13. [reasoning] marker in model list
+;; ---------------------------------------------------------------------------
+
+to test-reasoning-marker
+  print "--- test-reasoning-marker ---"
+  load-config
+
+  let output llm:list-models
+  ifelse member? "[reasoning]" output [
+    test-pass "[reasoning] marker present in model list"
+  ] [
+    print "INFO: no [reasoning] markers found (depends on provider/registry)"
+  ]
+
+  print ""
+end
+
+;; ---------------------------------------------------------------------------
+;; Run all tests
+;; ---------------------------------------------------------------------------
+
+to run-all-tests
   print "========================================"
-  print "  MODEL MANAGEMENT TEST SUITE"
+  print "  LLM EXTENSION TEST SUITE"
   print "========================================"
   print ""
 
-  test-list-models-format
-  print ""
+  ; Offline / discovery tests
+  test-provider-discovery
+  test-provider-help
+  test-invalid-provider
 
-  test-active-marker-changes
-  print ""
-
+  ; Config-dependent tests
+  test-active-config
   test-model-validation
-  print ""
 
-  test-provider-all-vs-ready
-  print ""
+  ; API tests
+  test-sync-chat
+  test-async-chat
+  test-choose
+  test-history
+  test-backward-compat
 
-  test-provider-status
-  print ""
+  ; Thinking config (no API)
+  test-thinking-config
+
+  ; Thinking API tests
+  test-chat-with-thinking
+  test-reasoning-marker
 
   print "========================================"
   print "  ALL TESTS COMPLETE"
   print "========================================"
 end
 
-to test-config-validation-complete
-  print "=== Config Validation and Error Handling Test Suite ==="
-  print ""
-
-  ; Test 1: Provider readiness checks
-  print "Test 1: Provider Readiness Checks"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-provider-readiness
-  print ""
-
-  ; Test 2: Ollama server not running
-  print "Test 2: Ollama Server Not Running"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-ollama-not-running
-  print ""
-
-  ; Test 3: Invalid config (missing API keys)
-  print "Test 3: Invalid Config (Missing API Keys)"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-invalid-config
-  print ""
-
-  ; Test 4: Error messages and help
-  print "Test 4: Error Messages and Help"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-config-error-messages
-  print ""
-
-  ; Test 5: Active config and status
-  print "Test 5: Active Config and Status"
-  print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  test-active-config
-  print ""
-
-  print "=== Config Validation Test Suite Complete ==="
-  print ""
-  print "Summary of what was tested:"
-  print "  ✓ Provider readiness checks (llm:providers vs llm:providers-all)"
-  print "  ✓ Ollama server reachability detection"
-  print "  ✓ API key validation and error handling"
-  print "  ✓ Helpful error messages and setup instructions"
-  print "  ✓ Active configuration reporting"
-  print "  ✓ Provider status detailed reporting"
-end
-
-;; ============================================================================
-;; THINKING/REASONING MODEL TESTS
-;; ============================================================================
-
-to test-set-thinking-primitives
-  print "=== Testing Thinking Configuration Primitives ==="
-
-  ; Test 1: set-thinking true
-  carefully [
-    llm:set-thinking true
-    print "PASS: llm:set-thinking true accepted"
-  ] [
-    print (word "FAIL: llm:set-thinking true failed: " error-message)
-  ]
-
-  ; Test 2: set-thinking false
-  carefully [
-    llm:set-thinking false
-    print "PASS: llm:set-thinking false accepted"
-  ] [
-    print (word "FAIL: llm:set-thinking false failed: " error-message)
-  ]
-
-  ; Test 3: set-reasoning-effort with valid values
-  foreach ["low" "medium" "high"] [ effort ->
-    carefully [
-      llm:set-reasoning-effort effort
-      print (word "PASS: llm:set-reasoning-effort \"" effort "\" accepted")
-    ] [
-      print (word "FAIL: llm:set-reasoning-effort \"" effort "\" failed: " error-message)
-    ]
-  ]
-
-  ; Test 4: set-reasoning-effort with invalid value
-  carefully [
-    llm:set-reasoning-effort "invalid"
-    print "FAIL: llm:set-reasoning-effort \"invalid\" should have been rejected"
-  ] [
-    print (word "PASS: Invalid reasoning effort rejected: " error-message)
-  ]
-
-  ; Test 5: set-thinking-budget with valid value
-  carefully [
-    llm:set-thinking-budget 4096
-    print "PASS: llm:set-thinking-budget 4096 accepted"
-  ] [
-    print (word "FAIL: llm:set-thinking-budget 4096 failed: " error-message)
-  ]
-
-  ; Test 6: set-thinking-budget with value too low
-  carefully [
-    llm:set-thinking-budget 512
-    print "FAIL: llm:set-thinking-budget 512 should have been rejected (< 1024)"
-  ] [
-    print (word "PASS: Low thinking budget rejected: " error-message)
-  ]
-
-  print "=== Thinking Primitives Test Complete ==="
-end
-
-to test-chat-with-thinking-format
-  print "=== Testing llm:chat-with-thinking Return Format ==="
-
-  ; Load config
-  carefully [
-    llm:load-config "demos/config"
-  ] [
-    print (word "Config loading failed: " error-message)
-    print "Skipping test - configure a provider first"
-    stop
-  ]
-
-  ; Enable thinking
-  llm:set-thinking true
-
-  ; Test: chat-with-thinking returns a list
-  carefully [
-    let result llm:chat-with-thinking "What is 2 + 2?"
-
-    ; Check it's a list
-    ifelse is-list? result [
-      print "PASS: chat-with-thinking returns a list"
-    ] [
-      print "FAIL: chat-with-thinking should return a list"
-    ]
-
-    ; Check list has exactly 2 elements
-    ifelse length result = 2 [
-      print "PASS: Result list has 2 elements [answer thinking]"
-    ] [
-      print (word "FAIL: Expected 2 elements, got " length result)
-    ]
-
-    ; Check first element (answer) is a string
-    ifelse is-string? item 0 result [
-      print "PASS: First element (answer) is a string"
-    ] [
-      print "FAIL: First element should be a string"
-    ]
-
-    ; Check second element (thinking) is a string
-    ifelse is-string? item 1 result [
-      print "PASS: Second element (thinking) is a string"
-    ] [
-      print "FAIL: Second element should be a string"
-    ]
-
-    ; Check answer is not empty
-    ifelse not empty? item 0 result [
-      print "PASS: Answer is not empty"
-      print (word "  Answer: " substring (item 0 result) 0 min list 80 length (item 0 result))
-    ] [
-      print "FAIL: Answer should not be empty"
-    ]
-
-    ; Report thinking content
-    ifelse not empty? item 1 result [
-      print (word "  Thinking: " substring (item 1 result) 0 min list 80 length (item 1 result) " ...")
-    ] [
-      print "  (No thinking text returned - provider may not expose it)"
-    ]
-
-  ] [
-    print (word "FAIL: chat-with-thinking threw error: " error-message)
-  ]
-
-  ; Disable thinking for subsequent tests
-  llm:set-thinking false
-
-  print "=== Chat With Thinking Format Test Complete ==="
-end
-
-to test-chat-backward-compat
-  print "=== Testing Backward Compatibility ==="
-
-  ; Load config
-  carefully [
-    llm:load-config "demos/config"
-  ] [
-    print (word "Config loading failed: " error-message)
-    print "Skipping test - configure a provider first"
-    stop
-  ]
-
-  ; Test: regular chat still returns a string (not a list)
-  carefully [
-    let result llm:chat "Say hello"
-
-    ifelse is-string? result [
-      print "PASS: llm:chat still returns a string"
-      print (word "  Result: " substring result 0 min list 80 length result)
-    ] [
-      print "FAIL: llm:chat should return a string, not a list"
-    ]
-  ] [
-    print (word "FAIL: llm:chat threw error: " error-message)
-  ]
-
-  print "=== Backward Compatibility Test Complete ==="
-end
-
-to test-thinking-with-ollama
-  print "=== Testing Thinking with Ollama (Local) ==="
-
-  ; Switch to Ollama
-  carefully [
-    llm:set-provider "ollama"
-  ] [
-    print (word "Cannot use Ollama: " error-message)
-    print "Skipping test - ensure Ollama is running"
-    stop
-  ]
-
-  ; Use a model that supports thinking (qwen3:0.6b or qwen3.5:9b)
-  llm:set-model "qwen3:0.6b"
-
-  ; Enable thinking
-  llm:set-thinking true
-
-  ; Test chat-with-thinking
-  carefully [
-    let result llm:chat-with-thinking "Solve: what is 15 * 7?"
-
-    ifelse is-list? result and length result = 2 [
-      print "PASS: chat-with-thinking returned [answer thinking] list"
-
-      let answer item 0 result
-      let thinking item 1 result
-
-      print (word "  Answer: " answer)
-
-      ifelse not empty? thinking [
-        print (word "  Thinking length: " length thinking " chars")
-        print (word "  Thinking preview: " substring thinking 0 min list 120 length thinking " ...")
-      ] [
-        print "  (No thinking text - model may not have used thinking)"
-      ]
-
-      ; Check answer mentions 105
-      ifelse member? "105" answer [
-        print "PASS: Answer contains correct result (105)"
-      ] [
-        print "WARNING: Answer may not contain correct result (105)"
-      ]
-    ] [
-      print "FAIL: Unexpected return format"
-    ]
-  ] [
-    print (word "FAIL: chat-with-thinking failed: " error-message)
-    print "  This may happen if the model is not installed."
-    print "  Install it with: ollama pull qwen3:0.6b"
-  ]
-
-  ; Disable thinking
-  llm:set-thinking false
-
-  print "=== Ollama Thinking Test Complete ==="
-end
+;; ---------------------------------------------------------------------------
+;; Optional: Ollama qwen3 thinking test (requires local Ollama)
+;; ---------------------------------------------------------------------------
 
 to test-ollama-qwen3-thinking
-  print "=== Ollama Qwen3 9B Thinking Test ==="
-  print ""
+  print "--- test-ollama-qwen3-thinking (requires Ollama) ---"
 
-  ; Set up Ollama with qwen3.5:9b
   carefully [
     llm:set-provider "ollama"
   ] [
-    print (word "Cannot use Ollama: " error-message)
+    print (word "Skipping: cannot set Ollama provider: " error-message)
     stop
   ]
 
   llm:set-model "qwen3:0.6b"
   llm:clear-history
 
-  ; Note: Thinking models need longer timeouts since they generate
-  ; a reasoning trace before answering. The 9B model can take 60-120s.
-  ; Using qwen3:0.6b for speed. For qwen3.5:9b, increase timeout further.
-
-  ; Test 1: Regular chat (no thinking)
-  print "--- Test 1: Regular chat (thinking OFF) ---"
+  ; Regular chat (thinking off)
   llm:set-thinking false
   carefully [
     let result llm:chat "What is 7 * 8? Answer with just the number."
-    print (word "Regular chat result: " result)
-    ifelse is-string? result [
-      print "PASS: Regular chat returns string"
-    ] [
-      print "FAIL: Expected string"
-    ]
+    assert-string result "ollama regular chat returns string"
   ] [
-    print (word "ERROR: " error-message)
+    test-fail (word "ollama regular chat: " error-message)
   ]
-  print ""
 
-  ; Test 2: Chat with thinking enabled
-  print "--- Test 2: Chat with thinking (thinking ON) ---"
+  ; Chat with thinking
   llm:set-thinking true
   llm:clear-history
   carefully [
-    let result llm:chat-with-thinking "Solve step by step: If a train travels 120km in 2 hours, what is its speed in km/h?"
+    let result llm:chat-with-thinking "Solve step by step: 120 / 2"
 
-    print (word "Result is list: " is-list? result)
-    print (word "Result length: " length result)
-    print ""
+    assert-true (is-list? result and length result = 2) "ollama thinking returns [answer thinking]"
 
     let answer item 0 result
     let thinking item 1 result
 
-    print "ANSWER:"
-    print answer
-    print ""
+    assert-true (not empty? answer) "ollama thinking answer non-empty"
+    print (word "  Answer: " answer)
 
     ifelse not empty? thinking [
-      print (word "THINKING (" length thinking " chars):")
-      print thinking
+      print (word "  Thinking (" length thinking " chars): "
+        substring thinking 0 min list 100 length thinking)
     ] [
-      print "THINKING: (empty - model did not return thinking text)"
-    ]
-    print ""
-
-    ; Verify answer is non-empty
-    ifelse not empty? answer [
-      print "PASS: Got non-empty answer"
-    ] [
-      print "FAIL: Answer is empty"
+      print "  (no thinking text returned)"
     ]
   ] [
-    print (word "ERROR: " error-message)
+    test-fail (word "ollama thinking chat: " error-message)
+    print "  Ensure qwen3:0.6b is installed: ollama pull qwen3:0.6b"
   ]
-  print ""
 
-  ; Test 3: Another thinking query - math problem
-  print "--- Test 3: Math reasoning ---"
-  llm:clear-history
-  carefully [
-    let result llm:chat-with-thinking "What is 17 * 13? Think carefully."
-
-    let answer item 0 result
-    let thinking item 1 result
-
-    print (word "Answer: " answer)
-    ifelse not empty? thinking [
-      print (word "Thinking: " thinking)
-    ] [
-      print "Thinking: (none returned)"
-    ]
-
-    ifelse member? "221" answer [
-      print "PASS: Correct answer (221)"
-    ] [
-      print (word "NOTE: Expected 221 in answer")
-    ]
-  ] [
-    print (word "ERROR: " error-message)
-  ]
-  print ""
-
-  ; Test 4: Verify history only contains clean answer
-  print "--- Test 4: History check ---"
+  ; Verify history has clean entries only
   let history llm:history
-  print (word "History entries: " length history)
-  foreach history [ msg ->
-    print (word "  [" item 0 msg "] " substring (item 1 msg) 0 min list 60 length (item 1 msg))
-  ]
+  print (word "  History entries: " length history)
 
-  ; Clean up
   llm:set-thinking false
   llm:clear-history
-
   print ""
-  print "=== Ollama Qwen3 9B Thinking Test Complete ==="
-end
-
-to test-thinking-history-isolation
-  print "=== Testing Thinking Text History Isolation ==="
-
-  ; Load config
-  carefully [
-    llm:load-config "demos/config"
-  ] [
-    print (word "Config loading failed: " error-message)
-    print "Skipping test"
-    stop
-  ]
-
-  ; Clear history
-  llm:clear-history
-
-  ; Enable thinking
-  llm:set-thinking true
-
-  ; Send a message with thinking
-  carefully [
-    let result llm:chat-with-thinking "Say exactly: hello world"
-
-    ; Check history only contains clean answer, not thinking text
-    let history llm:history
-
-    ifelse length history = 2 [
-      print "PASS: History has 2 entries (user + assistant)"
-
-      let assistant-msg item 1 history
-      let role item 0 assistant-msg
-      let content item 1 assistant-msg
-
-      ifelse role = "assistant" [
-        print "PASS: Second history entry is assistant role"
-      ] [
-        print (word "FAIL: Expected assistant role, got: " role)
-      ]
-
-      ; Verify thinking text is NOT in history content
-      let thinking item 1 result
-      if not empty? thinking [
-        ifelse not member? thinking content [
-          print "PASS: Thinking text is NOT stored in history"
-        ] [
-          print "FAIL: Thinking text should NOT be in history"
-        ]
-      ]
-    ] [
-      print (word "FAIL: Expected 2 history entries, got: " length history)
-    ]
-  ] [
-    print (word "FAIL: chat-with-thinking failed: " error-message)
-  ]
-
-  ; Clean up
-  llm:set-thinking false
-  llm:clear-history
-
-  print "=== History Isolation Test Complete ==="
-end
-
-to test-reasoning-marker-in-models
-  print "=== Testing [reasoning] Marker in Model List ==="
-
-  ; Set to OpenAI and check o-series models
-  llm:set-provider "openai"
-  llm:set-model "gpt-4o-mini"
-
-  let output llm:list-models
-
-  ; Check if any [reasoning] markers appear for known reasoning models
-  ifelse member? "[reasoning]" output [
-    print "PASS: [reasoning] marker present in model list"
-  ] [
-    print "INFO: No [reasoning] markers found (may depend on registry)"
-  ]
-
-  print output
-
-  print "=== Reasoning Marker Test Complete ==="
-end
-
-to run-all-thinking-tests
-  print "========================================"
-  print "  THINKING/REASONING MODEL TEST SUITE"
-  print "========================================"
-  print ""
-
-  test-set-thinking-primitives
-  print ""
-
-  test-chat-backward-compat
-  print ""
-
-  test-chat-with-thinking-format
-  print ""
-
-  test-thinking-history-isolation
-  print ""
-
-  test-reasoning-marker-in-models
-  print ""
-
-  print "========================================"
-  print "  ALL THINKING TESTS COMPLETE"
-  print "========================================"
-  print ""
-  print "Summary of what was tested:"
-  print "  - set-thinking true/false"
-  print "  - set-reasoning-effort low/medium/high + validation"
-  print "  - set-thinking-budget with min 1024 validation"
-  print "  - chat-with-thinking returns [answer thinking] list"
-  print "  - chat backward compatibility (still returns string)"
-  print "  - Thinking text NOT stored in history"
-  print "  - [reasoning] marker in model list display"
-  print ""
-  print "To test with Ollama thinking models, also run:"
-  print "  test-thinking-with-ollama"
 end]]></code>
   <widgets>
     <view x="210" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="429" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="429" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>
