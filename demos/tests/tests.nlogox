@@ -5,7 +5,7 @@
 to test-llm-providers
   print "Testing Available providers..."
 
-  llm:set-api-key "AIzaSyDbM-TMmsX_tiP790DF6vLjmRHM1dXOwOw"
+  llm:set-api-key "your-gemini-key-here"
 
   llm:set-provider "gemini"
 
@@ -822,8 +822,8 @@ to test-thinking-with-ollama
     stop
   ]
 
-  ; Use a model that supports thinking (qwen3.5 or deepseek-r1)
-  llm:set-model "qwen3.5"
+  ; Use a model that supports thinking (qwen3:0.6b or qwen3.5:9b)
+  llm:set-model "qwen3:0.6b"
 
   ; Enable thinking
   llm:set-thinking true
@@ -858,14 +858,128 @@ to test-thinking-with-ollama
     ]
   ] [
     print (word "FAIL: chat-with-thinking failed: " error-message)
-    print "  This may happen if qwen3.5 is not installed."
-    print "  Install it with: ollama pull qwen3.5"
+    print "  This may happen if the model is not installed."
+    print "  Install it with: ollama pull qwen3:0.6b"
   ]
 
   ; Disable thinking
   llm:set-thinking false
 
   print "=== Ollama Thinking Test Complete ==="
+end
+
+to test-ollama-qwen3-thinking
+  print "=== Ollama Qwen3 9B Thinking Test ==="
+  print ""
+
+  ; Set up Ollama with qwen3.5:9b
+  carefully [
+    llm:set-provider "ollama"
+  ] [
+    print (word "Cannot use Ollama: " error-message)
+    stop
+  ]
+
+  llm:set-model "qwen3:0.6b"
+  llm:clear-history
+
+  ; Note: Thinking models need longer timeouts since they generate
+  ; a reasoning trace before answering. The 9B model can take 60-120s.
+  ; Using qwen3:0.6b for speed. For qwen3.5:9b, increase timeout further.
+
+  ; Test 1: Regular chat (no thinking)
+  print "--- Test 1: Regular chat (thinking OFF) ---"
+  llm:set-thinking false
+  carefully [
+    let result llm:chat "What is 7 * 8? Answer with just the number."
+    print (word "Regular chat result: " result)
+    ifelse is-string? result [
+      print "PASS: Regular chat returns string"
+    ] [
+      print "FAIL: Expected string"
+    ]
+  ] [
+    print (word "ERROR: " error-message)
+  ]
+  print ""
+
+  ; Test 2: Chat with thinking enabled
+  print "--- Test 2: Chat with thinking (thinking ON) ---"
+  llm:set-thinking true
+  llm:clear-history
+  carefully [
+    let result llm:chat-with-thinking "Solve step by step: If a train travels 120km in 2 hours, what is its speed in km/h?"
+
+    print (word "Result is list: " is-list? result)
+    print (word "Result length: " length result)
+    print ""
+
+    let answer item 0 result
+    let thinking item 1 result
+
+    print "ANSWER:"
+    print answer
+    print ""
+
+    ifelse not empty? thinking [
+      print (word "THINKING (" length thinking " chars):")
+      print thinking
+    ] [
+      print "THINKING: (empty - model did not return thinking text)"
+    ]
+    print ""
+
+    ; Verify answer is non-empty
+    ifelse not empty? answer [
+      print "PASS: Got non-empty answer"
+    ] [
+      print "FAIL: Answer is empty"
+    ]
+  ] [
+    print (word "ERROR: " error-message)
+  ]
+  print ""
+
+  ; Test 3: Another thinking query - math problem
+  print "--- Test 3: Math reasoning ---"
+  llm:clear-history
+  carefully [
+    let result llm:chat-with-thinking "What is 17 * 13? Think carefully."
+
+    let answer item 0 result
+    let thinking item 1 result
+
+    print (word "Answer: " answer)
+    ifelse not empty? thinking [
+      print (word "Thinking: " thinking)
+    ] [
+      print "Thinking: (none returned)"
+    ]
+
+    ifelse member? "221" answer [
+      print "PASS: Correct answer (221)"
+    ] [
+      print (word "NOTE: Expected 221 in answer")
+    ]
+  ] [
+    print (word "ERROR: " error-message)
+  ]
+  print ""
+
+  ; Test 4: Verify history only contains clean answer
+  print "--- Test 4: History check ---"
+  let history llm:history
+  print (word "History entries: " length history)
+  foreach history [ msg ->
+    print (word "  [" item 0 msg "] " substring (item 1 msg) 0 min list 60 length (item 1 msg))
+  ]
+
+  ; Clean up
+  llm:set-thinking false
+  llm:clear-history
+
+  print ""
+  print "=== Ollama Qwen3 9B Thinking Test Complete ==="
 end
 
 to test-thinking-history-isolation
