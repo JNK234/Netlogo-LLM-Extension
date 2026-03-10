@@ -17,10 +17,15 @@ rm -f *.jar 2>/dev/null || true
 mkdir -p dist/llm
 cp target/scala-3.7.0/llm.jar dist/llm/
 
+# Auto-install to NetLogo 7.0.3
+NETLOGO_EXT="$HOME/Developer/CCL/NetLogo 7.0.3/extensions/llm"
+if [ -d "$(dirname "$NETLOGO_EXT")" ]; then
+  mkdir -p "$NETLOGO_EXT"
+  cp target/scala-3.7.0/llm.jar "$NETLOGO_EXT/"
+  echo "Installed to: $NETLOGO_EXT"
+fi
+
 echo ""
 echo "Build complete!"
 echo "Fat JAR: target/scala-3.7.0/llm.jar"
 echo "Install folder: dist/llm/"
-echo ""
-echo "To install:"
-echo "  cp -r dist/llm \"/Applications/NetLogo 7.0.0/extensions/\""

@@ -113,6 +113,7 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
     // Add generation config if parameters are specified
     val generationConfig = ujson.Obj()
     var hasConfig = false
+    val isThinking = request.thinkingConfig.exists(_.enabled)
 
     request.temperature.foreach { temp =>
       generationConfig("temperature") = temp
@@ -121,6 +122,20 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
     request.maxTokens.foreach { maxTokens =>
       generationConfig("maxOutputTokens") = maxTokens
+      hasConfig = true
+    }
+
+    if (isThinking) {
+      val thinkingObj = ujson.Obj()
+      // Map reasoning effort or set budget
+      request.thinkingConfig.flatMap(_.budgetTokens).foreach { budget =>
+        thinkingObj("thinkingBudget") = budget
+      }
+      request.thinkingConfig.flatMap(_.reasoningEffort).foreach { effort =>
+        thinkingObj("thinkingLevel") = effort.toUpperCase
+      }
+      thinkingObj("includeThoughts") = true
+      generationConfig("thinkingConfig") = thinkingObj
       hasConfig = true
     }
 
@@ -140,12 +155,27 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       val candidate = parsed("candidates").arr.head
       val finishReason = candidate("finishReason").str
 
-      // Handle cases where parts may be missing (e.g., MAX_TOKENS)
-      val text = try {
-        candidate("content")("parts").arr.head("text").str
+      val parts = try {
+        candidate("content")("parts").arr.toSeq
       } catch {
-        case _: Exception => s"[No content - $finishReason]"
+        case _: Exception => Seq.empty
       }
+
+      // Separate thinking parts from regular text parts
+      val thinkingParts = parts.filter(p => scala.util.Try(p("thought").bool).toOption.contains(true))
+      val textParts = parts.filter(p => !scala.util.Try(p("thought").bool).toOption.contains(true))
+
+      val text = if (textParts.nonEmpty) {
+        textParts.flatMap(p => scala.util.Try(p("text").str).toOption).mkString
+      } else if (parts.nonEmpty) {
+        parts.flatMap(p => scala.util.Try(p("text").str).toOption).mkString
+      } else {
+        s"[No content - $finishReason]"
+      }
+
+      val thinking = if (thinkingParts.nonEmpty) {
+        Some(thinkingParts.flatMap(p => scala.util.Try(p("text").str).toOption).mkString("\n"))
+      } else None
 
       val choices = Array(
         org.nlogo.extensions.llm.models.Choice(
@@ -155,7 +185,7 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
         )
       )
 
-      ChatResponse(s"gemini-${System.currentTimeMillis()}", System.currentTimeMillis() / 1000, model, choices)
+      ChatResponse(s"gemini-${System.currentTimeMillis()}", System.currentTimeMillis() / 1000, model, choices, thinking = thinking)
     } catch {
       case e: Exception =>
         throw new RuntimeException(s"Failed to parse Gemini response: ${e.getMessage}\nResponse: $responseBody")

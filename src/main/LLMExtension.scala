@@ -4,7 +4,7 @@ import org.nlogo.api._
 import org.nlogo.core.{LogoList, Syntax}
 import org.nlogo.extensions.llm.config.{ConfigLoader, ConfigStore}
 import org.nlogo.extensions.llm.providers.{LLMProvider, ProviderFactory, ModelRegistry, OllamaProvider}
-import org.nlogo.extensions.llm.models.ChatMessage
+import org.nlogo.extensions.llm.models.{ChatMessage, ChatResponse}
 import scala.collection.mutable.{ArrayBuffer, WeakHashMap}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -72,7 +72,13 @@ class LLMExtension extends DefaultClassManager {
     manager.addPrimitive("chat", ChatReporter)
     manager.addPrimitive("chat-async", ChatAsyncReporter)
     manager.addPrimitive("chat-with-template", ChatWithTemplateReporter)
+    manager.addPrimitive("chat-with-thinking", ChatWithThinkingReporter)
     manager.addPrimitive("choose", ChooseReporter)
+
+    // Thinking/reasoning configuration primitives
+    manager.addPrimitive("set-thinking", SetThinkingCommand)
+    manager.addPrimitive("set-reasoning-effort", SetReasoningEffortCommand)
+    manager.addPrimitive("set-thinking-budget", SetThinkingBudgetCommand)
     
     // History management primitives
     manager.addPrimitive("history", HistoryReporter)
@@ -566,6 +572,88 @@ Response:"""
     }
   }
   
+  // Thinking/Reasoning Primitives
+
+  object ChatWithThinkingReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(
+      right = List(Syntax.StringType),
+      ret = Syntax.ListType
+    )
+
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      val inputText = args(0).getString
+      val agent = context.getAgent
+
+      try {
+        val provider = ensureProvider()
+        val history = getAgentHistory(agent)
+
+        // Add user message to history
+        val userMessage = ChatMessage.user(inputText)
+        history += userMessage
+
+        // Send chat request and get full response with thinking
+        val responseFuture = provider.chatWithFullResponse(history.toSeq)
+        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
+          .flatMap(s => scala.util.Try(s.toInt).toOption)
+          .getOrElse(30)
+        val response = Await.result(responseFuture, timeoutSeconds.seconds)
+
+        val answerText = response.firstContent.getOrElse("")
+        val thinkingText = response.thinking.getOrElse("")
+
+        // Only add the clean answer to history (not thinking text)
+        history += ChatMessage.assistant(answerText)
+
+        // Return [answer thinking] list — always 2 elements
+        LogoList(answerText, thinkingText)
+
+      } catch {
+        case e: Exception =>
+          throw new ExtensionException(s"LLM chat-with-thinking failed: ${e.getMessage}")
+      }
+    }
+  }
+
+  object SetThinkingCommand extends Command {
+    override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.BooleanType))
+
+    override def perform(args: Array[Argument], context: Context): Unit = {
+      val enabled = args(0).getBooleanValue
+      configStore.set(ConfigStore.ENABLE_THINKING, enabled.toString)
+      // Force re-initialization so provider picks up new config
+      currentProvider = None
+    }
+  }
+
+  object SetReasoningEffortCommand extends Command {
+    override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.StringType))
+
+    override def perform(args: Array[Argument], context: Context): Unit = {
+      val effort = args(0).getString.toLowerCase.trim
+      if (!Set("low", "medium", "high").contains(effort)) {
+        throw new ExtensionException(
+          s"Invalid reasoning effort: '$effort'. Must be one of: low, medium, high"
+        )
+      }
+      configStore.set(ConfigStore.REASONING_EFFORT, effort)
+    }
+  }
+
+  object SetThinkingBudgetCommand extends Command {
+    override def getSyntax: Syntax = Syntax.commandSyntax(right = List(Syntax.NumberType))
+
+    override def perform(args: Array[Argument], context: Context): Unit = {
+      val budget = args(0).getIntValue
+      if (budget < 1024) {
+        throw new ExtensionException(
+          s"Thinking budget must be at least 1024 tokens, got: $budget"
+        )
+      }
+      configStore.set(ConfigStore.THINKING_BUDGET_TOKENS, budget.toString)
+    }
+  }
+
   // History Management Primitives
   
   object HistoryReporter extends Reporter {

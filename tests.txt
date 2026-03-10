@@ -78,3 +78,25 @@ LLMTemplateWithMultipleAgents
   empty? [agent-result] of turtle 0 => false
   empty? [agent-result] of turtle 1 => false
   [agent-result] of turtle 0 != [agent-result] of turtle 1 => true
+
+LLMThinkingConfigPrimitives
+  extensions [llm]
+  O> llm:set-thinking true
+  O> llm:set-reasoning-effort "high"
+  O> llm:set-thinking-budget 4096
+
+LLMChatWithThinkingReturnsList
+  extensions [llm]
+  globals [result]
+  O> llm:load-config "demos/config"
+  O> set result llm:chat-with-thinking "Say hello"
+  is-list? result => true
+  length result => 2
+  is-string? (item 0 result) => true
+  is-string? (item 1 result) => true
+  empty? (item 0 result) => false
+
+LLMChatBackwardCompat
+  extensions [llm]
+  O> llm:load-config "demos/config"
+  is-string? (llm:chat "Say hello") => true
