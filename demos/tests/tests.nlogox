@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<model version="NetLogo 7.0.0-beta2" snapToGrid="false">
+<model version="NetLogo 7.0.3" snapToGrid="false">
   <code><![CDATA[extensions [ llm ]
 
 to test-llm-providers
@@ -647,6 +647,345 @@ to test-config-validation-complete
   print "  ✓ Helpful error messages and setup instructions"
   print "  ✓ Active configuration reporting"
   print "  ✓ Provider status detailed reporting"
+end
+
+;; ============================================================================
+;; THINKING/REASONING MODEL TESTS
+;; ============================================================================
+
+to test-set-thinking-primitives
+  print "=== Testing Thinking Configuration Primitives ==="
+
+  ; Test 1: set-thinking true
+  carefully [
+    llm:set-thinking true
+    print "PASS: llm:set-thinking true accepted"
+  ] [
+    print (word "FAIL: llm:set-thinking true failed: " error-message)
+  ]
+
+  ; Test 2: set-thinking false
+  carefully [
+    llm:set-thinking false
+    print "PASS: llm:set-thinking false accepted"
+  ] [
+    print (word "FAIL: llm:set-thinking false failed: " error-message)
+  ]
+
+  ; Test 3: set-reasoning-effort with valid values
+  foreach ["low" "medium" "high"] [ effort ->
+    carefully [
+      llm:set-reasoning-effort effort
+      print (word "PASS: llm:set-reasoning-effort \"" effort "\" accepted")
+    ] [
+      print (word "FAIL: llm:set-reasoning-effort \"" effort "\" failed: " error-message)
+    ]
+  ]
+
+  ; Test 4: set-reasoning-effort with invalid value
+  carefully [
+    llm:set-reasoning-effort "invalid"
+    print "FAIL: llm:set-reasoning-effort \"invalid\" should have been rejected"
+  ] [
+    print (word "PASS: Invalid reasoning effort rejected: " error-message)
+  ]
+
+  ; Test 5: set-thinking-budget with valid value
+  carefully [
+    llm:set-thinking-budget 4096
+    print "PASS: llm:set-thinking-budget 4096 accepted"
+  ] [
+    print (word "FAIL: llm:set-thinking-budget 4096 failed: " error-message)
+  ]
+
+  ; Test 6: set-thinking-budget with value too low
+  carefully [
+    llm:set-thinking-budget 512
+    print "FAIL: llm:set-thinking-budget 512 should have been rejected (< 1024)"
+  ] [
+    print (word "PASS: Low thinking budget rejected: " error-message)
+  ]
+
+  print "=== Thinking Primitives Test Complete ==="
+end
+
+to test-chat-with-thinking-format
+  print "=== Testing llm:chat-with-thinking Return Format ==="
+
+  ; Load config
+  carefully [
+    llm:load-config "demos/config"
+  ] [
+    print (word "Config loading failed: " error-message)
+    print "Skipping test - configure a provider first"
+    stop
+  ]
+
+  ; Enable thinking
+  llm:set-thinking true
+
+  ; Test: chat-with-thinking returns a list
+  carefully [
+    let result llm:chat-with-thinking "What is 2 + 2?"
+
+    ; Check it's a list
+    ifelse is-list? result [
+      print "PASS: chat-with-thinking returns a list"
+    ] [
+      print "FAIL: chat-with-thinking should return a list"
+    ]
+
+    ; Check list has exactly 2 elements
+    ifelse length result = 2 [
+      print "PASS: Result list has 2 elements [answer thinking]"
+    ] [
+      print (word "FAIL: Expected 2 elements, got " length result)
+    ]
+
+    ; Check first element (answer) is a string
+    ifelse is-string? item 0 result [
+      print "PASS: First element (answer) is a string"
+    ] [
+      print "FAIL: First element should be a string"
+    ]
+
+    ; Check second element (thinking) is a string
+    ifelse is-string? item 1 result [
+      print "PASS: Second element (thinking) is a string"
+    ] [
+      print "FAIL: Second element should be a string"
+    ]
+
+    ; Check answer is not empty
+    ifelse not empty? item 0 result [
+      print "PASS: Answer is not empty"
+      print (word "  Answer: " substring (item 0 result) 0 min list 80 length (item 0 result))
+    ] [
+      print "FAIL: Answer should not be empty"
+    ]
+
+    ; Report thinking content
+    ifelse not empty? item 1 result [
+      print (word "  Thinking: " substring (item 1 result) 0 min list 80 length (item 1 result) " ...")
+    ] [
+      print "  (No thinking text returned - provider may not expose it)"
+    ]
+
+  ] [
+    print (word "FAIL: chat-with-thinking threw error: " error-message)
+  ]
+
+  ; Disable thinking for subsequent tests
+  llm:set-thinking false
+
+  print "=== Chat With Thinking Format Test Complete ==="
+end
+
+to test-chat-backward-compat
+  print "=== Testing Backward Compatibility ==="
+
+  ; Load config
+  carefully [
+    llm:load-config "demos/config"
+  ] [
+    print (word "Config loading failed: " error-message)
+    print "Skipping test - configure a provider first"
+    stop
+  ]
+
+  ; Test: regular chat still returns a string (not a list)
+  carefully [
+    let result llm:chat "Say hello"
+
+    ifelse is-string? result [
+      print "PASS: llm:chat still returns a string"
+      print (word "  Result: " substring result 0 min list 80 length result)
+    ] [
+      print "FAIL: llm:chat should return a string, not a list"
+    ]
+  ] [
+    print (word "FAIL: llm:chat threw error: " error-message)
+  ]
+
+  print "=== Backward Compatibility Test Complete ==="
+end
+
+to test-thinking-with-ollama
+  print "=== Testing Thinking with Ollama (Local) ==="
+
+  ; Switch to Ollama
+  carefully [
+    llm:set-provider "ollama"
+  ] [
+    print (word "Cannot use Ollama: " error-message)
+    print "Skipping test - ensure Ollama is running"
+    stop
+  ]
+
+  ; Use a model that supports thinking (qwen3.5 or deepseek-r1)
+  llm:set-model "qwen3.5"
+
+  ; Enable thinking
+  llm:set-thinking true
+
+  ; Test chat-with-thinking
+  carefully [
+    let result llm:chat-with-thinking "Solve: what is 15 * 7?"
+
+    ifelse is-list? result and length result = 2 [
+      print "PASS: chat-with-thinking returned [answer thinking] list"
+
+      let answer item 0 result
+      let thinking item 1 result
+
+      print (word "  Answer: " answer)
+
+      ifelse not empty? thinking [
+        print (word "  Thinking length: " length thinking " chars")
+        print (word "  Thinking preview: " substring thinking 0 min list 120 length thinking " ...")
+      ] [
+        print "  (No thinking text - model may not have used thinking)"
+      ]
+
+      ; Check answer mentions 105
+      ifelse member? "105" answer [
+        print "PASS: Answer contains correct result (105)"
+      ] [
+        print "WARNING: Answer may not contain correct result (105)"
+      ]
+    ] [
+      print "FAIL: Unexpected return format"
+    ]
+  ] [
+    print (word "FAIL: chat-with-thinking failed: " error-message)
+    print "  This may happen if qwen3.5 is not installed."
+    print "  Install it with: ollama pull qwen3.5"
+  ]
+
+  ; Disable thinking
+  llm:set-thinking false
+
+  print "=== Ollama Thinking Test Complete ==="
+end
+
+to test-thinking-history-isolation
+  print "=== Testing Thinking Text History Isolation ==="
+
+  ; Load config
+  carefully [
+    llm:load-config "demos/config"
+  ] [
+    print (word "Config loading failed: " error-message)
+    print "Skipping test"
+    stop
+  ]
+
+  ; Clear history
+  llm:clear-history
+
+  ; Enable thinking
+  llm:set-thinking true
+
+  ; Send a message with thinking
+  carefully [
+    let result llm:chat-with-thinking "Say exactly: hello world"
+
+    ; Check history only contains clean answer, not thinking text
+    let history llm:history
+
+    ifelse length history = 2 [
+      print "PASS: History has 2 entries (user + assistant)"
+
+      let assistant-msg item 1 history
+      let role item 0 assistant-msg
+      let content item 1 assistant-msg
+
+      ifelse role = "assistant" [
+        print "PASS: Second history entry is assistant role"
+      ] [
+        print (word "FAIL: Expected assistant role, got: " role)
+      ]
+
+      ; Verify thinking text is NOT in history content
+      let thinking item 1 result
+      if not empty? thinking [
+        ifelse not member? thinking content [
+          print "PASS: Thinking text is NOT stored in history"
+        ] [
+          print "FAIL: Thinking text should NOT be in history"
+        ]
+      ]
+    ] [
+      print (word "FAIL: Expected 2 history entries, got: " length history)
+    ]
+  ] [
+    print (word "FAIL: chat-with-thinking failed: " error-message)
+  ]
+
+  ; Clean up
+  llm:set-thinking false
+  llm:clear-history
+
+  print "=== History Isolation Test Complete ==="
+end
+
+to test-reasoning-marker-in-models
+  print "=== Testing [reasoning] Marker in Model List ==="
+
+  ; Set to OpenAI and check o-series models
+  llm:set-provider "openai"
+  llm:set-model "gpt-4o-mini"
+
+  let output llm:list-models
+
+  ; Check if any [reasoning] markers appear for known reasoning models
+  ifelse member? "[reasoning]" output [
+    print "PASS: [reasoning] marker present in model list"
+  ] [
+    print "INFO: No [reasoning] markers found (may depend on registry)"
+  ]
+
+  print output
+
+  print "=== Reasoning Marker Test Complete ==="
+end
+
+to run-all-thinking-tests
+  print "========================================"
+  print "  THINKING/REASONING MODEL TEST SUITE"
+  print "========================================"
+  print ""
+
+  test-set-thinking-primitives
+  print ""
+
+  test-chat-backward-compat
+  print ""
+
+  test-chat-with-thinking-format
+  print ""
+
+  test-thinking-history-isolation
+  print ""
+
+  test-reasoning-marker-in-models
+  print ""
+
+  print "========================================"
+  print "  ALL THINKING TESTS COMPLETE"
+  print "========================================"
+  print ""
+  print "Summary of what was tested:"
+  print "  - set-thinking true/false"
+  print "  - set-reasoning-effort low/medium/high + validation"
+  print "  - set-thinking-budget with min 1024 validation"
+  print "  - chat-with-thinking returns [answer thinking] list"
+  print "  - chat backward compatibility (still returns string)"
+  print "  - Thinking text NOT stored in history"
+  print "  - [reasoning] marker in model list display"
+  print ""
+  print "To test with Ollama thinking models, also run:"
+  print "  test-thinking-with-ollama"
 end]]></code>
   <widgets>
     <view x="210" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="429" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="429" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>

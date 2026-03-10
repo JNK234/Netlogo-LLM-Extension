@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<model version="NetLogo 7.0.0-beta2" snapToGrid="true">
+<model version="NetLogo 7.0.3" snapToGrid="true">
   <code><![CDATA[; ABOUTME: Emergent treasure hunt where agents discover what treasure is and where to find it through LLM-mediated communication in a maze
 ; ABOUTME: Agents share partial knowledge clues and use collaborative reasoning to solve the mystery
 

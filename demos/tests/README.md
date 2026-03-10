@@ -37,9 +37,18 @@ This directory contains test models for the NetLogo LLM Extension.
    - `test-provider-readiness` - Tests provider readiness detection
    - `test-config-error-messages` - Tests helpful error messages and provider help
 
+### Thinking/Reasoning Model Tests
+   - `test-set-thinking-primitives` - Tests `set-thinking`, `set-reasoning-effort`, `set-thinking-budget` with valid/invalid inputs
+   - `test-chat-with-thinking-format` - Tests `chat-with-thinking` returns `[answer thinking]` list with correct types
+   - `test-chat-backward-compat` - Tests `llm:chat` still returns a string (not a list)
+   - `test-thinking-with-ollama` - Tests thinking with Ollama local models (e.g., qwen3.5)
+   - `test-thinking-history-isolation` - Tests that thinking text is NOT stored in conversation history
+   - `test-reasoning-marker-in-models` - Tests `[reasoning]` marker in `llm:list-models` output
+
 ### Complete Test Suites
    - `test-multi-provider-complete` - Runs all basic functionality tests
    - `test-config-validation-complete` - Runs all config validation tests
+   - `run-all-thinking-tests` - Runs all thinking/reasoning model tests
 
 ## Configuration
 
@@ -99,3 +108,25 @@ Run `test-config-validation-complete` to execute all config validation tests:
 - API key validation
 - Error message clarity
 - Active configuration reporting
+
+## Testing Thinking/Reasoning Models
+
+### New Primitives
+- `llm:set-thinking true/false` — Enable/disable thinking mode
+- `llm:set-reasoning-effort "low"/"medium"/"high"` — Set effort level
+- `llm:set-thinking-budget 4096` — Set token budget (min 1024)
+- `llm:chat-with-thinking "prompt"` — Returns `[answer thinking]` list
+
+### Running Thinking Tests
+Run `run-all-thinking-tests` to execute the complete thinking test suite:
+- Primitive validation (valid/invalid inputs)
+- Return format verification (`[answer thinking]` list)
+- Backward compatibility (`llm:chat` still returns string)
+- History isolation (thinking text excluded from history)
+- Model list `[reasoning]` marker
+
+### Testing with Ollama Thinking Models
+1. Install a thinking model: `ollama pull qwen3.5`
+2. Ensure Ollama is running: `ollama serve`
+3. Run `test-thinking-with-ollama` in Command Center
+4. Expected: clean answer in item 0, thinking trace in item 1
