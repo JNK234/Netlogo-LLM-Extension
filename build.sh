@@ -17,30 +17,21 @@ rm -f *.jar 2>/dev/null || true
 mkdir -p dist/llm
 cp target/scala-3.7.0/llm.jar dist/llm/
 
-# Auto-install to NetLogo extensions directory
-# Override with: NETLOGO_DIR=/path/to/NetLogo ./build.sh
+# Auto-install to NetLogo if NETLOGO_DIR is set
+# Usage: NETLOGO_DIR="/Applications/NetLogo 7.0.3" ./build.sh
 if [ -n "$NETLOGO_DIR" ]; then
   NETLOGO_EXT="$NETLOGO_DIR/extensions/llm"
-else
-  # Search common locations
-  for candidate in \
-    "/Applications/NetLogo"*"/extensions" \
-    "$HOME/Applications/NetLogo"*"/extensions" \
-    "$HOME/Developer/CCL/NetLogo"*"/extensions"; do
-    if [ -d "$candidate" ]; then
-      NETLOGO_EXT="$candidate/llm"
-      break
-    fi
-  done
-fi
-
-if [ -n "$NETLOGO_EXT" ]; then
   mkdir -p "$NETLOGO_EXT"
   cp target/scala-3.7.0/llm.jar "$NETLOGO_EXT/"
   echo "Installed to: $NETLOGO_EXT"
 else
-  echo "NetLogo not found. Copy target/scala-3.7.0/llm.jar to your NetLogo extensions/llm/ directory."
-  echo "Or re-run with: NETLOGO_DIR=/path/to/NetLogo ./build.sh"
+  echo ""
+  echo "To auto-install, re-run with your NetLogo path:"
+  echo "  NETLOGO_DIR=\"/Applications/NetLogo 7.0.3\" ./build.sh"
+  echo ""
+  echo "Or manually copy:"
+  echo "  mkdir -p /path/to/NetLogo/extensions/llm"
+  echo "  cp target/scala-3.7.0/llm.jar /path/to/NetLogo/extensions/llm/"
 fi
 
 echo ""
