@@ -9,37 +9,34 @@ extensions [ llm ]
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
-to-report test-pass [ label ]
-  print (word "PASS: " label)
-  report true
+to test-pass [ msg ]
+  print (word "PASS: " msg)
 end
 
-to-report test-fail [ label ]
-  print (word "FAIL: " label)
-  report false
+to test-fail [ msg ]
+  print (word "FAIL: " msg)
 end
 
-to assert-true [ condition label ]
-  ifelse condition [ test-pass label ] [ test-fail label ]
+to assert-true [ condition msg ]
+  ifelse condition [ test-pass msg ] [ test-fail msg ]
 end
 
-to assert-string [ value label ]
-  assert-true (is-string? value) (word label " is a string")
+to assert-string [ value msg ]
+  assert-true (is-string? value) (word msg " is a string")
 end
 
 to load-config
-  ; Tries common config paths relative to where models live
-  carefully [
-    llm:load-config "demos/config"
-  ] [
-    carefully [
-      llm:load-config "../config.txt"
-    ] [
-      carefully [
-        llm:load-config "config.txt"
-      ] [
-        print (word "ERROR: Could not load config: " error-message)
-        print "Place a config file at demos/config or config.txt"
+  ; Tries common config paths — the right one depends on where NetLogo
+  ; resolves relative paths from (model dir or working dir)
+  carefully [ llm:load-config "demos/config" ] [
+    carefully [ llm:load-config "../config" ] [
+      carefully [ llm:load-config "config" ] [
+        carefully [ llm:load-config "config.txt" ] [
+          ; Fall back to Ollama (no config file needed)
+          print "INFO: No config file found, falling back to Ollama"
+          llm:set-provider "ollama"
+          llm:set-model "qwen3:0.6b"
+        ]
       ]
     ]
   ]
@@ -140,13 +137,16 @@ to test-model-validation
     test-fail (word "valid model rejected: " error-message)
   ]
 
-  ; Nonsense model should be rejected
+  ; Unknown model is allowed with a warning (by design — API validates it)
   carefully [
     llm:set-model "nonexistent-model-xyz"
-    test-fail "invalid model should be rejected"
+    test-pass "unknown model accepted (warns to stderr, API will validate)"
   ] [
-    test-pass "invalid model rejected"
+    test-fail (word "set-model should not throw: " error-message)
   ]
+
+  ; Restore valid model so subsequent tests work
+  llm:set-model current-model
 
   print ""
 end
@@ -226,7 +226,7 @@ to test-history
   assert-true (is-list? h0 and empty? h0) "history empty after clear"
 
   carefully [
-    let _ llm:chat "Say ok"
+    let chat-result llm:chat "Say ok"
     let h1 llm:history
     assert-true (length h1 = 2) "history has 2 entries after one exchange"
 
@@ -259,12 +259,12 @@ to test-thinking-config
   ]
 
   ; reasoning-effort valid values
-  foreach ["low" "medium" "high"] [ e ->
+  foreach ["low" "medium" "high"] [ effort ->
     carefully [
-      llm:set-reasoning-effort e
-      test-pass (word "reasoning-effort " e)
+      llm:set-reasoning-effort effort
+      test-pass (word "reasoning-effort " effort)
     ] [
-      test-fail (word "reasoning-effort " e ": " error-message)
+      test-fail (word "reasoning-effort " effort ": " error-message)
     ]
   ]
 
