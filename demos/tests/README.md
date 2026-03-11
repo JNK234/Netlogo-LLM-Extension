@@ -1,71 +1,39 @@
-# LLM Extension Tests
+# Manual Integration Tests (Live Providers)
 
-Test suite for the NetLogo LLM extension, covering provider discovery, chat primitives, and thinking/reasoning model support.
+This directory contains the NetLogo model used for manual, live-provider integration checks.
 
-## Setup
+## Purpose
 
-1. Install the LLM extension in NetLogo.
-2. Copy or edit `config.txt` with your provider API keys.
-3. For Ollama tests, ensure `ollama serve` is running.
+Use this suite to validate external integration behavior:
+- real API credentials
+- network connectivity
+- provider endpoint compatibility
+- provider-specific runtime issues (timeouts, auth failures, model availability)
 
-## Test Procedures
+This suite is not part of default `sbt test`.
 
-### Offline (no API key needed)
+## Files
 
-| Procedure | What it tests |
-|---|---|
-| `test-provider-discovery` | `llm:providers-all`, `llm:providers`, `llm:provider-status` |
-| `test-provider-help` | `llm:provider-help` for each provider |
-| `test-invalid-provider` | Rejection of unknown provider names |
+- `tests.nlogox` - Manual test model
+- `config.txt` - Local config used by the model
 
-### Config-dependent (needs config loaded)
+## Prerequisites
 
-| Procedure | What it tests |
-|---|---|
-| `test-active-config` | `llm:active`, `llm:config`, `llm:list-models` |
-| `test-model-validation` | Valid/invalid model acceptance via `llm:set-model` |
+1. Build and install the extension
+2. Configure valid credentials in `config.txt` for cloud providers, or run Ollama locally
+3. Ensure network access for cloud providers
 
-### API tests (makes LLM calls)
+## How To Run
 
-| Procedure | What it tests |
-|---|---|
-| `test-sync-chat` | `llm:chat` synchronous call |
-| `test-async-chat` | `llm:chat-async` asynchronous call |
-| `test-choose` | `llm:choose` constrained choice |
-| `test-history` | `llm:history` and `llm:clear-history` |
-| `test-backward-compat` | `llm:chat` still returns a plain string |
+1. Open `tests.nlogox` in NetLogo
+2. The model loads `config.txt`
+3. Run test procedures from the Command Center/buttons
 
-### Thinking / reasoning
+## Relationship To Automated Tests
 
-| Procedure | What it tests |
-|---|---|
-| `test-thinking-config` | `set-thinking`, `set-reasoning-effort`, `set-thinking-budget` (no API call) |
-| `test-chat-with-thinking` | `llm:chat-with-thinking` returns `[answer thinking]` list; thinking excluded from history |
-| `test-reasoning-marker` | `[reasoning]` tag in `llm:list-models` output |
+- Automated tests (`sbt test`) are deterministic and API-free.
+- This model is for manual integration verification against real providers.
 
-## Running All Tests
-
-In the NetLogo Command Center:
-
-```
-run-all-tests
-```
-
-This executes every procedure listed above in order.
-
-## Optional: Ollama Thinking Test
-
-Requires a local Ollama server with a thinking-capable model.
-
-```
-ollama pull qwen3:0.6b
-ollama serve
-```
-
-Then in the Command Center:
-
-```
-test-ollama-qwen3-thinking
-```
-
-This switches to Ollama, runs a regular chat and a `chat-with-thinking` call against `qwen3:0.6b`, and verifies the return format.
+Run both for release confidence:
+1. `sbt test`
+2. `demos/tests/tests.nlogox` manual checks

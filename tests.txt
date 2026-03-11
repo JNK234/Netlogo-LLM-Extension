@@ -1,3 +1,12 @@
+LLMConfigPrimitives
+  extensions [llm]
+  O> llm:set-provider "ollama"
+  item 0 llm:active => "ollama"
+  member? "ollama" llm:providers-all => true
+  empty? (llm:provider-help "ollama") => false
+  empty? llm:config => false
+  is-string? llm:list-models => true
+
 LLMConfigLoading
   extensions [llm]
   O> llm:load-config "demos/test-config"
@@ -10,6 +19,11 @@ LLMProvidersAll
   member? "anthropic" llm:providers-all => true
   member? "gemini" llm:providers-all => true
   member? "ollama" llm:providers-all => true
+
+LLMProviderStatus
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  length llm:provider-status => 4
 
 LLMListModels
   extensions [llm]
