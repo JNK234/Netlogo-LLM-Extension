@@ -38,6 +38,7 @@ These tests:
 - Chat flow (`chat`, `chat-async`, `runresult`)
 - Choice flow (`choose`)
 - Template flow (`chat-with-template`, variable substitution, history behavior)
+- Thinking/reasoning primitives (`set-thinking`, `set-reasoning-effort`, `set-thinking-budget`, `chat-with-thinking`)
 - Per-agent history isolation
 
 ### Not covered by automated tests
@@ -46,6 +47,35 @@ These tests:
 - Network timeouts/rate limits/provider outages
 - Upstream API contract changes
 - Model quality/correctness of generated content
+- Actual thinking/reasoning output content from live models
+
+## Ollama Integration Tests (Local)
+
+Run against a real local Ollama server to verify actual LLM responses:
+
+```bash
+OLLAMA_TESTS=true sbt test
+```
+
+Or run only the Ollama tests:
+
+```bash
+OLLAMA_TESTS=true sbt "testOnly org.nlogo.extensions.llm.OllamaIntegrationTests"
+```
+
+Prerequisites:
+- Ollama installed and running (`ollama serve`)
+- Models pulled: `ollama pull qwen3:0.6b` and `ollama pull llama3.2:3b`
+
+These tests verify:
+- Real chat responses from Ollama
+- Async chat with actual model inference
+- Thinking/reasoning output from qwen3 (a thinking-capable model)
+- Thinking budget configuration with live model
+- Multi-agent chat with separate turtle contexts
+- Template-based chat with variable substitution
+
+These tests are **excluded from default `sbt test`** and from CI.
 
 ## Manual Integration Tests (Live APIs)
 

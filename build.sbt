@@ -27,6 +27,16 @@ netLogoZipExtras := {
 scalaVersion          := "3.7.0"
 Compile / scalaSource := baseDirectory.value / "src" / "main"
 Test / scalaSource    := baseDirectory.value / "src" / "test"
+
+// Ollama integration tests excluded from default `sbt test`.
+// Run them with: OLLAMA_TESTS=true sbt test
+// Or directly:   OLLAMA_TESTS=true sbt "testOnly org.nlogo.extensions.llm.OllamaIntegrationTests"
+Test / testOptions += Tests.Filter { name =>
+  if (name.contains("OllamaIntegration"))
+    sys.env.contains("OLLAMA_TESTS")
+  else
+    true
+}
 scalacOptions        ++= Seq("-deprecation", "-unchecked", "-Xfatal-warnings", "-encoding", "us-ascii", "-release", "17")
 
 libraryDependencies ++= Seq(

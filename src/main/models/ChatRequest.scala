@@ -14,7 +14,8 @@ case class ChatRequest(
   model: String,
   messages: Seq[ChatMessage],
   maxTokens: Option[Int] = None,
-  temperature: Option[Double] = None
+  temperature: Option[Double] = None,
+  thinkingConfig: Option[ThinkingConfig] = None
 )
 
 object ChatRequest {

@@ -1,0 +1,25 @@
+<experiments>
+  <experiment name="topology-tournament" repetitions="3" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>all-done?</exitCondition>
+    <metric>mesh-avg-distance</metric>
+    <metric>hierarchy-avg-distance</metric>
+    <metric>chain-avg-distance</metric>
+    <metric>mesh-convergence-tick</metric>
+    <metric>hierarchy-convergence-tick</metric>
+    <metric>chain-convergence-tick</metric>
+    <metric>mesh-llm-calls</metric>
+    <metric>hierarchy-llm-calls</metric>
+    <metric>chain-llm-calls</metric>
+    <enumeratedValueSet variable="num-agents">
+      <value value="10"/>
+      <value value="30"/>
+      <value value="50"/>
+      <value value="100"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="max-ticks">
+      <value value="200"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>

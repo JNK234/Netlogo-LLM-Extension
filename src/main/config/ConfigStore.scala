@@ -168,6 +168,11 @@ object ConfigStore {
   val GEMINI_BASE_URL = "gemini_base_url"
   val OLLAMA_BASE_URL = "ollama_base_url"
   
+  // Thinking/reasoning model configuration
+  val ENABLE_THINKING = "enable_thinking"
+  val REASONING_EFFORT = "reasoning_effort"
+  val THINKING_BUDGET_TOKENS = "thinking_budget_tokens"
+
   // Reserved for future use
   val INFERENCE_URL = "inference_url"
 

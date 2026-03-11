@@ -29,6 +29,14 @@ trait LLMProvider {
   def chat(messages: Seq[ChatMessage]): Future[ChatMessage]
 
   /**
+   * Chat method that returns the full response including thinking text
+   *
+   * @param messages The conversation history
+   * @return Future containing the complete ChatResponse with thinking field
+   */
+  def chatWithFullResponse(messages: Seq[ChatMessage]): Future[ChatResponse]
+
+  /**
    * Set a configuration parameter for this provider
    *
    * @param key The configuration key (e.g., "api_key", "base_url")

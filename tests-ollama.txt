@@ -1,0 +1,84 @@
+OllamaConfigLoading
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  item 0 llm:active => "ollama"
+  member? "ollama" llm:providers => true
+
+OllamaChat
+  extensions [llm]
+  globals [response]
+  O> llm:load-config "demos/test-config"
+  O> set response llm:chat "Reply with exactly the word hello"
+  is-string? response => true
+  empty? response => false
+
+OllamaChatAsync
+  extensions [llm]
+  globals [promise result]
+  O> llm:load-config "demos/test-config"
+  O> set promise llm:chat-async "Reply with exactly the word hi"
+  is-anonymous-reporter? promise => true
+  O> set result (runresult promise)
+  is-string? result => true
+  empty? result => false
+
+OllamaChatHistory
+  extensions [llm]
+  globals [r1 r2]
+  O> llm:load-config "demos/test-config"
+  O> llm:clear-history
+  O> set r1 llm:chat "My name is TestBot"
+  O> set r2 llm:chat "What is my name?"
+  length llm:history => 4
+
+OllamaChoose
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  member? (llm:choose "Pick exactly one color" ["red" "blue" "green"]) ["red" "blue" "green"] => true
+
+OllamaTemplate
+  extensions [llm]
+  globals [result]
+  O> llm:load-config "demos/test-config"
+  O> set result llm:chat-with-template "demos/test-template.yaml" [["task" "greeting"] ["input" "world"]]
+  is-string? result => true
+  empty? result => false
+
+OllamaChatWithThinking
+  extensions [llm]
+  globals [result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "qwen3:0.6b"
+  O> llm:set-thinking true
+  O> set result llm:chat-with-thinking "What is 2 + 2?"
+  is-list? result => true
+  length result => 2
+  is-string? (item 0 result) => true
+  is-string? (item 1 result) => true
+  empty? (item 0 result) => false
+
+OllamaThinkingWithBudget
+  extensions [llm]
+  globals [result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "qwen3:0.6b"
+  O> llm:set-thinking true
+  O> llm:set-thinking-budget 2048
+  O> set result llm:chat-with-thinking "What is 3 + 5?"
+  is-list? result => true
+  length result => 2
+  is-string? (item 0 result) => true
+  empty? (item 0 result) => false
+
+OllamaMultiAgent
+  extensions [llm]
+  turtles-own [agent-result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "llama3.2:3b"
+  O> create-turtles 2
+  O> ask turtle 0 [ set agent-result llm:chat "Reply with exactly: hello from turtle zero" ]
+  O> ask turtle 1 [ set agent-result llm:chat "Reply with exactly: hello from turtle one" ]
+  is-string? [agent-result] of turtle 0 => true
+  is-string? [agent-result] of turtle 1 => true
+  empty? [agent-result] of turtle 0 => false
+  empty? [agent-result] of turtle 1 => false

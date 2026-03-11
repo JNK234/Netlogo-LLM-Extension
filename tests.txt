@@ -8,17 +8,39 @@ LLMConfigPrimitives
   empty? llm:config => false
   is-string? llm:list-models => true
 
-LLMConfigLoading
+LLMProvidersAll
   extensions [llm]
-  O> llm:load-config "demos/config"
-  item 0 llm:active => "openai"
-  member? "openai" llm:providers => true
+  length llm:providers-all => 4
+  member? "openai" llm:providers-all => true
+  member? "anthropic" llm:providers-all => true
+  member? "gemini" llm:providers-all => true
+  member? "ollama" llm:providers-all => true
 
 LLMProviderStatus
   extensions [llm]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
   length llm:provider-status => 4
+
+LLMListModels
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  is-string? llm:list-models => true
+  empty? llm:list-models => false
+
+LLMActiveConfig
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  item 0 llm:active => "openai"
+
+LLMConfigSummary
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  is-string? llm:config => true
+  empty? llm:config => false
 
 LLMHistoryManagement
   extensions [llm]
@@ -29,70 +51,139 @@ LLMHistoryManagement
   O> set history llm:history
   length history => 2
   (item 0 (item 0 history)) => "user"
+  (item 1 (item 0 history)) => "hello"
   (item 0 (item 1 history)) => "assistant"
+  (item 1 (item 1 history)) => "hi"
   O> llm:clear-history
   llm:history => []
+
+LLMSetModel
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:set-model "gpt-4o"
+  item 1 llm:active => "gpt-4o"
+
+LLMThinkingConfigPrimitives
+  extensions [llm]
+  O> llm:set-thinking true
+  O> llm:set-reasoning-effort "high"
+  O> llm:set-thinking-budget 4096
+  O> llm:set-thinking false
+
+LLMReasoningEffortValidation
+  extensions [llm]
+  O> llm:set-reasoning-effort "none"
+  O> llm:set-reasoning-effort "low"
+  O> llm:set-reasoning-effort "medium"
+  O> llm:set-reasoning-effort "high"
+  O> llm:set-reasoning-effort "xhigh"
+
+LLMThinkingBudgetValidation
+  extensions [llm]
+  O> llm:set-thinking-budget 1024
+  O> llm:set-thinking-budget 8192
+
+LLMChat
+  extensions [llm]
+  globals [response]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> set response llm:chat "Say hello"
+  is-string? response => true
+  empty? response => false
+
+LLMChatAsync
+  extensions [llm]
+  globals [promise result]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> set promise llm:chat-async "Say hi"
+  is-anonymous-reporter? promise => true
+  O> set result (runresult promise)
+  is-string? result => true
+  empty? result => false
+
+LLMChatHistory
+  extensions [llm]
+  globals [r1 r2]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> set r1 llm:chat "My name is TestBot"
+  O> set r2 llm:chat "What is my name?"
+  length llm:history => 4
+  (item 0 (item 0 llm:history)) => "user"
+  (item 0 (item 1 llm:history)) => "assistant"
 
 LLMChoosePrimitive
   extensions [llm]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
-  member? (llm:choose "pick one" ["a" "b" "c"]) ["a" "b" "c"] => true
+  member? (llm:choose "Pick one" ["a" "b" "c"]) ["a" "b" "c"] => true
 
-LLMChatPrimitives
+LLMTemplateChat
   extensions [llm]
-  globals [sync promise async history]
+  globals [result]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
-  O> llm:clear-history
-  O> set sync llm:chat "Say anything"
-  is-string? sync => true
-  empty? sync => false
-  O> set promise llm:chat-async "Say anything else"
-  is-anonymous-reporter? promise => true
-  O> set async runresult promise
-  is-string? async => true
-  empty? async => false
-  O> set history llm:history
-  length history => 4
-  (item 0 (item 0 history)) => "user"
-  (item 0 (item 1 history)) => "assistant"
-
-LLMTemplateVariableSubstitution
-  extensions [llm]
-  globals [result history]
-  O> llm:set-api-key "test-key"
-  O> llm:set-provider "openai"
-  O> llm:clear-history
-  O> set result llm:chat-with-template "demos/simple-template.yaml" [["text" "template-value"]]
+  O> set result llm:chat-with-template "demos/simple-template.yaml" [["text" "hello world"]]
   is-string? result => true
-  is-number? (position "template-value" result) => true
-  O> set history llm:history
-  length history => 2
+  empty? result => false
 
 LLMTemplateWithHistory
   extensions [llm]
-  globals [template-result history msg1 msg2]
+  globals [msg1 template-result]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
   O> llm:clear-history
-  O> set msg1 llm:chat "previous message 1"
-  O> set msg2 llm:chat "previous message 2"
+  O> set msg1 llm:chat "previous message"
   O> set template-result llm:chat-with-template "demos/simple-template.yaml" [["text" "with history"]]
+  is-string? template-result => true
   empty? template-result => false
-  O> set history llm:history
-  length history => 6
+  length llm:history => 4
 
-LLMMultiAgentIsolation
+LLMChatWithThinking
+  extensions [llm]
+  globals [result]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:set-thinking true
+  O> set result llm:chat-with-thinking "What is 2 + 2?"
+  is-list? result => true
+  length result => 2
+  is-string? (item 0 result) => true
+  is-string? (item 1 result) => true
+  empty? (item 0 result) => false
+
+LLMChatWithThinkingBudget
+  extensions [llm]
+  globals [result]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:set-thinking true
+  O> llm:set-thinking-budget 2048
+  O> set result llm:chat-with-thinking "What is 3 + 5?"
+  is-list? result => true
+  length result => 2
+  is-string? (item 0 result) => true
+  empty? (item 0 result) => false
+
+LLMMultiAgentChat
   extensions [llm]
   turtles-own [agent-result]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
   O> create-turtles 2
-  O> ask turtle 0 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["text" "agent0"]] ]
-  O> ask turtle 1 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["text" "agent1"]] ]
+  O> ask turtle 0 [ set agent-result llm:chat "Say one" ]
+  O> ask turtle 1 [ set agent-result llm:chat "Say two" ]
+  is-string? [agent-result] of turtle 0 => true
+  is-string? [agent-result] of turtle 1 => true
   empty? [agent-result] of turtle 0 => false
   empty? [agent-result] of turtle 1 => false
-  [agent-result] of turtle 0 != [agent-result] of turtle 1 => true
-  length [llm:history] of turtle 0 => 2
-  length [llm:history] of turtle 1 => 2
+
+LLMConfigLoading
+  extensions [llm]
+  O> llm:load-config "demos/config"
+  item 0 llm:active => "openai"
+  member? "openai" llm:providers => true

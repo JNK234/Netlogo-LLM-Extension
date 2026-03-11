@@ -50,6 +50,11 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       "stream" -> false
     )
 
+    // Enable thinking for reasoning models
+    if (request.thinkingConfig.exists(_.enabled)) {
+      baseRequest("think") = true
+    }
+
     // Add options if parameters are specified
     val options = ujson.Obj()
     var hasOptions = false
@@ -83,6 +88,10 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       val content = message("content").str
       val doneReason = if (parsed("done").bool) "stop" else "length"
 
+      // Extract thinking text if present (Ollama returns it in message.thinking)
+      val thinking = scala.util.Try(message("thinking").str).toOption
+        .filter(_.nonEmpty)
+
       val choices = Array(
         org.nlogo.extensions.llm.models.Choice(
           index = 0,
@@ -91,7 +100,7 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
         )
       )
 
-      ChatResponse(id, created, model, choices)
+      ChatResponse(id, created, model, choices, thinking = thinking)
     } catch {
       case e: Exception =>
         throw new RuntimeException(s"Failed to parse Ollama response: ${e.getMessage}\nResponse: $responseBody")
