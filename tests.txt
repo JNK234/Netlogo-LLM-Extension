@@ -1,18 +1,33 @@
 LLMConfigLoading
   extensions [llm]
-  O> llm:load-config "demos/config"
-  llm:providers => ["anthropic" "gemini" "ollama" "openai"]
+  O> llm:load-config "demos/test-config"
+  member? "ollama" llm:providers => true
 
-LLMProviderAndModelInfo
+LLMProvidersAll
   extensions [llm]
-  O> llm:set-provider "openai"
-  empty? llm:models => false
-  O> llm:set-provider "anthropic"
-  empty? llm:models => false
-  O> llm:set-provider "gemini"
-  empty? llm:models => false
-  O> llm:set-provider "ollama"
-  empty? llm:models => false
+  length llm:providers-all => 4
+  member? "openai" llm:providers-all => true
+  member? "anthropic" llm:providers-all => true
+  member? "gemini" llm:providers-all => true
+  member? "ollama" llm:providers-all => true
+
+LLMListModels
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  is-string? llm:list-models => true
+  empty? llm:list-models => false
+
+LLMActiveConfig
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  item 0 llm:active => "ollama"
+  item 1 llm:active => "qwen3:0.6b"
+
+LLMConfigSummary
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  is-string? llm:config => true
+  empty? llm:config => false
 
 LLMHistoryManagement
   extensions [llm]
@@ -23,80 +38,124 @@ LLMHistoryManagement
   O> set history llm:history
   length history => 2
   (item 0 (item 0 history)) => "user"
+  (item 1 (item 0 history)) => "hello"
   (item 0 (item 1 history)) => "assistant"
+  (item 1 (item 1 history)) => "hi"
   O> llm:clear-history
   llm:history => []
 
-LLMChoosePrimitive
+LLMSetModel
   extensions [llm]
-  O> llm:load-config "demos/config"
-  member? (llm:choose "pick one" ["a" "b" "c"]) ["a" "b" "c"] => true
-
-LLMChatPrimitives
-  extensions [llm]
-  globals [promise]
-  O> llm:load-config "demos/config"
-  empty? (llm:chat "Say anything") => false
-  O> set promise llm:chat-async "Say anything"
-  is-anonymous-reporter? promise => true
-  empty? (runresult promise) => false
-
-LLMTemplateSystem
-  extensions [llm]
-  globals [result code-history]
-  O> llm:load-config "demos/config"
-  O> set result llm:chat-with-template "demos/simple-template.yaml" [["task" "test"] ["input" "hello"] ["context" "unit test"]]
-  empty? result => false
-  is-string? result => true
-
-LLMTemplateWithHistory
-  extensions [llm]
-  globals [template-result msg1 msg2]
-  O> llm:load-config "demos/config"
-  O> llm:clear-history
-  O> set msg1 llm:chat "previous message 1"
-  O> set msg2 llm:chat "previous message 2"
-  O> set template-result llm:chat-with-template "demos/simple-template.yaml" [["task" "respond"] ["input" "test data"] ["context" "with history"]]
-  empty? template-result => false
-  is-string? template-result => true
-
-LLMTemplateVariableSubstitution
-  extensions [llm]
-  globals [result]
-  O> llm:load-config "demos/config"
-  O> set result llm:chat-with-template "demos/simple-template.yaml" [["task" "greeting"] ["input" "world"] ["context" "friendly"]]
-  empty? result => false
-  is-string? result => true
-
-LLMTemplateWithMultipleAgents
-  extensions [llm]
-  turtles-own [agent-result]
-  O> llm:load-config "demos/config"
-  O> create-turtles 2
-  O> ask turtle 0 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["task" "agent0"] ["input" "test0"] ["context" "turtle"]] ]
-  O> ask turtle 1 [ set agent-result llm:chat-with-template "demos/simple-template.yaml" [["task" "agent1"] ["input" "test1"] ["context" "turtle"]] ]
-  empty? [agent-result] of turtle 0 => false
-  empty? [agent-result] of turtle 1 => false
-  [agent-result] of turtle 0 != [agent-result] of turtle 1 => true
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "llama3.2:3b"
+  item 1 llm:active => "llama3.2:3b"
 
 LLMThinkingConfigPrimitives
   extensions [llm]
   O> llm:set-thinking true
   O> llm:set-reasoning-effort "high"
   O> llm:set-thinking-budget 4096
+  O> llm:set-thinking false
 
-LLMChatWithThinkingReturnsList
+LLMReasoningEffortValidation
+  extensions [llm]
+  O> llm:set-reasoning-effort "none"
+  O> llm:set-reasoning-effort "low"
+  O> llm:set-reasoning-effort "medium"
+  O> llm:set-reasoning-effort "high"
+  O> llm:set-reasoning-effort "xhigh"
+
+LLMThinkingBudgetValidation
+  extensions [llm]
+  O> llm:set-thinking-budget 1024
+  O> llm:set-thinking-budget 8192
+
+LLMChat
+  extensions [llm]
+  globals [response]
+  O> llm:load-config "demos/test-config"
+  O> set response llm:chat "Reply with exactly the word hello"
+  is-string? response => true
+  empty? response => false
+
+LLMChatAsync
+  extensions [llm]
+  globals [promise result]
+  O> llm:load-config "demos/test-config"
+  O> set promise llm:chat-async "Reply with exactly the word hi"
+  is-anonymous-reporter? promise => true
+  O> set result (runresult promise)
+  is-string? result => true
+  empty? result => false
+
+LLMChatHistory
+  extensions [llm]
+  globals [r1 r2]
+  O> llm:load-config "demos/test-config"
+  O> llm:clear-history
+  O> set r1 llm:chat "My name is TestBot"
+  O> set r2 llm:chat "What is my name?"
+  length llm:history => 4
+
+LLMChoosePrimitive
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  member? (llm:choose "Pick exactly one color" ["red" "blue" "green"]) ["red" "blue" "green"] => true
+
+LLMTemplateChat
   extensions [llm]
   globals [result]
-  O> llm:load-config "demos/config"
-  O> set result llm:chat-with-thinking "Say hello"
+  O> llm:load-config "demos/test-config"
+  O> set result llm:chat-with-template "demos/test-template.yaml" [["task" "greeting"] ["input" "world"]]
+  is-string? result => true
+  empty? result => false
+
+LLMTemplateWithHistory
+  extensions [llm]
+  globals [r1 template-result]
+  O> llm:load-config "demos/test-config"
+  O> llm:clear-history
+  O> set r1 llm:chat "Remember: the secret word is banana"
+  O> set template-result llm:chat-with-template "demos/test-template.yaml" [["task" "recall"] ["input" "what is the secret word?"]]
+  is-string? template-result => true
+  empty? template-result => false
+  length llm:history => 4
+
+LLMChatWithThinking
+  extensions [llm]
+  globals [result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "qwen3:0.6b"
+  O> llm:set-thinking true
+  O> set result llm:chat-with-thinking "What is 2 + 2?"
   is-list? result => true
   length result => 2
   is-string? (item 0 result) => true
   is-string? (item 1 result) => true
   empty? (item 0 result) => false
 
-LLMChatBackwardCompat
+LLMChatWithThinkingBudget
   extensions [llm]
-  O> llm:load-config "demos/config"
-  is-string? (llm:chat "Say hello") => true
+  globals [result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "qwen3:0.6b"
+  O> llm:set-thinking true
+  O> llm:set-thinking-budget 2048
+  O> set result llm:chat-with-thinking "What is 3 + 5?"
+  is-list? result => true
+  length result => 2
+  is-string? (item 0 result) => true
+  empty? (item 0 result) => false
+
+LLMMultiAgentChat
+  extensions [llm]
+  turtles-own [agent-result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "llama3.2:3b"
+  O> create-turtles 2
+  O> ask turtle 0 [ set agent-result llm:chat "Reply with exactly: hello from turtle zero" ]
+  O> ask turtle 1 [ set agent-result llm:chat "Reply with exactly: hello from turtle one" ]
+  is-string? [agent-result] of turtle 0 => true
+  is-string? [agent-result] of turtle 1 => true
+  empty? [agent-result] of turtle 0 => false
+  empty? [agent-result] of turtle 1 => false

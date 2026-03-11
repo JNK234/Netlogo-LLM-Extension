@@ -631,12 +631,14 @@ Response:"""
 
     override def perform(args: Array[Argument], context: Context): Unit = {
       val effort = args(0).getString.toLowerCase.trim
-      if (!Set("low", "medium", "high").contains(effort)) {
+      if (!Set("none", "low", "medium", "high", "xhigh").contains(effort)) {
         throw new ExtensionException(
-          s"Invalid reasoning effort: '$effort'. Must be one of: low, medium, high"
+          s"Invalid reasoning effort: '$effort'. Must be one of: none, low, medium, high, xhigh"
         )
       }
       configStore.set(ConfigStore.REASONING_EFFORT, effort)
+      // Force re-initialization so provider picks up new config
+      currentProvider = None
     }
   }
 
@@ -651,6 +653,8 @@ Response:"""
         )
       }
       configStore.set(ConfigStore.THINKING_BUDGET_TOKENS, budget.toString)
+      // Force re-initialization so provider picks up new config
+      currentProvider = None
     }
   }
 

@@ -39,6 +39,8 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
   }
 
   override protected def buildHeaders(apiKey: Option[String]): Map[String, String] = {
+    // Note: This reads ENABLE_THINKING from the provider's configStore, which stays in sync
+    // because LLMExtension invalidates the provider (currentProvider = None) on thinking config changes.
     val thinkingEnabled = configStore.get(ConfigStore.ENABLE_THINKING).exists(_.toLowerCase == "true")
     val version = if (thinkingEnabled) "2025-04-15" else "2023-06-01"
     Map(
@@ -77,13 +79,21 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
     }
 
     if (isThinking) {
+      // Anthropic requires budget >= 1024 AND budget < max_tokens, so max_tokens must be > 1024
+      if (maxTokens <= 1024) {
+        throw new RuntimeException(
+          s"Claude thinking requires max_tokens > 1024 (current: $maxTokens). " +
+          "The thinking budget must be at least 1024 and less than max_tokens."
+        )
+      }
+
       // Anthropic requires temperature=1.0 when thinking is enabled
       baseRequest("temperature") = 1.0
 
       // Budget must be >= 1024 and < max_tokens
       val budget = request.thinkingConfig.flatMap(_.budgetTokens)
         .map(b => math.max(1024, math.min(b, maxTokens - 1)))
-        .getOrElse(math.min(4096, maxTokens - 1))
+        .getOrElse(math.max(1024, math.min(4096, maxTokens - 1)))
 
       baseRequest("thinking") = ujson.Obj(
         "type" -> "enabled",

@@ -134,7 +134,6 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       request.thinkingConfig.flatMap(_.reasoningEffort).foreach { effort =>
         thinkingObj("thinkingLevel") = effort.toUpperCase
       }
-      thinkingObj("includeThoughts") = true
       generationConfig("thinkingConfig") = thinkingObj
       hasConfig = true
     }
