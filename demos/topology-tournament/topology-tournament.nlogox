@@ -41,6 +41,18 @@ to setup
   seed-beliefs
   initialize-agents
 
+  print ""
+  print "=== TOPOLOGY TOURNAMENT ==="
+  print (word "Agents per topology: " agents-per-topology)
+  print (word "Mode: " llm-status)
+  print (word "Belief options: " belief-options)
+  print ""
+  print (word "Mesh initial:      " belief-summary mesh-agents)
+  print (word "Hierarchy initial:  " belief-summary hierarchy-agents)
+  print (word "Chain initial:      " belief-summary chain-agents)
+  print "==========================="
+  print ""
+
   reset-ticks
 end
 
@@ -189,6 +201,13 @@ to go
   ]
 
   check-all-convergence
+
+  ;; Per-tick summary
+  print (word "Tick " ticks
+    " | mesh: " belief-summary mesh-agents " (" precision agreement-pct mesh-agents 0 "%)"
+    " | hierarchy: " belief-summary hierarchy-agents " (" precision agreement-pct hierarchy-agents 0 "%)"
+    " | chain: " belief-summary chain-agents " (" precision agreement-pct chain-agents 0 "%)")
+
   update-tournament-state
   tick
 end
@@ -210,7 +229,6 @@ end
 
 to decide-belief-llm [neighbor-beliefs]
   carefully [
-    ;; Every agent calls the LLM every tick — topology constrains what it sees
     llm:set-history (list
       (list "system" (word
         "You are agent " who " in a " topology-name " network with " length neighbor-beliefs " neighbors. "
@@ -227,11 +245,11 @@ to decide-belief-llm [neighbor-beliefs]
       "What belief do you choose?"
     )
     let chosen llm:choose prompt belief-options
-    print (word "Agent " who " (" topology-name ", " length neighbor-beliefs " nbrs): "
+    print (word "  Agent " who " (" topology-name ", " length neighbor-beliefs " nbrs): "
       belief " -> " chosen " [neighbors: " belief-count-summary neighbor-beliefs "]")
     set belief chosen
   ] [
-    print (word "Agent " who " LLM failed: " error-message ". Using deterministic.")
+    print (word "  Agent " who " LLM error: " error-message " — using deterministic")
     decide-belief-deterministic neighbor-beliefs
   ]
 end
@@ -272,6 +290,9 @@ to check-topology-convergence [name group]
   if item idx convergence-times != -1 [ stop ]
   if converged? group [
     set convergence-times replace-item idx convergence-times ticks
+    print ""
+    print (word ">>> " name " CONVERGED at tick " ticks " on belief: " [belief] of one-of group " <<<")
+    print ""
   ]
 end
 
@@ -307,13 +328,31 @@ to update-tournament-state
   if not member? -1 convergence-times [
     set tournament-running? false
     set winner-topology fastest-topology
+    print-tournament-results
     stop
   ]
 
   if ticks >= max-ticks [
     set tournament-running? false
     set winner-topology fastest-topology
+    print-tournament-results
   ]
+end
+
+to print-tournament-results
+  print ""
+  print "=== TOURNAMENT RESULTS ==="
+  print (word "Mode: " llm-status " | Agents per topology: " agents-per-topology)
+  foreach (range length topology-order) [i ->
+    let name item i topology-order
+    let result item i convergence-times
+    ifelse result != -1
+    [ print (word "  " name ": converged at tick " result) ]
+    [ print (word "  " name ": did NOT converge (max-ticks=" max-ticks ")") ]
+  ]
+  print (word "Winner: " winner-topology)
+  print "==========================="
+  print ""
 end
 
 to stop-tournament
