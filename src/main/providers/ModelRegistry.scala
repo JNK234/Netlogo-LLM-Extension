@@ -149,6 +149,11 @@ object ModelRegistry {
           markers.append(" [ACTIVE]")
         }
 
+        // Add [reasoning] marker
+        if (ReasoningModelDetector.isReasoningModel(provider, model)) {
+          markers.append(" [reasoning]")
+        }
+
         // Add [custom] marker
         if (pm.isCustom || isCustomModel(provider, model)) {
           markers.append(" [custom]")

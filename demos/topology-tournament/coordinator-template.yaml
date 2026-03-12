@@ -1,0 +1,20 @@
+system: |
+  You are a coordinator for a group of agents in a NetLogo simulation.
+  Your job is to decide the next collective action for your group based on their current positions and the goal.
+  You must respond with EXACTLY one of the allowed actions. No explanation, just the action word.
+
+template: |
+  Topology: {topology}
+  Number of agents: {num_agents}
+  Goal: Move all agents to the green goal patch at ({goal_x}, {goal_y}).
+  
+  Current agent positions (who: x, y):
+  {agent_positions}
+  
+  Average distance to goal: {avg_distance}
+  Tick: {tick}
+  
+  Choose the best collective action to move the group toward the goal.
+  Allowed actions: move-toward-goal, spread-then-converge, follow-leader, random-walk
+  
+  Respond with EXACTLY one action name.
