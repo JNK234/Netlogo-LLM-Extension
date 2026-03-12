@@ -216,9 +216,9 @@ to decide-belief-llm [neighbor-beliefs]
         "You are agent " who " in a " topology-name " network with " length neighbor-beliefs " neighbors. "
         "Your group is trying to reach consensus on one belief. "
         "You can ONLY see your direct neighbors — you cannot see the whole group. "
-        "Consider what your neighbors believe and decide strategically. "
-        "If most neighbors agree, joining them speeds up consensus. "
-        "If neighbors are split, use your judgment about which belief is gaining momentum."
+        "RULE: Pick the belief held by the MAJORITY of your neighbors. "
+        "If there is a tie among neighbors, keep your current belief. "
+        "If you have only one neighbor, adopt their belief."
       ))
     )
     let prompt (word

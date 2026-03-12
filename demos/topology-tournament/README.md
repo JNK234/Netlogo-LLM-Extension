@@ -37,7 +37,6 @@ This means the same decision rule (local majority) produces different convergenc
 
 - `topology-tournament.nlogox`: main simulation model (NetLogo 7.x XML format)
 - `config.txt`: provider/model/runtime settings
-- `tests/test_topology_tournament.py`: unit tests for model structure and per-agent decisions
 
 ## Widgets
 
@@ -65,10 +64,3 @@ This means the same decision rule (local majority) produces different convergenc
 4. Toggle `use-llm?` to compare LLM-driven vs deterministic per-agent decisions.
 5. Watch convergence monitors and the agreement plot.
 
-## Test Instructions
-
-From repository root:
-
-```bash
-python3 -m unittest discover demos/topology-tournament/tests -p "test_*.py"
-```

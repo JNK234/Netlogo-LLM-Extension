@@ -1,6 +1,6 @@
 # Topology Tournament LLM settings
 provider=ollama
-model=qwen3:4b
+model=qwen3.5:9b
 base_url=http://localhost:11434
 temperature=0.3
 max_tokens=120
