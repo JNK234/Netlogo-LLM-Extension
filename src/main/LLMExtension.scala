@@ -150,9 +150,12 @@ class LLMExtension extends DefaultClassManager {
    * Get timeout from config, falling back to 30 seconds
    */
   private def getTimeoutSeconds: Int =
-    configStore.get(ConfigStore.TIMEOUT_SECONDS)
-      .flatMap(s => scala.util.Try(s.toInt).toOption)
-      .getOrElse(30)
+    configStore.get(ConfigStore.TIMEOUT_SECONDS).map { s =>
+      scala.util.Try(s.toInt).getOrElse {
+        System.err.println(s"WARNING: Invalid timeout_seconds value '$s' (not a valid integer), using default 30")
+        30
+      }
+    }.getOrElse(30)
   
   /**
    * Check if a provider has an API key configured
@@ -175,11 +178,13 @@ class LLMExtension extends DefaultClassManager {
         .orElse(configStore.get(ConfigStore.BASE_URL))
         .getOrElse(ConfigStore.DEFAULT_OLLAMA_BASE_URL)
       provider.setConfig(ConfigStore.BASE_URL, baseUrl)
-      
+
       val checkFuture = provider.checkServerConnection()
       Await.result(checkFuture, 1.second)
     } catch {
-      case _: Exception => false
+      case ex: Exception =>
+        System.err.println(s"WARNING: Ollama reachability check failed: ${ex.getMessage}")
+        false
     }
   }
   
@@ -225,7 +230,9 @@ class LLMExtension extends DefaultClassManager {
         case Right(json) =>
           val cursor: HCursor = json.hcursor
           val system = cursor.downField("system").as[String].getOrElse("")
-          val template = cursor.downField("template").as[String].getOrElse("")
+          val template = cursor.downField("template").as[String].getOrElse {
+            throw new RuntimeException(s"Template file '$filename' is missing required 'template' field")
+          }
           Template(system, template)
         case Left(error) =>
           throw new RuntimeException(s"Failed to parse YAML: ${error.getMessage}")

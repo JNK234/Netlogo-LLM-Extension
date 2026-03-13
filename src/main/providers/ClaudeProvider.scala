@@ -118,9 +118,15 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       val contentBlocks = parsed("content").arr
 
       // Separate thinking blocks from text blocks
-      val thinkingTexts = contentBlocks.filter(b =>
+      val thinkingBlocks = contentBlocks.filter(b =>
         scala.util.Try(b("type").str).toOption.contains("thinking")
-      ).flatMap(b => scala.util.Try(b("thinking").str).toOption)
+      )
+      val thinkingTexts = thinkingBlocks.flatMap { b =>
+        scala.util.Try(b("thinking").str).toOption.orElse {
+          System.err.println(s"WARNING: Claude thinking block present but could not extract thinking text: $b")
+          None
+        }
+      }
 
       val textBlocks = contentBlocks.filter(b =>
         scala.util.Try(b("type").str).toOption.contains("text")
@@ -128,9 +134,19 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
       // Fall back to first block if no explicit text blocks found
       val text = if (textBlocks.nonEmpty) {
-        textBlocks.map(b => b("text").str).mkString
+        textBlocks.map { b =>
+          scala.util.Try(b("text").str).getOrElse {
+            System.err.println(s"WARNING: Claude text block missing 'text' field: $b")
+            ""
+          }
+        }.mkString
       } else {
-        contentBlocks.headOption.flatMap(b => scala.util.Try(b("text").str).toOption).getOrElse("")
+        contentBlocks.headOption.flatMap { b =>
+          scala.util.Try(b("text").str).toOption
+        }.getOrElse {
+          System.err.println(s"WARNING: No text blocks found in Claude response, falling back to empty string. Content blocks: $contentBlocks")
+          ""
+        }
       }
 
       val thinking = if (thinkingTexts.nonEmpty) Some(thinkingTexts.mkString("\n")) else None
@@ -146,7 +162,7 @@ class ClaudeProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       ChatResponse(id, created, model, choices, thinking = thinking)
     } catch {
       case e: Exception =>
-        throw new RuntimeException(s"Failed to parse Claude response: ${e.getMessage}\nResponse: $responseBody")
+        throw new RuntimeException(s"Failed to parse Claude response: ${e.getMessage}\nResponse: $responseBody", e)
     }
   }
 }
