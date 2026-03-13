@@ -3,7 +3,7 @@
 
 # Recommended local/default option (no cloud key required)
 provider=ollama
-model=llama3.2:3b
+model=qwen2.5:7b
 base_url=http://localhost:11434
 
 # Runtime behavior
