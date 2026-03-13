@@ -559,9 +559,9 @@ to route-my-incidents
         "Incident: " [summary] of target "\n"
         "Severity: " [assessed-severity] of target "\n"
         "Impact: " [impact] of target "\n"
-        "Current load — BASIC: " count-active-tier "BASIC"
-        ", EXPERT: " count-active-tier "EXPERT"
-        ", COORDINATOR: " count-active-tier "COORDINATOR" "\n"
+        "Current load — BASIC: " count-active-tier "BASIC" "/9"
+        ", EXPERT: " count-active-tier "EXPERT" "/6"
+        ", COORDINATOR: " count-active-tier "COORDINATOR" "/3" "\n"
         "Routing rules based on severity:\n"
         " - LOW severity -> BASIC\n"
         " - MODERATE severity -> BASIC (or EXPERT if BASIC is full)\n"
@@ -913,141 +913,75 @@ to-report queue-resolved-count
 end
 ]]></code>
   <widgets>
-    <!-- World view -->
-    <view x="310" wrappingAllowedX="false" y="10" frameRate="30.0"
-          minPycor="-16" height="498" showTickCounter="true"
-          patchSize="15.0" fontSize="10" wrappingAllowedY="false"
-          width="498" tickCounterLabel="ticks"
-          maxPycor="16" updateMode="1" maxPxcor="16" minPxcor="-16"></view>
-
-    <!-- Buttons -->
-    <button x="15" y="15" height="33" disableUntilTicks="false"
-            forever="false" kind="Observer" display="setup" width="90" sizeVersion="0">setup</button>
-    <button x="115" y="15" height="33" disableUntilTicks="false"
-            forever="true" kind="Observer" display="go" width="90" sizeVersion="0">go</button>
-    <button x="15" y="55" height="33" disableUntilTicks="false"
-            forever="false" kind="Observer" display="add incident" width="90" sizeVersion="0">add-incident</button>
-    <button x="115" y="55" height="33" disableUntilTicks="false"
-            forever="false" kind="Observer" display="force reflect" width="90" sizeVersion="0">force-reflect</button>
-
-    <!-- Switch: use-llm? -->
-    <switch x="15" y="100" height="33" variable="use-llm?" on="true"
-            width="190" sizeVersion="0" display="use-llm?"></switch>
-
-    <!-- Chooser: memory-mode -->
-    <chooser x="15" y="140" height="45" variable="memory-mode"
-             width="190" sizeVersion="0" display="memory-mode" current="0">
+    <view x="310" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-16" height="498" showTickCounter="true" patchSize="15.0" fontSize="10" wrappingAllowedY="false" width="498" tickCounterLabel="ticks" maxPycor="16" updateMode="1" maxPxcor="16" minPxcor="-16"></view>
+    <button x="15" y="15" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="setup" width="90" sizeVersion="0">setup</button>
+    <button x="115" y="15" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="go" width="90" sizeVersion="0">go</button>
+    <button x="15" y="55" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="add incident" width="90" sizeVersion="0">add-incident</button>
+    <button x="115" y="55" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="force reflect" width="90" sizeVersion="0">force-reflect</button>
+    <switch x="15" y="100" height="33" on="true" variable="use-llm?" display="use-llm?" width="190" sizeVersion="0"></switch>
+    <chooser x="15" y="140" height="45" variable="memory-mode" current="0" display="memory-mode" width="190" sizeVersion="0">
       <choice type="string" value="persistent"></choice>
       <choice type="string" value="per-episode"></choice>
       <choice type="string" value="none"></choice>
     </chooser>
-
-    <!-- Sliders -->
-    <slider x="15" y="195" height="33" variable="reflection-interval"
-            min="0" max="50" default="10.0" step="5"
-            width="190" sizeVersion="0" display="reflection-interval"
-            direction="Horizontal"></slider>
-    <slider x="15" y="235" height="33" variable="incident-rate"
-            min="0" max="100" default="30.0" step="5"
-            width="190" sizeVersion="0" display="incident-rate"
-            direction="Horizontal"></slider>
-    <slider x="15" y="275" height="33" variable="episode-length"
-            min="0" max="100" default="25.0" step="5"
-            width="190" sizeVersion="0" display="episode-length"
-            direction="Horizontal"></slider>
-
-    <!-- Monitors: Row 1 — LLM status and mode -->
-    <monitor x="15" precision="17" y="320" height="40" fontSize="9"
-             display="LLM Provider" width="190" sizeVersion="0">llm-status</monitor>
-    <monitor x="15" precision="17" y="360" height="40" fontSize="9"
-             display="Episode" width="90" sizeVersion="0">current-episode</monitor>
-    <monitor x="115" precision="17" y="360" height="40" fontSize="9"
-             display="Mode" width="90" sizeVersion="0">memory-mode</monitor>
-
-    <!-- Monitors: Row 2 — Queues -->
-    <monitor x="15" precision="17" y="405" height="40" fontSize="9"
-             display="New" width="60" sizeVersion="0">queue-new-count</monitor>
-    <monitor x="80" precision="17" y="405" height="40" fontSize="9"
-             display="Triaged" width="60" sizeVersion="0">queue-triaged-count</monitor>
-    <monitor x="145" precision="17" y="405" height="40" fontSize="9"
-             display="Active" width="60" sizeVersion="0">queue-active-count</monitor>
-
-    <!-- Monitors: Row 3 — Core metrics -->
-    <monitor x="15" precision="1" y="450" height="40" fontSize="9"
-             display="Triage Acc%" width="95" sizeVersion="0">triage-accuracy</monitor>
-    <monitor x="115" precision="1" y="450" height="40" fontSize="9"
-             display="Route Acc%" width="95" sizeVersion="0">route-accuracy</monitor>
-
-    <!-- Monitors: Row 4 — Additional metrics -->
-    <monitor x="15" precision="1" y="495" height="40" fontSize="9"
-             display="Misleading%" width="95" sizeVersion="0">misleading-accuracy</monitor>
-    <monitor x="115" precision="1" y="495" height="40" fontSize="9"
-             display="Avg Resp" width="95" sizeVersion="0">avg-response-time</monitor>
-
-    <!-- Monitors: Row 5 — Per-persona accuracy -->
-    <monitor x="15" precision="17" y="540" height="40" fontSize="9"
-             display="Veteran" width="65" sizeVersion="0">veteran-accuracy</monitor>
-    <monitor x="85" precision="17" y="540" height="40" fontSize="9"
-             display="Rookie" width="65" sizeVersion="0">rookie-accuracy</monitor>
-    <monitor x="155" precision="17" y="540" height="40" fontSize="9"
-             display="Analyst" width="55" sizeVersion="0">analyst-accuracy</monitor>
-
-    <!-- Monitors: Row 6 — Rates -->
-    <monitor x="15" precision="1" y="585" height="40" fontSize="9"
-             display="Late%" width="65" sizeVersion="0">late-rate</monitor>
-    <monitor x="85" precision="1" y="585" height="40" fontSize="9"
-             display="Escalation%" width="65" sizeVersion="0">escalation-rate</monitor>
-    <monitor x="155" precision="17" y="585" height="40" fontSize="9"
-             display="Resolved" width="55" sizeVersion="0">total-resolved</monitor>
-
-    <!-- Plot: Accuracy Over Time -->
-    <plot x="820" y="10" height="230" width="310" display="Accuracy Over Time"
-          xAxis="ticks" yAxis="%" xMin="0.0" xMax="10.0" yMin="0.0" yMax="100.0"
-          autoPlotX="true" autoPlotY="true" legend="true">
+    <slider x="15" step="5" y="195" max="50" display="reflection-interval" height="33" min="0" direction="Horizontal" default="10.0" variable="reflection-interval" width="190" sizeVersion="0"></slider>
+    <slider x="15" step="5" y="235" max="100" display="incident-rate" height="33" min="0" direction="Horizontal" default="30.0" variable="incident-rate" width="190" sizeVersion="0"></slider>
+    <slider x="15" step="5" y="275" max="100" display="episode-length" height="33" min="0" direction="Horizontal" default="25.0" variable="episode-length" width="190" sizeVersion="0"></slider>
+    <monitor x="15" precision="17" y="320" height="40" fontSize="9" display="LLM Provider" width="190" sizeVersion="0">llm-status</monitor>
+    <monitor x="15" precision="17" y="360" height="40" fontSize="9" display="Episode" width="90" sizeVersion="0">current-episode</monitor>
+    <monitor x="115" precision="17" y="360" height="40" fontSize="9" display="Mode" width="90" sizeVersion="0">memory-mode</monitor>
+    <monitor x="15" precision="17" y="405" height="40" fontSize="9" display="New" width="60" sizeVersion="0">queue-new-count</monitor>
+    <monitor x="80" precision="17" y="405" height="40" fontSize="9" display="Triaged" width="60" sizeVersion="0">queue-triaged-count</monitor>
+    <monitor x="145" precision="17" y="405" height="40" fontSize="9" display="Active" width="60" sizeVersion="0">queue-active-count</monitor>
+    <monitor x="15" precision="1" y="450" height="40" fontSize="9" display="Triage Acc%" width="95" sizeVersion="0">triage-accuracy</monitor>
+    <monitor x="115" precision="1" y="450" height="40" fontSize="9" display="Route Acc%" width="95" sizeVersion="0">route-accuracy</monitor>
+    <monitor x="15" precision="1" y="495" height="40" fontSize="9" display="Misleading%" width="95" sizeVersion="0">misleading-accuracy</monitor>
+    <monitor x="115" precision="1" y="495" height="40" fontSize="9" display="Avg Resp" width="95" sizeVersion="0">avg-response-time</monitor>
+    <monitor x="15" precision="17" y="540" height="40" fontSize="9" display="Veteran" width="65" sizeVersion="0">veteran-accuracy</monitor>
+    <monitor x="85" precision="17" y="540" height="40" fontSize="9" display="Rookie" width="65" sizeVersion="0">rookie-accuracy</monitor>
+    <monitor x="155" precision="17" y="540" height="40" fontSize="9" display="Analyst" width="55" sizeVersion="0">analyst-accuracy</monitor>
+    <monitor x="15" precision="1" y="585" height="40" fontSize="9" display="Late%" width="65" sizeVersion="0">late-rate</monitor>
+    <monitor x="85" precision="1" y="585" height="40" fontSize="9" display="Escalation%" width="65" sizeVersion="0">escalation-rate</monitor>
+    <monitor x="155" precision="17" y="585" height="40" fontSize="9" display="Resolved" width="55" sizeVersion="0">total-resolved</monitor>
+    <plot x="820" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="%" y="10" xMin="0.0" height="230" legend="true" xMax="10.0" yMin="0.0" width="310" xAxis="ticks" display="Accuracy Over Time">
       <setup></setup>
       <update></update>
-      <pen display="Triage" interval="1.0" mode="0" color="-13345367" legend="true">
+      <pen interval="1.0" mode="0" display="Triage" color="-13345367" legend="true">
         <setup></setup>
         <update>plot triage-accuracy</update>
       </pen>
-      <pen display="Route" interval="1.0" mode="0" color="-2674135" legend="true">
+      <pen interval="1.0" mode="0" display="Route" color="-2674135" legend="true">
         <setup></setup>
         <update>plot route-accuracy</update>
       </pen>
-      <pen display="Misleading" interval="1.0" mode="0" color="-5825686" legend="true">
+      <pen interval="1.0" mode="0" display="Misleading" color="-5825686" legend="true">
         <setup></setup>
         <update>plot misleading-accuracy</update>
       </pen>
     </plot>
-
-    <!-- Plot: Case Flow -->
-    <plot x="820" y="250" height="230" width="310" display="Case Flow"
-          xAxis="ticks" yAxis="count" xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0"
-          autoPlotX="true" autoPlotY="true" legend="true">
+    <plot x="820" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="count" y="250" xMin="0.0" height="230" legend="true" xMax="10.0" yMin="0.0" width="310" xAxis="ticks" display="Case Flow">
       <setup></setup>
       <update></update>
-      <pen display="New" interval="1.0" mode="0" color="-1184463" legend="true">
+      <pen interval="1.0" mode="0" display="New" color="-1184463" legend="true">
         <setup></setup>
         <update>plot queue-new-count</update>
       </pen>
-      <pen display="Active" interval="1.0" mode="0" color="-13345367" legend="true">
+      <pen interval="1.0" mode="0" display="Active" color="-13345367" legend="true">
         <setup></setup>
         <update>plot queue-active-count</update>
       </pen>
-      <pen display="Resolved" interval="1.0" mode="0" color="-7500403" legend="true">
+      <pen interval="1.0" mode="0" display="Resolved" color="-7500403" legend="true">
         <setup></setup>
         <update>plot total-resolved</update>
       </pen>
-      <pen display="Late" interval="1.0" mode="0" color="-2064490" legend="true">
+      <pen interval="1.0" mode="0" display="Late" color="-2064490" legend="true">
         <setup></setup>
         <update>plot total-late</update>
       </pen>
     </plot>
-
-    <!-- Output area for log messages -->
-    <output x="820" y="490" height="130" width="310" fontSize="9"></output>
+    <output x="820" y="490" height="130" fontSize="9" width="310"></output>
   </widgets>
-  <info><![CDATA[## Crisis Triage with Ambiguous Incidents
+  <info>## Crisis Triage with Ambiguous Incidents
 
 ### The Story
 
@@ -1114,7 +1048,7 @@ Run both modes for 50+ ticks and compare the Accuracy Over Time plot.
 **Why no thinking/reasoning models**: Speed (3 dispatchers x 2 calls/tick would take minutes with thinking), cost (300+ calls per session), and overkill for classification tasks.
 
 **Why `llm:choose` for routing**: Guarantees output is one of the valid tiers, avoiding parsing failures. The extension handles fuzzy matching and falls back to random choice if the LLM response can't be parsed.
-]]></info>
+</info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">
@@ -1142,7 +1076,7 @@ Run both modes for 50+ ticks and compare the Accuracy Over Time plot.
         <point x="180" y="195"></point>
         <point x="195" y="90"></point>
       </polygon>
-      <rectangle startX="127" startY="79" endX="172" endY="94" color="-1920102913" filled="true" marked="true"></rectangle>
+      <rectangle endX="172" startY="79" marked="true" color="-1920102913" endY="94" startX="127" filled="true"></rectangle>
       <polygon color="-1920102913" filled="true" marked="true">
         <point x="195" y="90"></point>
         <point x="240" y="150"></point>
