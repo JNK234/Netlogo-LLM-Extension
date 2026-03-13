@@ -25,6 +25,16 @@ class DeterministicTestProvider(implicit ec: ExecutionContext) extends LLMProvid
     }
   }
 
+  override def chatWithFullResponse(messages: Seq[ChatMessage]): Future[ChatResponse] = {
+    chat(messages).map { message =>
+      ChatResponse.simple(
+        id = "deterministic-test-response",
+        model = "deterministic-model",
+        message = message
+      )
+    }
+  }
+
   override def chat(messages: Seq[ChatMessage]): Future[ChatMessage] = Future.successful {
     val lastUserMessage = messages.reverseIterator
       .find(_.role == "user")

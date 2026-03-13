@@ -1,6 +1,7 @@
 # Build artifacts
 target/
 *.jar
+.bundledFiles
 
 # Test files with API keys
 demos/test-basic.nlogo
