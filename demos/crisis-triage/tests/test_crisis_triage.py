@@ -1,3 +1,6 @@
+# ABOUTME: Static validation tests for the crisis triage demo.
+# ABOUTME: Tests file structure, XML format, code structure, and template consistency.
+
 import re
 import unittest
 import xml.etree.ElementTree as ET
@@ -17,12 +20,10 @@ def read(path: Path) -> str:
 
 
 def parse_model() -> ET.Element:
-    """Parse the .nlogox model file as XML and return the root element."""
     return ET.parse(MODEL_PATH).getroot()
 
 
 def model_code_only() -> str:
-    """Extract the NetLogo code from the <code> CDATA section using XML parsing."""
     root = parse_model()
     code_elem = root.find("code")
     if code_elem is None or code_elem.text is None:
@@ -55,76 +56,79 @@ class TestCrisisTriageArtifacts(unittest.TestCase):
         for path in required:
             self.assertTrue(path.exists(), f"missing file: {path}")
 
-    def test_model_declares_tiered_breeds(self) -> None:
+    def test_model_declares_breeds(self) -> None:
         code = model_code_only()
-        self.assertIn("breed [cases case]", code)
-        self.assertIn("breed [basic-agents basic-agent]", code)
-        self.assertIn("breed [expert-agents expert-agent]", code)
-        self.assertIn("breed [coordinators coordinator]", code)
+        self.assertIn("breed [ dispatchers dispatcher ]", code)
+        self.assertIn("breed [ incidents incident ]", code)
+        self.assertIn("breed [ responders responder ]", code)
 
     def test_model_contains_required_procedures(self) -> None:
         code = model_code_only()
         procedures = [
             "to setup",
             "to setup-llm",
-            "to triage-new-cases",
-            "to perform-triage",
-            "to route-triaged-cases",
-            "to dispatch-case",
-            "to coordinator-rebalance",
-            "to reassign-case",
-            "to process-assigned-cases",
-            "to finalize-case",
+            "to setup-dispatchers",
+            "to setup-responders",
+            "to go",
+            "to triage-my-incidents",
+            "to route-my-incidents",
+            "to process-active-cases",
+            "to dispatcher-reflect",
+            "to handle-episode-boundary",
         ]
         for proc in procedures:
             self.assertIn(proc, code, f"missing procedure: {proc}")
 
-    def test_model_uses_llm_templates_and_config(self) -> None:
+    def test_model_uses_llm_config_and_template(self) -> None:
         code = model_code_only()
         self.assertIn('set config-path "demos/crisis-triage/config.txt"', code)
         self.assertIn('set triage-template-path "demos/crisis-triage/triage-template.yaml"', code)
-        self.assertIn('set dispatcher-template-path "demos/crisis-triage/dispatcher-template.yaml"', code)
         self.assertIn("llm:chat-with-template triage-template-path", code)
-        self.assertIn("llm:chat-with-template dispatcher-template-path", code)
-        self.assertIn("heuristic-severity-report", code)
+
+    def test_model_uses_all_eight_primitives(self) -> None:
+        code = model_code_only()
+        primitives = [
+            "llm:load-config",
+            "llm:set-history",
+            "llm:chat-with-template",
+            "llm:choose",
+            "llm:history",
+            "llm:chat",
+            "llm:clear-history",
+            "llm:active",
+        ]
+        for prim in primitives:
+            self.assertIn(prim, code, f"missing LLM primitive: {prim}")
 
     def test_triage_template_placeholders_match_model(self) -> None:
         template = read(TRIAGE_TEMPLATE_PATH)
         placeholders = set(re.findall(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", template))
         self.assertEqual(
             placeholders,
-            {"incident", "impact", "elapsed_ticks", "known_context"},
+            {"persona", "episode", "tick", "incident", "impact"},
         )
-        self.assertIn("SEVERITY: LOW|MODERATE|HIGH|CRITICAL", template)
-
-    def test_dispatcher_template_placeholders_match_model(self) -> None:
-        template = read(DISPATCHER_TEMPLATE_PATH)
-        placeholders = set(re.findall(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", template))
-        self.assertEqual(
-            placeholders,
-            {"severity", "incident", "basic_load", "expert_load", "coordinator_load"},
-        )
-        self.assertIn("ROUTE: BASIC|EXPERT|COORDINATOR", template)
 
     def test_config_has_required_keys(self) -> None:
         config = parse_config(CONFIG_PATH)
         for key in ["provider", "model", "temperature", "max_tokens", "timeout_seconds"]:
             self.assertIn(key, config, f"missing key in config: {key}")
 
+    def test_config_max_tokens_is_200(self) -> None:
+        config = parse_config(CONFIG_PATH)
+        self.assertEqual(config["max_tokens"], "200")
+
     def test_readme_has_core_sections(self) -> None:
         readme = read(README_PATH)
         for text in [
-            "What it demonstrates",
-            "Model architecture",
-            "Run instructions",
-            "Test suite",
+            "Quick Start",
+            "A/B Experiment",
+            "Design Rationale",
+            "Paper Connection",
         ]:
             self.assertIn(text, readme)
 
 
 class TestModelXmlParsing(unittest.TestCase):
-    """Validate the .nlogox file using proper XML parsing instead of regex."""
-
     def setUp(self) -> None:
         self.root = parse_model()
 
@@ -149,16 +153,25 @@ class TestModelXmlParsing(unittest.TestCase):
         self.assertIn("view", child_tags)
         self.assertIn("button", child_tags)
         self.assertIn("monitor", child_tags)
+        self.assertIn("switch", child_tags)
+        self.assertIn("chooser", child_tags)
+        self.assertIn("slider", child_tags)
+        self.assertIn("plot", child_tags)
 
     def test_widgets_button_count(self) -> None:
         widgets = self.root.find("widgets")
         buttons = widgets.findall("button")
-        self.assertEqual(len(buttons), 3, "expected 3 buttons: setup, go, new-case")
+        self.assertEqual(len(buttons), 4, "expected 4 buttons: setup, go, add-incident, force-reflect")
 
     def test_widgets_monitor_count(self) -> None:
         widgets = self.root.find("widgets")
         monitors = widgets.findall("monitor")
-        self.assertGreaterEqual(len(monitors), 7, "expected at least 7 monitors")
+        self.assertGreaterEqual(len(monitors), 12, "expected at least 12 monitors")
+
+    def test_widgets_plot_count(self) -> None:
+        widgets = self.root.find("widgets")
+        plots = widgets.findall("plot")
+        self.assertEqual(len(plots), 2, "expected 2 plots: Accuracy Over Time, Case Flow")
 
     def test_turtle_shapes_defined(self) -> None:
         shapes = self.root.find("turtleShapes")
@@ -166,11 +179,10 @@ class TestModelXmlParsing(unittest.TestCase):
         shape_names = [s.get("name") for s in shapes.findall("shape")]
         self.assertIn("default", shape_names)
         self.assertIn("circle", shape_names)
+        self.assertIn("person", shape_names)
 
 
 class TestModelStructure(unittest.TestCase):
-    """Structural assertions on the NetLogo 7.x .nlogox format."""
-
     def setUp(self) -> None:
         self.root = parse_model()
 
@@ -208,8 +220,6 @@ class TestModelStructure(unittest.TestCase):
 
 
 class TestBehaviorRegression(unittest.TestCase):
-    """Catch regressions in model syntax and LLM extension usage patterns."""
-
     def setUp(self) -> None:
         self.code = model_code_only()
 
@@ -217,14 +227,11 @@ class TestBehaviorRegression(unittest.TestCase):
         self.assertIn("extensions [ llm ]", self.code)
 
     def test_chat_with_template_uses_list_syntax(self) -> None:
-        """Ensure llm:chat-with-template uses (list ...) not [...] for variables."""
         lines = self.code.splitlines()
         for line in lines:
             stripped = line.strip()
             if "llm:chat-with-template" not in stripped:
                 continue
-            # The template call should be followed by (list on the same or next
-            # logical line.  It must NOT use bracket syntax like [["key" val]].
             self.assertNotRegex(
                 stripped,
                 r'llm:chat-with-template\s+\S+\s+\[\[',
@@ -232,7 +239,6 @@ class TestBehaviorRegression(unittest.TestCase):
             )
 
     def test_no_inline_provider_setup_in_procedures(self) -> None:
-        """Model should use llm:load-config, not manual set-provider/set-api-key."""
         for deprecated in ["llm:set-provider", "llm:set-api-key", "llm:set-model"]:
             self.assertNotIn(
                 deprecated,
@@ -241,7 +247,6 @@ class TestBehaviorRegression(unittest.TestCase):
             )
 
     def test_all_procedure_blocks_are_closed(self) -> None:
-        """Every 'to' or 'to-report' must have a matching 'end'."""
         opens = len(re.findall(r"^to(?:-report)?\s", self.code, re.MULTILINE))
         closes = len(re.findall(r"^end\s*$", self.code, re.MULTILINE))
         self.assertEqual(
@@ -251,7 +256,6 @@ class TestBehaviorRegression(unittest.TestCase):
         )
 
     def test_no_deprecated_primitives(self) -> None:
-        """Guard against usage of removed or renamed LLM extension primitives."""
         deprecated = [
             "llm:ask",
             "llm:send",
@@ -264,12 +268,19 @@ class TestBehaviorRegression(unittest.TestCase):
     def test_globals_declared(self) -> None:
         self.assertIn("globals [", self.code)
         for g in ["llm-ready?", "config-path", "triage-template-path",
-                   "dispatcher-template-path"]:
+                   "incident-bank", "total-triaged", "correct-triage"]:
             self.assertIn(g, self.code, f"missing global: {g}")
 
-    def test_breed_owns_blocks_present(self) -> None:
-        self.assertIn("turtles-own [", self.code)
-        self.assertIn("cases-own [", self.code)
+    def test_incident_bank_has_30_entries(self) -> None:
+        """The incident bank should contain 30 incidents (10 misleading + 10 clear + 10 borderline)."""
+        code = self.code
+        # Count (list " patterns inside build-incident-bank — each incident starts with (list "
+        bank_start = code.find("to build-incident-bank")
+        bank_end = code.find("\nend", bank_start)
+        bank_code = code[bank_start:bank_end]
+        incident_count = bank_code.count('(list "')
+        # The outer (list wrapping all incidents doesn't start with (list "
+        self.assertEqual(incident_count, 30, f"expected 30 incidents, found {incident_count}")
 
 
 if __name__ == "__main__":

@@ -1,114 +1,100 @@
-# Demo 2: Crisis Triage with Tiered Intelligence Coordination
+# Demo 2: Crisis Triage with Ambiguous Incidents
 
-This demo models a municipal crisis desk where incidents are triaged by an LLM, routed to one of three response tiers, and dynamically escalated when capacity or risk changes.
+A municipal emergency operations center where LLM-powered dispatchers assess ambiguous crisis reports — demonstrating that keyword matching fails when incidents are deliberately misleading, but LLMs reading full impact descriptions can succeed.
 
 Target runtime: NetLogo 7.0.3 (`.nlogox` model format).
 
-## What it demonstrates
+## The Story
 
-- Tiered responders: `basic`, `expert`, `coordinator`
-- LLM-driven severity assessment via `triage-template.yaml`
-- LLM-assisted dispatch recommendation via `dispatcher-template.yaml`
-- Capacity-aware fallback routing when a preferred tier is saturated
-- Coordinator-triggered escalation for risky or critical in-flight cases
-- Automatic heuristic fallback if LLM config/provider is unavailable
+Three dispatchers — Veteran, Rookie, and Analyst — receive a stream of crisis incidents. Each must assess severity and route to the right response tier. The incident bank includes **misleading cases** where surface keywords don't match reality:
 
-## Deliverables
+- "Toxic chemical spill at school" → actually spilled vinegar (LOW severity)
+- "Minor water leak in basement" → threatening a neonatal ICU (CRITICAL severity)
+- "Dog loose on highway" → causing a multi-vehicle pileup (HIGH severity)
 
-- `crisis-triage.nlogox`: NetLogo 7 simulation model (canonical)
-- `triage-template.yaml`: Severity prompt template
-- `dispatcher-template.yaml`: Routing prompt template
-- `config.txt`: LLM extension configuration
-- `tests/`: Automated validation tests
+A naive keyword heuristic over-triggers on "toxic", "fire", "collapse" and fails on these cases. The LLM reads the full impact description and can assess correctly.
 
-## Model architecture
+## Quick Start
 
-### Agent tiers
+1. Edit `config.txt` with your provider credentials (default: local Ollama).
+2. Open `crisis-triage.nlogox` in NetLogo 7.0.3.
+3. Click **setup** → dispatchers appear with persona labels, responders by tier.
+4. Click **go** → incidents spawn, flow through the pipeline, monitors update.
+5. Watch the output log for `[TRIAGE]`, `[ROUTE]`, and `[REFLECT]` messages.
 
-- `basic-agents`
-  - Highest volume, low-complexity workload
-  - Lower completion probability for hard cases
-- `expert-agents`
-  - Moderate/high severity handling
-  - Better completion rates on difficult incidents
-- `coordinators`
-  - Critical incidents and system-level balancing
-  - Reassign risky cases from lower tiers
+## How to Use
 
-### Incident lifecycle
+### Controls
 
-1. New incident is created (`queue-state = "new"`)
-2. Triage step classifies severity (`low/moderate/high/critical`)
-3. Dispatch step chooses preferred tier and applies capacity fallback
-4. Case is processed by assigned tier
-5. Coordinator may reassign active risky cases
-6. Resolved incidents are counted per tier
+| Control | Type | Purpose |
+|---------|------|---------|
+| `use-llm?` | Switch | Toggle between LLM dispatchers and naive heuristic |
+| `memory-mode` | Chooser | persistent / per-episode / none |
+| `reflection-interval` | Slider | Ticks between dispatcher self-reflection (0 = off) |
+| `incident-rate` | Slider | Probability (%) of new incident per tick |
+| `episode-length` | Slider | Ticks per episode boundary (0 = no episodes) |
+| `add incident` | Button | Manually inject a random incident |
+| `force reflect` | Button | Trigger immediate reflection for all dispatchers |
 
-## Files and paths
+### What to Observe
 
-All files for this demo live in:
+- **Misleading%** — The key metric. Accuracy on misleading incidents where keywords don't match reality.
+- **Triage Acc%** / **Route Acc%** — Overall accuracy vs ground truth.
+- **Accuracy Over Time** plot — Watch how accuracy evolves, especially with memory.
+- **Per-persona differences** — Veteran, Rookie, and Analyst may perform differently.
+- **Reflection log** — Dispatchers reason about their own performance.
 
-`demos/crisis-triage/`
+## The A/B Experiment
 
-The NetLogo model loads these by relative path:
+1. Run with `use-llm?` ON for 50+ ticks. Note the Misleading% metric.
+2. Click setup again. Toggle `use-llm?` OFF. Run for 50+ ticks.
+3. Compare:
+   - **Heuristic**: ~30% on misleading cases (keywords mislead it).
+   - **LLM**: Expected ~70%+ on misleading cases (reads actual impact).
+4. Compare memory modes: Run with "persistent" vs "none" over multiple episodes.
 
-- `demos/crisis-triage/config.txt`
-- `demos/crisis-triage/triage-template.yaml`
-- `demos/crisis-triage/dispatcher-template.yaml`
+## LLM Primitives Exercised (8)
 
-## Run instructions
+| Primitive | Where | Paper Concept |
+|-----------|-------|---------------|
+| `llm:load-config` | `setup-llm` | Config management |
+| `llm:set-history` | `setup-dispatchers` — persona injection | Personalization (Ch.2) |
+| `llm:chat-with-template` | `triage-my-incidents` — severity assessment | Environment/Interface (Ch.1) |
+| `llm:choose` | `route-my-incidents` — bounded tier selection | Bounded Rationality |
+| `llm:history` | `dispatcher-reflect` — check history length | Memory (Ch.3) |
+| `llm:chat` | `dispatcher-reflect` — freeform reflection | Reflection (Ch.3) |
+| `llm:clear-history` | `handle-episode-boundary` — configurable reset | Memory ablation |
+| `llm:active` | Monitor widget — show provider/model | Provider awareness |
 
-1. Ensure NetLogo 7.0.3 has the `llm` extension available.
-2. Configure provider settings in `config.txt` (default is local Ollama).
-3. Open `crisis-triage.nlogox` in NetLogo.
-4. Click `setup`.
-5. Click `go`.
-6. Optionally click `new-case` to inject additional incidents.
+## Design Rationale
 
-## NetLogo 7 validation guidance
+**Why dispatchers use LLM, not responders**: Triage and routing are judgment calls where reading context matters. Case processing is mechanical — it doesn't benefit from language understanding.
 
-- Primary validation should be GUI-based in NetLogo 7.0.3 (`setup`, then run `go` for multiple ticks).
-- Headless checks can be useful for smoke testing, but GUI validation is recommended as the canonical check due known NetLogo 7 headless/BehaviorSpace limitations.
+**Why no thinking/reasoning models**: With 3 dispatchers making 2+ LLM calls per tick, thinking models would add minutes of latency per tick. The triage task is classification, not multi-step reasoning. Standard `llm:chat-with-template` and `llm:choose` are the right tools.
 
-## LLM behavior
+**Why `llm:choose` for routing**: Guarantees the output is one of the valid tier names, avoiding parsing failures from freeform text.
 
-- Severity is requested using strict output formatting:
-  - `SEVERITY: LOW|MODERATE|HIGH|CRITICAL`
-- Routing is requested using strict output formatting:
-  - `ROUTE: BASIC|EXPERT|COORDINATOR`
-- Parser logic in the model extracts these tags and falls back safely when missing.
+**Why misleading incidents**: They make the LLM genuinely necessary. Without them, keyword matching achieves similar accuracy and the LLM adds cost without value.
 
-## Heuristic fallback mode
+## Paper Connection
 
-If LLM config fails to load or provider calls fail:
+This demo implements concepts from the Gao et al. (2312.11970) LLM-ABM survey:
 
-- `llm-ready?` monitor is `false`
-- Severity uses keyword-driven deterministic rules
-- Routing uses severity-to-tier defaults + capacity fallback
+- **Personalization** (Ch.2): Dispatcher personas via `llm:set-history` produce different decisions from the same model.
+- **Bounded Rationality**: `llm:choose` constrains decisions to valid options.
+- **Memory** (Ch.3): Configurable memory modes show how history retention affects performance.
+- **Reflection** (Ch.3): Dispatchers reason about their own accuracy and identify patterns.
+- **Environment/Interface** (Ch.1): Templates structure how agents perceive incidents.
 
-This keeps the simulation functional offline.
+## Files
 
-## Provider configuration notes
+| File | Purpose |
+|------|---------|
+| `crisis-triage.nlogox` | NetLogo 7 simulation model |
+| `triage-template.yaml` | Severity assessment prompt with anti-keyword-bias guidance |
+| `dispatcher-template.yaml` | Documentation stub (routing uses `llm:choose`) |
+| `config.txt` | LLM provider configuration |
 
-- Default `config.txt` is safe and local-first (`provider=ollama`) with no secrets.
-- Optional cloud examples are commented in `config.txt` for OpenAI, Claude, and Gemini.
-- Never commit real API keys into demo configs.
+## Provider Configuration
 
-## Test suite
-
-Tests are static validations that do not call external APIs.
-
-Run from repository root:
-
-```bash
-python -m unittest discover -s demos/crisis-triage/tests -p "test_*.py" -v
-```
-
-Coverage includes:
-
-- Required files present
-- NetLogo model includes tiered breeds and key procedures
-- Model references both YAML templates and config
-- Template variables match model substitution keys
-- Config includes required LLM keys
-- README contains usage, architecture, and test instructions
+Default is local Ollama (no API key needed). See commented examples in `config.txt` for OpenAI, Claude, and Gemini. Never commit real API keys.
