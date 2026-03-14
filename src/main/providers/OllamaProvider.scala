@@ -89,8 +89,12 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       val doneReason = if (parsed("done").bool) "stop" else "length"
 
       // Extract thinking text if present (Ollama returns it in message.thinking)
-      val thinking = scala.util.Try(message("thinking").str).toOption
-        .filter(_.nonEmpty)
+      val thinking = if (scala.util.Try(message.obj.contains("thinking")).getOrElse(false)) {
+        scala.util.Try(message("thinking").str).toOption.orElse {
+          System.err.println(s"WARNING: Ollama response has 'thinking' field but it could not be parsed as string")
+          None
+        }.filter(_.nonEmpty)
+      } else None
 
       val choices = Array(
         org.nlogo.extensions.llm.models.Choice(
@@ -103,7 +107,7 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       ChatResponse(id, created, model, choices, thinking = thinking)
     } catch {
       case e: Exception =>
-        throw new RuntimeException(s"Failed to parse Ollama response: ${e.getMessage}\nResponse: $responseBody")
+        throw new RuntimeException(s"Failed to parse Ollama response: ${e.getMessage}\nResponse: $responseBody", e)
     }
   }
 
@@ -120,7 +124,9 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
     httpRequest.send(backend).map { response =>
       response.isSuccess
     }.recover {
-      case _ => false
+      case ex =>
+        System.err.println(s"WARNING: Ollama server connection check failed: ${ex.getMessage}")
+        false
     }
   }
 
@@ -146,12 +152,18 @@ class OllamaProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
               model("name").str
             }.toSet
           } catch {
-            case _: Exception => Set.empty[String]
+            case ex: Exception =>
+              System.err.println(s"WARNING: Failed to parse Ollama model list response: ${ex.getMessage}")
+              Set.empty[String]
           }
-        case Left(_) => Set.empty[String]
+        case Left(error) =>
+          System.err.println(s"WARNING: Ollama model list request returned error: $error")
+          Set.empty[String]
       }
     }.recover {
-      case _ => Set.empty[String]
+      case ex =>
+        System.err.println(s"WARNING: Ollama model list request failed: ${ex.getMessage}")
+        Set.empty[String]
     }
   }
 }

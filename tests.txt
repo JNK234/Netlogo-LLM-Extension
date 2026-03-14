@@ -116,11 +116,77 @@ LLMChatHistory
   (item 0 (item 0 llm:history)) => "user"
   (item 0 (item 1 llm:history)) => "assistant"
 
-LLMChoosePrimitive
+LLMChooseExactMatch
   extensions [llm]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
-  member? (llm:choose "Pick one" ["a" "b" "c"]) ["a" "b" "c"] => true
+  member? (llm:choose "Pick one" ["apple" "banana" "cherry"]) ["apple" "banana" "cherry"] => true
+
+LLMChooseCaseInsensitive
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  (llm:choose "Pick one __TEST_RESPOND:APPLE" ["apple" "banana"]) => "apple"
+
+LLMChooseEmptyListThrows
+  extensions [llm]
+  globals [err]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> carefully [let __x llm:choose "Pick" []] [set err error-message]
+  is-string? err => true
+
+LLMChooseNoMatchThrows
+  extensions [llm]
+  globals [err]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> carefully [let __x llm:choose "Pick one __TEST_RESPOND:zzzz" ["apple" "banana"]] [set err error-message]
+  is-string? err => true
+
+LLMChooseHistoryClean
+  extensions [llm]
+  globals [result]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> set result llm:choose "Pick a fruit" ["apple" "banana" "cherry"]
+  length llm:history => 2
+  (item 0 (item 0 llm:history)) => "user"
+  (item 1 (item 0 llm:history)) => "Pick a fruit"
+  (item 0 (item 1 llm:history)) => "assistant"
+  member? (item 1 (item 1 llm:history)) ["apple" "banana" "cherry"] => true
+
+LLMChooseHistoryUnchangedOnFailure
+  extensions [llm]
+  globals [err]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> llm:set-history [["user" "prior"] ["assistant" "context"]]
+  O> carefully [let __x llm:choose "Pick __TEST_RESPOND:zzzz" ["apple" "banana"]] [set err error-message]
+  length llm:history => 2
+  (item 1 (item 0 llm:history)) => "prior"
+
+LLMChooseThinkingModel
+  extensions [llm]
+  globals [result]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> set result llm:choose "Pick one __TEST_THINKING:apple" ["apple" "banana"]
+  result => "apple"
+
+LLMChatHistoryCorrectOnSuccess
+  extensions [llm]
+  globals [result]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openai"
+  O> llm:clear-history
+  O> set result llm:chat "hello"
+  length llm:history => 2
+  (item 1 (item 0 llm:history)) => "hello"
+  (item 0 (item 1 llm:history)) => "assistant"
 
 LLMTemplateChat
   extensions [llm]

@@ -101,7 +101,7 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       ChatResponse(id, created, model, choices)
     } catch {
       case e: Exception =>
-        throw new RuntimeException(s"Failed to parse OpenAI response: ${e.getMessage}\nResponse: $responseBody")
+        throw new RuntimeException(s"Failed to parse OpenAI response: ${e.getMessage}\nResponse: $responseBody", e)
     }
   }
 }
