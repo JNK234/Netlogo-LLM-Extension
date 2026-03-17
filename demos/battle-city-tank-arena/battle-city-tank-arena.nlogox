@@ -501,16 +501,41 @@ to-report direction-name [dir]
 end
 
 ;; ============================================================
-;; ACTION SELECTION — LLM via llm:choose
+;; ACTION SELECTION — LLM via llm:choose (or llm:chat-with-thinking)
 ;; ============================================================
 to choose-action
   set total-llm-calls total-llm-calls + 1
   carefully [
     llm:clear-history
-    let action llm:choose my-observation ["move-forward" "turn-left" "turn-right" "fire" "stay"]
-    set last-action action
+
+    ;; Stage 3: inject ally message into history context before deciding
+    if current-stage = 3 and communication-enabled? and ally-message != "" [
+      llm:set-history (list
+        (list "user" (word "Your ally sent this message: \"" ally-message "\""))
+        (list "assistant" "Understood, I'll factor that into my decision.")
+      )
+    ]
+
+    ifelse show-thinking? [
+      ;; Use chat-with-thinking to expose reasoning chain
+      let prompt (word my-observation "\nChoose EXACTLY one action: move-forward, turn-left, turn-right, fire, stay")
+      let response llm:chat-with-thinking prompt
+      let action-text item 0 response
+      let thinking-text item 1 response
+      if thinking-text != "" [
+        output-print (word "--- Tank " who " thinking ---")
+        output-print thinking-text
+        output-print "---"
+      ]
+      set last-action parse-action-response action-text
+    ] [
+      ;; Standard llm:choose
+      let action llm:choose my-observation ["move-forward" "turn-left" "turn-right" "fire" "stay"]
+      set last-action action
+    ]
+
     if show-observations? [
-      output-print (word "Tank " who " chose: " action)
+      output-print (word "Tank " who " chose: " last-action)
     ]
   ] [
     set last-action "stay"
@@ -518,12 +543,40 @@ to choose-action
   ]
 end
 
+;; Parse action from free-text response (for show-thinking mode)
+to-report parse-action-response [response]
+  let r lower-case (word response)
+  if position "move-forward" r != false [ report "move-forward" ]
+  if position "turn-left"    r != false [ report "turn-left" ]
+  if position "turn-right"   r != false [ report "turn-right" ]
+  if position "fire"         r != false [ report "fire" ]
+  if position "stay"         r != false [ report "stay" ]
+  report "stay"
+end
+
 ;; ============================================================
-;; MESSAGE GENERATION — placeholder for Phase 3
+;; MESSAGE GENERATION — Stage 3 communication via llm:chat-with-template
 ;; ============================================================
 to generate-message
-  ;; Will be replaced with llm:chat-with-template in Phase 3
-  set my-message ""
+  set total-llm-calls total-llm-calls + 1
+  carefully [
+    llm:clear-history
+    let vars (list
+      (list "observation" my-observation)
+    )
+    let msg llm:chat-with-template "message-template.yaml" vars
+    ;; Truncate to keep messages brief
+    if length msg > 80 [ set msg substring msg 0 80 ]
+    set my-message msg
+    set label msg
+    set message-timer 3
+    if show-observations? [
+      output-print (word "Tank " who " says: " msg)
+    ]
+  ] [
+    set my-message ""
+    output-print (word "Message error for tank " who ": " error-message)
+  ]
 end
 
 to deliver-messages
