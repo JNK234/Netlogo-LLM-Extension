@@ -1,65 +1,66 @@
-# Topology Tournament
+# Demo 1: Topology Tournament
 
-**MARBLE paper replication**: Demonstrates that mesh topology > hierarchy > chain for multi-agent LLM coordination.
+This demo compares how quickly three communication structures reach consensus when each agent can only see its direct neighbors:
+- `mesh`: everyone connected to everyone (degree n-1)
+- `hierarchy`: tree-like parent-child structure (degree 1-3)
+- `chain`: linear neighbor-to-neighbor communication (degree 1-2)
 
-Based on: [MARBLE (2503.01935)](https://arxiv.org/abs/2503.01935)
+Each agent independently observes its `link-neighbors` and uses `llm:choose` to pick a belief. Topology genuinely constrains information flow — mesh agents see all peers, chain agents see at most two.
+
+## Hypothesis
+
+Inspired by the MARBLE paper (arXiv:2503.01935) on how network topology affects multi-agent LLM convergence:
+- `mesh` should converge fastest because each agent sees all peers (degree n-1) — full information every tick.
+- `hierarchy` should converge in the middle because agents near the root see more neighbors, but leaf agents see only their parent.
+- `chain` should converge slowest because each agent sees at most 2 neighbors — information propagates one hop per tick.
 
 ## How It Works
 
-Three groups of agents, each with a different communication topology, race to converge on a goal:
+1. `setup` builds three groups (`mesh-agents`, `hierarchy-agents`, `chain-agents`) and their topology-specific links.
+2. Agents are seeded with mixed initial belief tokens (`COLLECT`, `EXPLORE`, `STABILIZE`).
+3. Each tick uses **simultaneous update**: all agents snapshot their beliefs, then each unconverged agent:
+   - Gathers its `link-neighbors`' snapshotted beliefs
+   - **LLM mode**: calls `llm:set-history` with a per-agent system prompt, then `llm:choose` to pick from belief options
+   - **Deterministic mode**: applies local majority rule (self + neighbors)
+4. Convergence time is recorded per topology when all agents in that topology share one belief.
 
-| Topology | Info Visibility | Noise | Expected Performance |
-|----------|----------------|-------|---------------------|
-| **Mesh** | Coordinator sees ALL agents | Low (0.1) | Fastest |
-| **Hierarchy** | Coordinator sees ~75% via tree | Medium (0.3) | Middle |
-| **Chain** | Coordinator sees ~30% via chain | High (0.6) | Slowest |
+## Why Topology Matters
 
-Each tick, a coordinator agent per topology calls `llm:chat-with-template` to decide the group's collective action. Better topology → better information → better decisions → faster convergence.
+The key insight is that topology constrains what each agent can observe:
+- **Mesh** agents have degree n-1: they see every other agent's belief, so majority information is immediately available.
+- **Hierarchy** agents have degree 1-3: root sees all children, but leaf agents only see their parent.
+- **Chain** agents have degree 1-2: endpoints see one neighbor, middle agents see two. Information must propagate hop-by-hop.
 
-## Setup
+This means the same decision rule (local majority) produces different convergence speeds purely because of network structure.
 
-1. Copy `llm/` extension folder next to this model (or install globally)
-2. Edit `config.txt` with your API key:
-   ```
-   provider=openai
-   model=gpt-4o-mini
-   api_key=sk-YOUR-KEY-HERE
-   temperature=0.3
-   ```
-3. Open `topology-tournament.nlogo` in NetLogo 7.0+
+## Files
 
-## Required Interface Widgets
+- `topology-tournament.nlogox`: main simulation model (NetLogo 7.x XML format)
+- `config.txt`: provider/model/runtime settings
 
-Create these in the NetLogo Interface tab:
+## Widgets
 
-- **Slider** `num-agents`: min=5, max=100, default=30, increment=5
-- **Slider** `max-ticks`: min=50, max=500, default=200, increment=50
-- **Button** `setup`: calls `setup`
-- **Button** `go`: calls `go` (forever)
-- **Plot** "Average Distance to Goal" with 3 pens:
-  - "mesh" (blue): `plot mesh-avg-distance`
-  - "hierarchy" (red): `plot hierarchy-avg-distance`
-  - "chain" (yellow): `plot chain-avg-distance`
-- **Monitors**: `mesh-convergence-tick`, `hierarchy-convergence-tick`, `chain-convergence-tick`
+| Widget | Purpose |
+|--------|---------|
+| **Setup** button | Initialize topologies and seed beliefs |
+| **Go** button | Continuous execution (forever) |
+| **Step** button | Single-tick execution |
+| **agents-per-topology** slider | Number of agents per topology (3–12) |
+| **max-ticks** slider | Maximum ticks before tournament ends (20–400) |
+| **llm-config-path** input | Path to LLM config file |
+| **use-llm?** switch | Toggle LLM vs deterministic per-agent mode |
+| **LLM Status** monitor | Shows "Connected" or "Deterministic" |
+| **Winner** monitor | Winning topology name |
+| **Status** monitor | Summary of convergence times and winner |
+| **Mesh/Hierarchy/Chain Convergence** monitors | Tick at which each topology converged |
+| **Mesh/Hierarchy/Chain Agreement %** monitors | Real-time agreement percentage per topology |
+| **Agreement by Topology** plot | Convergence curves over time |
 
-## BehaviorSpace
+## Run Instructions
 
-Import `behaviorspace-config.xml` or create experiment with:
-- Variable: `num-agents` ∈ {10, 30, 50, 100}
-- Metrics: convergence ticks and LLM calls per topology
-- 3 repetitions per configuration
+1. Add a real API key in `demos/topology-tournament/config.txt`.
+2. Open `demos/topology-tournament/topology-tournament.nlogox` in NetLogo 7.
+3. Click `Setup`, then `Go` (or use `Step` for single-tick execution).
+4. Toggle `use-llm?` to compare LLM-driven vs deterministic per-agent decisions.
+5. Watch convergence monitors and the agreement plot.
 
-## Analysis
-
-```bash
-python analyze-results.py results.csv
-```
-
-Generates `topology-tournament-results.png` — line chart of convergence time by topology and agent count.
-
-## Key Design Decisions (Bronze)
-
-- **Information asymmetry** is the core mechanism: mesh coordinators see 100% of agents, hierarchy ~75%, chain ~30%
-- **Noise factor** in movement models the quality of coordination: mesh=0.1, hierarchy=0.3, chain=0.6
-- **One LLM call per topology per tick** (coordinator only) — keeps costs manageable
-- Actions: `move-toward-goal`, `spread-then-converge`, `follow-leader`, `random-walk`
