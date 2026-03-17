@@ -1,0 +1,977 @@
+<?xml version="1.0" encoding="utf-8"?>
+<model version="NetLogo 7.0.3" snapToGrid="true">
+  <code><![CDATA[
+;; ABOUTME: Battle City Tank Arena — LLM-powered tank battle demonstrating the BattleAgentBench communication paradox
+;; ABOUTME: Tests whether inter-agent messaging helps or hurts LLM coordination across 3 progressive stages
+
+extensions [llm]
+
+;; --- Breeds ---
+breed [tanks tank]
+breed [bullets bullet]
+breed [explosions explosion]
+breed [flags flag]
+
+;; --- Patch variables ---
+patches-own [
+  terrain-type  ;; "open" "brick" "steel" "base-red" "base-blue" "water" "flag"
+  wall-hp       ;; brick walls start at 2, steel is indestructible
+  base-team     ;; 0 = none, 1 = red, 2 = blue
+  base-hp       ;; base health (starts at 3)
+]
+
+;; --- Tank variables ---
+tanks-own [
+  team-id          ;; 1 = red, 2 = blue
+  tank-health      ;; starts at 3
+  tank-direction   ;; 0=N, 90=E, 180=S, 270=W
+  is-llm?          ;; true if controlled by LLM
+  last-action      ;; last action taken
+  my-observation   ;; observation string for LLM
+  ally-message     ;; message received from ally (Stage 3)
+  my-message       ;; message sent to ally (Stage 3)
+  message-timer    ;; ticks remaining to show speech bubble
+  fire-cooldown    ;; ticks until can fire again
+  spawn-x          ;; respawn location
+  spawn-y
+]
+
+;; --- Bullet variables ---
+bullets-own [
+  bullet-team      ;; team that fired this bullet
+  bullet-direction ;; direction of travel (heading)
+  bullet-distance  ;; distance traveled so far
+]
+
+;; --- Explosion variables ---
+explosions-own [
+  explosion-timer  ;; ticks remaining
+]
+
+;; --- Globals ---
+globals [
+  current-stage       ;; 1, 2, or 3
+  red-score
+  blue-score
+  red-base-hp
+  blue-base-hp
+  total-llm-calls
+  game-over?
+  winner
+  communication-enabled?
+
+  ;; Map data: list of strings defining the 31x31 arena
+  arena-map
+]
+
+;; ============================================================
+;; SETUP
+;; ============================================================
+to setup
+  clear-all
+
+  set game-over? false
+  set winner "none"
+  set red-score 0
+  set blue-score 0
+  set total-llm-calls 0
+
+  ;; Determine current stage from chooser
+  set current-stage stage-number
+
+  ;; Communication only in stage 3 (or overridden)
+  set communication-enabled? (current-stage = 3 and comms-override?)
+
+  ;; Build the arena map
+  build-arena-map
+  setup-map
+
+  ;; Spawn tanks based on stage
+  if current-stage = 1 [ setup-stage-1 ]
+  if current-stage = 2 [ setup-stage-2 ]
+  if current-stage = 3 [ setup-stage-3 ]
+
+  reset-ticks
+end
+
+;; ============================================================
+;; STAGE-NUMBER REPORTER
+;; ============================================================
+to-report stage-number
+  if stage = "1: Solo Navigation" [ report 1 ]
+  if stage = "2: Team Battle"     [ report 2 ]
+  if stage = "3: Team + Comms"    [ report 3 ]
+  report 2
+end
+
+;; ============================================================
+;; ARENA MAP BUILDER
+;; ============================================================
+to build-arena-map
+  ;; 31x31 symmetric arena inspired by Battle City
+  ;; Legend: . = open, W = brick wall, S = steel, R = red base, B = blue base, ~ = water
+  ;; Row 0 is bottom, Row 30 is top
+  set arena-map (list
+    ;; Row 0 (bottom) - Red base area
+    "...............R..............."  ;; 0
+    "...............R..............."  ;; 1
+    "..WWW...WWW.........WWW...WWW.."  ;; 2
+    "..W.W...W.W...WWW...W.W...W.W.."  ;; 3
+    "..WWW...WWW...W.W...WWW...WWW.."  ;; 4
+    "..............WWW.............."  ;; 5
+    "..WW..WWWW..........WWWW..WW.."  ;; 6
+    "..WW..W..............W....WW.."  ;; 7
+    "......W....SS....SS...W......."  ;; 8
+    "..WWW......SS....SS......WWW.."  ;; 9
+    "..W........SS....SS........W.."  ;; 10
+    "..W....WW............WW....W.."  ;; 11
+    "..W....WW............WW....W.."  ;; 12
+    ".......WW....WWWW...WW........"  ;; 13
+    "..SS.........W..W.........SS.."  ;; 14
+    "..SS.........W..W.........SS.."  ;; 15  center
+    "..SS.........WWWW.........SS.."  ;; 16
+    ".......WW............WW......."  ;; 17
+    "..W....WW............WW....W.."  ;; 18
+    "..W....WW............WW....W.."  ;; 19
+    "..W........SS....SS........W.."  ;; 20
+    "..WWW......SS....SS......WWW.."  ;; 21
+    "......W....SS....SS...W......."  ;; 22
+    "..WW..W..............W....WW.."  ;; 23
+    "..WW..WWWW..........WWWW..WW.."  ;; 24
+    "..............WWW.............."  ;; 25
+    "..WWW...WWW...W.W...WWW...WWW.."  ;; 26
+    "..W.W...W.W...WWW...W.W...W.W.."  ;; 27
+    "..WWW...WWW.........WWW...WWW.."  ;; 28
+    "...............B..............."  ;; 29
+    "...............B..............."  ;; 30
+  )
+end
+
+;; ============================================================
+;; SETUP MAP — render arena from strings
+;; ============================================================
+to setup-map
+  ;; Set world to 31x31 centered
+  ;; World coords: -15 to 15 in both axes
+  ask patches [
+    set terrain-type "open"
+    set wall-hp 0
+    set base-team 0
+    set base-hp 0
+    set pcolor gray - 3
+  ]
+
+  let row-idx 0
+  foreach arena-map [ row-str ->
+    let col-idx 0
+    let chars-remaining row-str
+    while [col-idx < 31 and col-idx < length row-str] [
+      let ch item col-idx row-str
+      let px col-idx - 15
+      let py row-idx - 15
+
+      if px >= min-pxcor and px <= max-pxcor and py >= min-pycor and py <= max-pycor [
+        ask patch px py [
+          if ch = "." [
+            set terrain-type "open"
+            set pcolor gray - 3
+          ]
+          if ch = "W" [
+            set terrain-type "brick"
+            set wall-hp 2
+            set pcolor brown + 1
+          ]
+          if ch = "S" [
+            set terrain-type "steel"
+            set wall-hp -1  ;; indestructible
+            set pcolor gray - 1
+          ]
+          if ch = "R" [
+            set terrain-type "base-red"
+            set base-team 1
+            set base-hp 3
+            set pcolor red - 2
+          ]
+          if ch = "B" [
+            set terrain-type "base-blue"
+            set base-team 2
+            set base-hp 3
+            set pcolor blue - 2
+          ]
+          if ch = "~" [
+            set terrain-type "water"
+            set pcolor cyan - 1
+          ]
+        ]
+      ]
+      set col-idx col-idx + 1
+    ]
+    set row-idx row-idx + 1
+  ]
+
+  ;; Store base HP in globals
+  set red-base-hp 3
+  set blue-base-hp 3
+end
+
+;; ============================================================
+;; STAGE SETUP PROCEDURES
+;; ============================================================
+to setup-stage-1
+  ;; Solo navigation: 1 LLM tank (blue) must reach the flag
+  ;; Place flag near center-top
+  ask patch 0 10 [
+    set terrain-type "flag"
+    set pcolor green + 1
+  ]
+  create-flags 1 [
+    setxy 0 10
+    set shape "flag"
+    set color green
+    set size 2
+  ]
+
+  ;; Spawn 1 LLM tank at red base area (bottom)
+  create-tanks 1 [
+    set team-id 2
+    set color blue + 1
+    set shape "arrow"
+    set size 1.8
+    set heading 0
+    set tank-direction 0
+    set tank-health 3
+    set is-llm? true
+    set last-action "none"
+    set my-observation ""
+    set ally-message ""
+    set my-message ""
+    set message-timer 0
+    set fire-cooldown 0
+    setxy 0 -13
+    set spawn-x 0
+    set spawn-y -13
+  ]
+end
+
+to setup-stage-2
+  ;; Team battle: 2 LLM tanks (blue) vs 2 scripted bots (red), no comms
+  ;; Blue LLM tanks
+  create-tanks 1 [
+    setup-tank-defaults 2 true
+    setxy -3 -13
+    set spawn-x -3
+    set spawn-y -13
+  ]
+  create-tanks 1 [
+    setup-tank-defaults 2 true
+    setxy 3 -13
+    set spawn-x 3
+    set spawn-y -13
+  ]
+
+  ;; Red bot tanks
+  create-tanks 1 [
+    setup-tank-defaults 1 false
+    setxy -3 13
+    set spawn-x -3
+    set spawn-y 13
+    set heading 180
+    set tank-direction 180
+  ]
+  create-tanks 1 [
+    setup-tank-defaults 1 false
+    setxy 3 13
+    set spawn-x 3
+    set spawn-y 13
+    set heading 180
+    set tank-direction 180
+  ]
+end
+
+to setup-stage-3
+  ;; Same as stage 2 but communication enabled
+  setup-stage-2
+  set communication-enabled? comms-override?
+end
+
+to setup-tank-defaults [team llm?]
+  set team-id team
+  ifelse team = 1
+    [ set color red + 1 ]
+    [ set color blue + 1 ]
+  set shape "arrow"
+  set size 1.8
+  set heading 0
+  set tank-direction 0
+  set tank-health 3
+  set is-llm? llm?
+  set last-action "none"
+  set my-observation ""
+  set ally-message ""
+  set my-message ""
+  set message-timer 0
+  set fire-cooldown 0
+end
+
+;; ============================================================
+;; GO — Main tick loop
+;; ============================================================
+to go
+  if game-over? [ stop ]
+  if ticks >= max-ticks [ resolve-timeout stop ]
+
+  ;; Update communication toggle live
+  if current-stage = 3 [
+    set communication-enabled? comms-override?
+  ]
+
+  ;; 1. Decrease cooldowns
+  ask tanks with [tank-health > 0] [
+    if fire-cooldown > 0 [ set fire-cooldown fire-cooldown - 1 ]
+    if message-timer > 0 [
+      set message-timer message-timer - 1
+      if message-timer = 0 [ set label "" ]
+    ]
+  ]
+
+  ;; 2. Build observations for LLM tanks
+  ask tanks with [is-llm? and tank-health > 0] [
+    set my-observation build-observation
+  ]
+
+  ;; 3. Communicate (Stage 3 only)
+  if current-stage = 3 and communication-enabled? [
+    ask tanks with [is-llm? and tank-health > 0] [ generate-message ]
+    deliver-messages
+  ]
+
+  ;; 4. Decide actions
+  ask tanks with [is-llm? and tank-health > 0] [
+    choose-action
+  ]
+  ask tanks with [not is-llm? and tank-health > 0] [
+    bot-decide
+  ]
+
+  ;; 5. Execute actions
+  ask tanks with [tank-health > 0] [
+    execute-action last-action
+  ]
+
+  ;; 6. Move bullets and resolve collisions
+  move-bullets
+  check-collisions
+
+  ;; 7. Update explosions
+  update-explosions
+
+  ;; 8. Check win condition
+  check-win-condition
+
+  tick
+end
+
+;; ============================================================
+;; OBSERVATION BUILDER
+;; ============================================================
+to-report build-observation
+  let obs ""
+
+  ;; Ego info
+  set obs (word obs "You are at (" xcor "," ycor ") facing " direction-name tank-direction
+    " with " tank-health " HP.\n")
+
+  ;; Terrain ahead (5 patches)
+  set obs (word obs "Ahead: ")
+  let i 1
+  while [i <= 5] [
+    let p patch-ahead i
+    if p != nobody [
+      set obs (word obs "[" i ":" [terrain-type] of p "]")
+    ]
+    set i i + 1
+  ]
+  set obs (word obs "\n")
+
+  ;; 7x7 ASCII minimap centered on self
+  set obs (word obs "Map (7x7, you=X):\n")
+  let my-x pxcor
+  let my-y pycor
+  let dy 3
+  while [dy >= -3] [
+    let dx -3
+    while [dx <= 3] [
+      let p patch-at dx dy
+      ifelse p = nobody [
+        set obs (word obs "#")
+      ] [
+        ifelse dx = 0 and dy = 0 [
+          set obs (word obs "X")
+        ] [
+          let ch map-char p
+          set obs (word obs ch)
+        ]
+      ]
+      set dx dx + 1
+    ]
+    set obs (word obs "\n")
+    set dy dy - 1
+  ]
+
+  ;; Visible enemies (in-cone 8 90)
+  let visible-enemies other tanks with [tank-health > 0 and team-id != [team-id] of myself] in-cone 8 90
+  ifelse any? visible-enemies [
+    set obs (word obs "Enemies visible: ")
+    ask visible-enemies [
+      set obs (word obs "(" xcor "," ycor ") ")
+    ]
+    set obs (word obs "\n")
+  ] [
+    set obs (word obs "No enemies visible.\n")
+  ]
+
+  ;; Ally info (stages 2-3)
+  if current-stage >= 2 [
+    let allies other tanks with [tank-health > 0 and team-id = [team-id] of myself]
+    if any? allies [
+      set obs (word obs "Allies: ")
+      ask allies [
+        set obs (word obs "(" xcor "," ycor " dir=" direction-name tank-direction " hp=" tank-health ") ")
+      ]
+      set obs (word obs "\n")
+    ]
+  ]
+
+  ;; Ally message (stage 3)
+  if current-stage = 3 and communication-enabled? and ally-message != "" [
+    set obs (word obs "Ally says: \"" ally-message "\"\n")
+  ]
+
+  ;; Stage-specific objective
+  if current-stage = 1 [
+    ;; Distance to flag
+    let flag-target one-of flags
+    if flag-target != nobody [
+      set obs (word obs "Objective: Reach the flag at (" [xcor] of flag-target "," [ycor] of flag-target "). "
+        "Distance: " precision distance flag-target 1 "\n")
+    ]
+  ]
+  if current-stage >= 2 [
+    set obs (word obs "Objective: Destroy enemy base and tanks. Your base HP: "
+      (ifelse-value (team-id = 1) [red-base-hp] [blue-base-hp])
+      " Enemy base HP: "
+      (ifelse-value (team-id = 1) [blue-base-hp] [red-base-hp]) "\n")
+  ]
+
+  ;; Last action result
+  if last-action != "none" [
+    set obs (word obs "Last action: " last-action "\n")
+  ]
+
+  report obs
+end
+
+;; Map character for ASCII minimap
+to-report map-char [p]
+  let tt [terrain-type] of p
+  if tt = "brick"     [ report "W" ]
+  if tt = "steel"     [ report "S" ]
+  if tt = "water"     [ report "~" ]
+  if tt = "base-red"  [ report "R" ]
+  if tt = "base-blue" [ report "B" ]
+  if tt = "flag"      [ report "F" ]
+
+  ;; Check for tanks/bullets on patch
+  if any? tanks-on p with [tank-health > 0 and team-id != [team-id] of myself] [ report "E" ]
+  if any? tanks-on p with [tank-health > 0 and team-id = [team-id] of myself and self != myself] [ report "A" ]
+
+  report "."
+end
+
+;; Direction name helper
+to-report direction-name [dir]
+  if dir = 0   [ report "North" ]
+  if dir = 90  [ report "East" ]
+  if dir = 180 [ report "South" ]
+  if dir = 270 [ report "West" ]
+  report "North"
+end
+
+;; ============================================================
+;; ACTION SELECTION — LLM (placeholder, filled in Phase 2)
+;; ============================================================
+to choose-action
+  ;; Phase 1: random action for testing game engine
+  ;; Will be replaced with llm:choose in Phase 2
+  let actions ["move-forward" "turn-left" "turn-right" "fire" "stay"]
+  set last-action one-of actions
+end
+
+;; ============================================================
+;; MESSAGE GENERATION — placeholder for Phase 3
+;; ============================================================
+to generate-message
+  ;; Will be replaced with llm:chat-with-template in Phase 3
+  set my-message ""
+end
+
+to deliver-messages
+  ;; Swap messages between allied LLM tanks
+  let blue-llm-tanks sort tanks with [is-llm? and team-id = 2 and tank-health > 0]
+  if length blue-llm-tanks = 2 [
+    let t1 item 0 blue-llm-tanks
+    let t2 item 1 blue-llm-tanks
+    let msg1 [my-message] of t1
+    let msg2 [my-message] of t2
+    ask t1 [
+      set ally-message msg2
+      if msg2 != "" [ set message-timer 3 ]
+    ]
+    ask t2 [
+      set ally-message msg1
+      if msg1 != "" [ set message-timer 3 ]
+    ]
+  ]
+end
+
+;; ============================================================
+;; BOT AI — State machine: patrol → chase → attack → retreat
+;; ============================================================
+to bot-decide
+  ;; Retreat if low health
+  if tank-health = 1 [
+    bot-retreat
+    stop
+  ]
+
+  ;; Attack: enemy aligned on same row/col within 6 patches
+  let target-enemy nobody
+  ;; Check in current facing direction
+  let ahead-patches patches-ahead-n 6
+  let enemies-ahead tanks with [tank-health > 0 and team-id != [team-id] of myself and member? patch-here ahead-patches]
+  if any? enemies-ahead [
+    set last-action "fire"
+    stop
+  ]
+
+  ;; Chase: enemy visible in cone
+  let visible-enemies other tanks with [tank-health > 0 and team-id != [team-id] of myself] in-cone 8 120
+  if any? visible-enemies [
+    let nearest min-one-of visible-enemies [distance myself]
+    bot-chase nearest
+    stop
+  ]
+
+  ;; Default: patrol
+  bot-patrol
+end
+
+to bot-retreat
+  ;; Move toward own base
+  let target-x spawn-x
+  let target-y spawn-y
+  let desired-heading towardsxy target-x target-y
+  let desired-dir round-to-cardinal desired-heading
+  ifelse desired-dir != tank-direction [
+    set last-action ifelse-value (turn-direction-for desired-dir = "left") ["turn-left"] ["turn-right"]
+  ] [
+    ifelse can-move-forward? [
+      set last-action "move-forward"
+    ] [
+      set last-action one-of ["turn-left" "turn-right"]
+    ]
+  ]
+end
+
+to bot-chase [enemy]
+  let desired-heading towards enemy
+  let desired-dir round-to-cardinal desired-heading
+  ifelse desired-dir != tank-direction [
+    set last-action ifelse-value (turn-direction-for desired-dir = "left") ["turn-left"] ["turn-right"]
+  ] [
+    ;; If aligned, fire; otherwise move forward
+    ifelse aligned-with? enemy [
+      set last-action "fire"
+    ] [
+      ifelse can-move-forward? [
+        set last-action "move-forward"
+      ] [
+        set last-action one-of ["turn-left" "turn-right"]
+      ]
+    ]
+  ]
+end
+
+to bot-patrol
+  ;; Simple patrol: move forward, turn randomly when blocked
+  ifelse can-move-forward? [
+    ;; Occasionally turn for variety
+    ifelse random 100 < 15 [
+      set last-action one-of ["turn-left" "turn-right"]
+    ] [
+      set last-action "move-forward"
+    ]
+  ] [
+    set last-action one-of ["turn-left" "turn-right"]
+  ]
+
+  ;; Occasionally fire while patrolling
+  if random 100 < 10 [
+    set last-action "fire"
+  ]
+end
+
+;; Check if enemy is aligned on same row/col in facing direction
+to-report aligned-with? [enemy]
+  let ex [xcor] of enemy
+  let ey [ycor] of enemy
+  if tank-direction = 0   and pxcor = [pxcor] of enemy and ey > ycor [ report true ]
+  if tank-direction = 180 and pxcor = [pxcor] of enemy and ey < ycor [ report true ]
+  if tank-direction = 90  and pycor = [pycor] of enemy and ex > xcor [ report true ]
+  if tank-direction = 270 and pycor = [pycor] of enemy and ex < xcor [ report true ]
+  report false
+end
+
+;; Patches ahead in facing direction, up to n
+to-report patches-ahead-n [n]
+  let result patch-set nobody
+  let i 1
+  while [i <= n] [
+    let p patch-ahead i
+    if p != nobody [ set result (patch-set result p) ]
+    set i i + 1
+  ]
+  report result
+end
+
+;; Round heading to nearest cardinal direction
+to-report round-to-cardinal [h]
+  ;; Normalize to 0-359
+  set h h mod 360
+  if h < 0 [ set h h + 360 ]
+  if h >= 315 or h < 45   [ report 0 ]
+  if h >= 45  and h < 135  [ report 90 ]
+  if h >= 135 and h < 225  [ report 180 ]
+  report 270
+end
+
+;; Determine whether to turn left or right to reach desired direction
+to-report turn-direction-for [desired-dir]
+  let diff (desired-dir - tank-direction) mod 360
+  if diff < 0 [ set diff diff + 360 ]
+  ifelse diff <= 180
+    [ report "right" ]
+    [ report "left" ]
+end
+
+;; Check if tank can move one patch forward
+to-report can-move-forward?
+  let p patch-ahead 1
+  if p = nobody [ report false ]
+  if [terrain-type] of p = "brick"  [ report false ]
+  if [terrain-type] of p = "steel"  [ report false ]
+  if [terrain-type] of p = "water"  [ report false ]
+  if any? other tanks-on p with [tank-health > 0] [ report false ]
+  report true
+end
+
+;; ============================================================
+;; ACTION EXECUTION
+;; ============================================================
+to execute-action [action-name]
+  if action-name = "move-forward" [
+    if can-move-forward? [
+      fd 1
+    ]
+    stop
+  ]
+  if action-name = "turn-left" [
+    set tank-direction (tank-direction - 90) mod 360
+    if tank-direction < 0 [ set tank-direction tank-direction + 360 ]
+    set heading tank-direction
+    stop
+  ]
+  if action-name = "turn-right" [
+    set tank-direction (tank-direction + 90) mod 360
+    set heading tank-direction
+    stop
+  ]
+  if action-name = "fire" [
+    if fire-cooldown <= 0 [
+      fire-bullet
+      set fire-cooldown 3
+    ]
+    stop
+  ]
+  ;; "stay" or unknown: do nothing
+end
+
+;; ============================================================
+;; BULLET MECHANICS
+;; ============================================================
+to fire-bullet
+  hatch-bullets 1 [
+    set shape "circle"
+    set size 0.5
+    set color yellow
+    set heading [tank-direction] of myself
+    set bullet-team [team-id] of myself
+    set bullet-direction [tank-direction] of myself
+    set bullet-distance 0
+  ]
+end
+
+to move-bullets
+  ask bullets [
+    ;; Bullets move 2 patches per tick
+    let steps 0
+    while [steps < 2] [
+      let next-p patch-ahead 1
+      ifelse next-p = nobody [
+        die  ;; hit world edge
+        stop
+      ] [
+        ;; Check for wall collision
+        let tt [terrain-type] of next-p
+        if tt = "steel" [
+          ;; Bounce off steel, destroy bullet
+          spawn-explosion xcor ycor
+          die
+          stop
+        ]
+        if tt = "brick" [
+          ;; Damage brick wall
+          ask next-p [
+            set wall-hp wall-hp - 1
+            ifelse wall-hp <= 0 [
+              set terrain-type "open"
+              set pcolor gray - 3
+            ] [
+              set pcolor brown + 3  ;; damaged wall is lighter
+            ]
+          ]
+          spawn-explosion [pxcor] of next-p [pycor] of next-p
+          die
+          stop
+        ]
+
+        ;; Check for tank collision
+        let hit-tanks tanks-on next-p with [tank-health > 0 and team-id != [bullet-team] of myself]
+        if any? hit-tanks [
+          ask one-of hit-tanks [
+            set tank-health tank-health - 1
+            if tank-health <= 0 [
+              ;; Tank destroyed
+              ifelse team-id = 1
+                [ set blue-score blue-score + 1 ]
+                [ set red-score red-score + 1 ]
+              spawn-explosion xcor ycor
+              set shape "x"
+              set size 1
+              set color gray
+            ]
+          ]
+          spawn-explosion [pxcor] of next-p [pycor] of next-p
+          die
+          stop
+        ]
+
+        ;; Check for base collision
+        if tt = "base-red" or tt = "base-blue" [
+          let bt [base-team] of next-p
+          if bt != bullet-team [
+            ask next-p [
+              set base-hp base-hp - 1
+              ifelse bt = 1
+                [ set red-base-hp red-base-hp - 1 ]
+                [ set blue-base-hp blue-base-hp - 1 ]
+              if base-hp <= 0 [
+                set terrain-type "open"
+                set pcolor gray - 3
+              ]
+            ]
+            ;; Score for base damage
+            ifelse bt = 1
+              [ set blue-score blue-score + 3 ]
+              [ set red-score red-score + 3 ]
+            spawn-explosion [pxcor] of next-p [pycor] of next-p
+            die
+            stop
+          ]
+        ]
+
+        ;; Move bullet forward
+        fd 1
+        set bullet-distance bullet-distance + 1
+
+        ;; Despawn after 15 patches
+        if bullet-distance >= 15 [
+          die
+          stop
+        ]
+      ]
+      set steps steps + 1
+    ]
+  ]
+end
+
+to check-collisions
+  ;; Stage 1: check if LLM tank reached flag
+  if current-stage = 1 [
+    ask tanks with [is-llm? and tank-health > 0] [
+      if any? flags-here [
+        set game-over? true
+        set winner "Blue (LLM)"
+        output-print "LLM tank reached the flag!"
+      ]
+    ]
+  ]
+end
+
+;; ============================================================
+;; EXPLOSIONS
+;; ============================================================
+to spawn-explosion [ex ey]
+  create-explosions 1 [
+    setxy ex ey
+    set shape "star"
+    set color orange
+    set size 1.0
+    set explosion-timer 3
+  ]
+end
+
+to update-explosions
+  ask explosions [
+    set explosion-timer explosion-timer - 1
+    ;; Pulse size
+    set size 1.0 + (3 - explosion-timer) * 0.3
+    set color orange - (3 - explosion-timer)
+    if explosion-timer <= 0 [ die ]
+  ]
+end
+
+;; ============================================================
+;; WIN CONDITION CHECKS
+;; ============================================================
+to check-win-condition
+  if current-stage = 1 [ stop ]  ;; handled in check-collisions
+
+  ;; Base destroyed
+  if red-base-hp <= 0 [
+    set game-over? true
+    set winner "Blue"
+    output-print "Blue wins! Red base destroyed."
+  ]
+  if blue-base-hp <= 0 [
+    set game-over? true
+    set winner "Red"
+    output-print "Red wins! Blue base destroyed."
+  ]
+
+  ;; All enemy tanks eliminated
+  let red-alive count tanks with [team-id = 1 and tank-health > 0]
+  let blue-alive count tanks with [team-id = 2 and tank-health > 0]
+  if red-alive = 0 and blue-alive > 0 [
+    set game-over? true
+    set winner "Blue"
+    output-print "Blue wins! All red tanks eliminated."
+  ]
+  if blue-alive = 0 and red-alive > 0 [
+    set game-over? true
+    set winner "Red"
+    output-print "Red wins! All blue tanks eliminated."
+  ]
+end
+
+to resolve-timeout
+  set game-over? true
+  ifelse red-score > blue-score [
+    set winner "Red"
+    output-print (word "Time's up! Red wins " red-score " to " blue-score)
+  ] [
+    ifelse blue-score > red-score [
+      set winner "Blue"
+      output-print (word "Time's up! Blue wins " blue-score " to " red-score)
+    ] [
+      set winner "Draw"
+      output-print (word "Time's up! Draw at " red-score " each")
+    ]
+  ]
+end
+
+;; ============================================================
+;; REPORTERS for monitors
+;; ============================================================
+to-report red-score-report
+  report red-score
+end
+
+to-report blue-score-report
+  report blue-score
+end
+
+to-report llm-calls-report
+  report total-llm-calls
+end
+
+to-report winner-report
+  report winner
+end
+
+to-report red-base-hp-report
+  report red-base-hp
+end
+
+to-report blue-base-hp-report
+  report blue-base-hp
+end
+
+to-report game-status
+  if game-over? [ report (word "GAME OVER: " winner " wins!") ]
+  report (word "Stage " current-stage " | Tick " ticks "/" max-ticks)
+end
+]]></code>
+  <widgets>
+    <view x="295" y="10" height="540" frameRate="10" fontSize="10" wrappingAllowedInX="false" wrappingAllowedInY="false" patchSize="17" maxPycor="15" maxPxcor="15" minPycor="-15" minPxcor="-15" width="540" updateMode="TickBased"></view>
+
+    <button x="15" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="80" display="Setup">setup</button>
+    <button x="105" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="80" display="Go">go</button>
+    <button x="195" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="80" display="Step">go</button>
+
+    <chooser x="15" y="60" height="60" variable="stage" current="1" width="260" display="Stage">
+      <option>"1: Solo Navigation"</option>
+      <option>"2: Team Battle"</option>
+      <option>"3: Team + Comms"</option>
+    </chooser>
+
+    <switch x="15" y="130" height="40" on="true" variable="comms-override?" width="170" display="comms-override?"></switch>
+    <switch x="15" y="175" height="40" on="false" variable="show-observations?" width="170" display="show-observations?"></switch>
+    <switch x="15" y="220" height="40" on="false" variable="show-thinking?" width="170" display="show-thinking?"></switch>
+
+    <slider x="15" step="10" y="270" max="200" width="260" display="max-ticks" height="40" min="20" direction="Horizontal" default="60.0" variable="max-ticks"></slider>
+
+    <monitor x="15" precision="0" y="320" height="40" fontSize="11" width="125" display="Red Score">red-score-report</monitor>
+    <monitor x="150" precision="0" y="320" height="40" fontSize="11" width="125" display="Blue Score">blue-score-report</monitor>
+
+    <monitor x="15" precision="0" y="365" height="40" fontSize="11" width="125" display="Red Base HP">red-base-hp-report</monitor>
+    <monitor x="150" precision="0" y="365" height="40" fontSize="11" width="125" display="Blue Base HP">blue-base-hp-report</monitor>
+
+    <monitor x="15" precision="0" y="410" height="40" fontSize="11" width="125" display="LLM Calls">llm-calls-report</monitor>
+    <monitor x="150" precision="17" y="410" height="40" fontSize="11" width="125" display="Ticks">ticks</monitor>
+
+    <monitor x="15" precision="17" y="455" height="40" fontSize="9" width="260" display="Status">game-status</monitor>
+    <monitor x="15" precision="17" y="500" height="40" fontSize="9" width="260" display="Winner">winner-report</monitor>
+
+    <plot x="850" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Score" y="10" xMin="0.0" height="200" legend="true" xMax="100.0" yMin="0.0" width="300" xAxis="Ticks" display="Team Scores">
+      <pen interval="1" x="0.0" y="0.0" color="-2674135" mode="0" display="Red">plot red-score</pen>
+      <pen interval="1" x="0.0" y="0.0" color="-13345367" mode="0" display="Blue">plot blue-score</pen>
+    </plot>
+
+    <plot x="850" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="Calls" y="220" xMin="0.0" height="150" legend="false" xMax="100.0" yMin="0.0" width="300" xAxis="Ticks" display="LLM Calls (cumulative)">
+      <pen interval="1" x="0.0" y="0.0" color="-7500403" mode="0" display="calls">plot total-llm-calls</pen>
+    </plot>
+
+    <output x="850" y="380" height="170" fontSize="10" width="300"></output>
+  </widgets>
+</model>
