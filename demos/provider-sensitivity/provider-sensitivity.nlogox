@@ -1,317 +1,507 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.3" snapToGrid="true">
-  <code><![CDATA[; ABOUTME: Demonstrates provider sensitivity by comparing OpenAI, Anthropic, Gemini, and Ollama on the same prompts.
-; ABOUTME: Includes runtime provider switching and side-by-side latency/cost/quality reporting.
+  <code><![CDATA[; ABOUTME: Telephone Game demo — parallel provider chains paraphrase a seed message, revealing semantic drift.
+; ABOUTME: Uses turtles, directed links, Jaccard-based drift scoring, optional thinking mode.
 
 extensions [llm]
 
+directed-link-breed [chain-links chain-link]
+
+turtles-own [
+  provider-name       ;; "openai", "anthropic", etc.
+  chain-position      ;; 0 = seed, 1..N-1 = paraphrase positions
+  current-message     ;; message this turtle holds
+  original-message    ;; seed message (for drift comparison)
+  drift-score         ;; [0,1] semantic drift from original
+  length-ratio        ;; response length / original length
+  processed?          ;; has this turtle completed its paraphrase?
+  error?              ;; did this turtle's LLM call fail?
+  thinking-trace      ;; thinking text (only for thinking-mode chain)
+]
+
 globals [
-  prompt-bank
-  current-prompt-index
-  comparison-results      ; [provider model prompt response length latency-ms estimated-cost-usd quality-score]
   ready-providers-list
-  run-complete?
+  current-step         ;; which chain position is being processed
+  seed-message
+  all-chains-complete?
   active-provider
+  thinking-provider    ;; which provider uses thinking mode (or "")
 ]
 
 ;; ===== SETUP =====
 
 to setup
   clear-all
-  set run-complete? false
-  set comparison-results []
-  set current-prompt-index 0
+  set all-chains-complete? false
+  set current-step 1
   set active-provider "none"
+  set thinking-provider ""
 
   carefully [
     llm:load-config "config-multi-provider.txt"
-    print "Loaded config-multi-provider.txt."
+    output-print "Loaded config-multi-provider.txt."
   ] [
-    print (word "Primary config load failed: " error-message)
+    output-print (word "Config load failed: " error-message)
     carefully [
       llm:load-config "config"
-      print "Loaded fallback config."
+      output-print "Loaded fallback config."
     ] [
-      print (word "Fallback config load failed: " error-message)
-      print "Update config-multi-provider.txt with your provider keys."
+      output-print (word "Fallback config load failed: " error-message)
+      output-print "Update config-multi-provider.txt with your provider keys."
     ]
   ]
 
   refresh-ready-providers
   if empty? ready-providers-list [
-    print "WARNING: No providers are ready."
-    print "Run llm:provider-help \"openai\" (or another provider) for setup guidance."
+    output-print "WARNING: No providers are ready."
+    output-print "Run llm:provider-help for setup guidance."
     stop
   ]
 
-  set prompt-bank build-prompt-bank
-  print (word "Loaded " length prompt-bank " prompts from category: " prompt-category)
+  set seed-message get-seed-message
 
-  if not empty? ready-providers-list [
-    activate-provider (first ready-providers-list)
+  ;; Decide thinking provider
+  if thinking-mode? and not empty? ready-providers-list [
+    set thinking-provider first ready-providers-list
   ]
 
+  ;; Create chains
+  let num-providers length ready-providers-list
+  if num-providers = 0 [ stop ]
+
+  let y-spacing (world-height / (num-providers + 1))
+  let x-start min-pxcor + 2
+  let x-end max-pxcor - 2
+  let x-spacing (x-end - x-start) / max (list 1 (chain-length - 1))
+
+  let chain-idx 0
+  foreach ready-providers-list [ prov ->
+    let chain-y max-pycor - (y-spacing * (chain-idx + 1))
+
+    ;; Create turtles for this chain
+    let prev-turtle nobody
+    let pos 0
+    repeat chain-length [
+      let tx x-start + (x-spacing * pos)
+      create-turtles 1 [
+        setxy tx chain-y
+        set provider-name prov
+        set chain-position pos
+        set original-message seed-message
+        set drift-score 0
+        set length-ratio 1
+        set error? false
+        set thinking-trace ""
+        set size 1.8
+
+        ;; Seed turtle gets the original message
+        ifelse pos = 0 [
+          set current-message seed-message
+          set processed? true
+          set color green
+          set label-color white
+        ] [
+          set current-message ""
+          set processed? false
+          set color gray
+        ]
+
+        ;; Star shape for thinking-mode chain
+        ifelse prov = thinking-provider [
+          set shape "star"
+        ] [
+          set shape "circle"
+        ]
+
+        ;; Link from previous turtle
+        if prev-turtle != nobody [
+          create-chain-link-from prev-turtle [
+            set color gray + 2
+          ]
+        ]
+        set prev-turtle self
+      ]
+      set pos pos + 1
+    ]
+    set chain-idx chain-idx + 1
+  ]
+
+  ;; Label seed turtles with provider name
+  ask turtles with [chain-position = 0] [
+    set label (word provider-name "  ")
+  ]
+
+  update-all-visuals
   reset-ticks
 end
 
 to refresh-ready-providers
   set ready-providers-list sort llm:providers
-  print (word "Ready providers: " ready-providers-list)
+  output-print (word "Ready providers: " ready-providers-list)
 end
 
-to-report build-prompt-bank
-  if prompt-category = "factual" [
-    report (list
-      "What is the capital of France? Answer in one sentence."
-      "Explain photosynthesis in two sentences."
-      "What causes ocean tides? Answer briefly."
-    )
-  ]
-  if prompt-category = "creative" [
-    report (list
-      "Write a haiku about a turtle crossing a road."
-      "Invent a name for a cafe that serves only desserts. Give only the name."
-      "Describe a sunset in exactly ten words."
-    )
-  ]
-  if prompt-category = "reasoning" [
-    report (list
-      "If all roses are flowers and some flowers fade quickly, can we conclude all roses fade quickly? Explain in one sentence."
-      "A bat and a ball cost $1.10. The bat costs $1 more than the ball. How much does the ball cost? Show your work briefly."
-      "Is it possible to fold a piece of paper in half more than seven times? Answer briefly."
-    )
-  ]
-  if prompt-category = "decision" [
-    report (list
-      "You find a wallet on the street with $200 and an ID. What do you do? Answer in one sentence."
-      "You can save five strangers or one close friend. Which do you choose? Explain briefly."
-      "Should a self-driving car prioritize passengers or pedestrians? State your position in one sentence."
-    )
-  ]
-  report (list
-    "What is the capital of France? Answer in one sentence."
-    "Write a haiku about a turtle crossing a road."
-    "A bat and a ball cost $1.10. The bat costs $1 more than the ball. How much does the ball cost?"
-  )
-end
-
-;; ===== MAIN COMPARISON LOOP =====
+;; ===== MAIN LOOP =====
 
 to go
-  if run-complete? [
-    print "All prompts tested. Click 'show-results' for the full summary."
+  if all-chains-complete? [
+    output-print "All chains complete. Click 'Show Results' for summary."
     stop
   ]
 
-  if current-prompt-index >= length prompt-bank [
-    set run-complete? true
-    print "=== Comparison complete ==="
-    print (word "Total result rows: " length comparison-results)
-    show-results
+  if current-step >= chain-length [
+    set all-chains-complete? true
+    output-print "=== All chains complete ==="
+    show-final-results
     stop
   ]
 
-  let current-prompt item current-prompt-index prompt-bank
-  print ""
-  print (word "=== Prompt " (current-prompt-index + 1) "/" length prompt-bank " ===")
-  print (word "Prompt: " current-prompt)
-  print ""
+  output-print (word "--- Step " current-step " of " (chain-length - 1) " ---")
 
-  foreach ready-providers-list [ provider-name ->
-    run-single-provider provider-name current-prompt
+  ;; Process position current-step for every chain
+  foreach ready-providers-list [ prov ->
+    let step-turtles turtles with [provider-name = prov and chain-position = current-step]
+    if any? step-turtles [
+      ask step-turtles [
+        ifelse prov = thinking-provider and thinking-mode? [
+          process-thinking-chain-step
+        ] [
+          process-chain-step
+        ]
+      ]
+    ]
   ]
 
-  set current-prompt-index current-prompt-index + 1
+  update-all-visuals
+  set current-step current-step + 1
   tick
 end
 
-to run-single-provider [provider-name current-prompt]
-  carefully [
-    llm:set-provider provider-name
-    let model-name get-default-model provider-name
-    llm:set-model model-name
-    llm:clear-history
+;; ===== CHAIN PROCESSING =====
 
-    reset-timer
-    let response llm:chat current-prompt
-    let latency-ms precision (timer * 1000) 0
-    let resp-length length response
-    let estimated-cost-usd estimate-cost-usd provider-name current-prompt response
-    let quality-score score-response current-prompt response
-
-    let result (list provider-name model-name current-prompt response resp-length latency-ms estimated-cost-usd quality-score)
-    set comparison-results lput result comparison-results
-
-    print (word "  [" provider-name "/" model-name "] len=" resp-length
-           " latency=" latency-ms "ms est-cost=$" estimated-cost-usd " quality=" quality-score)
-    print (word "    " truncate-string response 120)
-  ] [
-    print (word "  [" provider-name "] ERROR: " error-message)
-    let failed-result (list provider-name "n/a" current-prompt (word "ERROR: " error-message) 0 0 0 0)
-    set comparison-results lput failed-result comparison-results
+to process-chain-step
+  ;; Get the message from the previous turtle in the chain
+  let prev-turtle one-of in-chain-link-neighbors
+  if prev-turtle = nobody or [current-message] of prev-turtle = "" [
+    set error? true
+    set processed? true
+    stop
   ]
-end
 
-to-report get-default-model [provider-name]
-  if provider-name = "openai"    [ report "gpt-4o-mini" ]
-  if provider-name = "anthropic" [ report "claude-3-5-haiku-latest" ]
-  if provider-name = "gemini"    [ report "gemini-2.0-flash" ]
-  if provider-name = "ollama"    [ report "llama3.2" ]
-  report "unknown"
-end
+  let input-msg [current-message] of prev-turtle
+  let paraphrase-prompt (word
+    "Paraphrase the following message in your own words. "
+    "Keep the same meaning and level of detail. "
+    "Do not add new information or opinions. "
+    "Output only the paraphrased message.\n\n"
+    "Message: " input-msg)
 
-;; ===== RUNTIME PROVIDER SWITCHING =====
-
-to activate-provider [provider-name]
   carefully [
     llm:set-provider provider-name
     llm:set-model (get-default-model provider-name)
-    set active-provider provider-name
-    print (word "Active provider set to: " provider-name " / " (get-default-model provider-name))
+    llm:clear-history
+
+    let response llm:chat paraphrase-prompt
+    set current-message response
+    set drift-score compute-drift original-message response
+    if length original-message > 0 [
+      set length-ratio length response / length original-message
+    ]
+    set processed? true
+    set error? false
+
+    output-print (word "  [" provider-name " pos=" chain-position "] drift=" (precision drift-score 2))
   ] [
-    print (word "Provider switch failed for " provider-name ": " error-message)
+    output-print (word "  [" provider-name " pos=" chain-position "] ERROR: " error-message)
+    set current-message (word "ERROR: " error-message)
+    set error? true
+    set processed? true
+    set drift-score 1
   ]
 end
 
-to use-openai
-  activate-provider "openai"
-end
-
-to use-anthropic
-  activate-provider "anthropic"
-end
-
-to use-gemini
-  activate-provider "gemini"
-end
-
-to use-ollama
-  activate-provider "ollama"
-end
-
-to cycle-provider
-  if empty? ready-providers-list [
-    print "No ready providers to cycle."
+to process-thinking-chain-step
+  ;; Same as process-chain-step but uses chat-with-thinking
+  let prev-turtle one-of in-chain-link-neighbors
+  if prev-turtle = nobody or [current-message] of prev-turtle = "" [
+    set error? true
+    set processed? true
     stop
   ]
-  let idx position active-provider ready-providers-list
-  if idx = false [
-    activate-provider (first ready-providers-list)
-    stop
+
+  let input-msg [current-message] of prev-turtle
+  let paraphrase-prompt (word
+    "Paraphrase the following message in your own words. "
+    "Keep the same meaning and level of detail. "
+    "Do not add new information or opinions. "
+    "Output only the paraphrased message.\n\n"
+    "Message: " input-msg)
+
+  carefully [
+    llm:set-provider provider-name
+    llm:set-model (get-default-model provider-name)
+    llm:clear-history
+    llm:set-thinking true
+
+    let result llm:chat-with-thinking paraphrase-prompt
+    let response item 0 result
+    let thinking item 1 result
+
+    set current-message response
+    set thinking-trace thinking
+    set drift-score compute-drift original-message response
+    if length original-message > 0 [
+      set length-ratio length response / length original-message
+    ]
+    set processed? true
+    set error? false
+
+    llm:set-thinking false
+
+    output-print (word "  [" provider-name " pos=" chain-position " THINKING] drift=" (precision drift-score 2))
+    if thinking != "" [
+      output-print (word "    Thinking: " truncate-string thinking 80)
+    ]
+  ] [
+    llm:set-thinking false
+    output-print (word "  [" provider-name " pos=" chain-position "] THINKING ERROR: " error-message)
+    set current-message (word "ERROR: " error-message)
+    set error? true
+    set processed? true
+    set drift-score 1
   ]
-  let next-idx ((idx + 1) mod (length ready-providers-list))
-  activate-provider (item next-idx ready-providers-list)
 end
 
-;; ===== RESULTS DISPLAY =====
+;; ===== VISUALS =====
 
-to show-results
-  print ""
-  print "==============================================================="
-  print "Provider Sensitivity Results"
-  print "==============================================================="
+to update-all-visuals
+  ask turtles [
+    ifelse processed? [
+      ifelse error? [
+        set color red
+      ] [
+        ;; Green (low drift) -> Yellow -> Red (high drift)
+        let r-val min (list 255 (round (255 * drift-score)))
+        let g-val min (list 255 (round (255 * (1 - drift-score))))
+        set color rgb r-val g-val 0
+      ]
+    ] [
+      set color gray
+    ]
 
-  let prompt-idx 0
-  foreach prompt-bank [ p ->
-    print ""
-    print (word "Prompt " (prompt-idx + 1) ": " truncate-string p 70)
-    foreach comparison-results [ result ->
-      let r-provider item 0 result
-      let r-model item 1 result
-      let r-prompt item 2 result
-      let r-response item 3 result
-      let r-length item 4 result
-      let r-latency item 5 result
-      let r-cost item 6 result
-      let r-quality item 7 result
-      if r-prompt = p [
-        print (word "  - " r-provider " (" r-model ") len=" r-length
-               " latency=" r-latency "ms cost=$" r-cost " quality=" r-quality)
-        print (word "    " truncate-string r-response 100)
+    ;; Labels
+    ifelse show-labels? [
+      ifelse chain-position = 0 [
+        set label (word provider-name "  ")
+      ] [
+        ifelse processed? and not error? [
+          set label (word truncate-string current-message 20 "  ")
+        ] [
+          set label ""
+        ]
+      ]
+    ] [
+      ifelse chain-position = 0 [
+        set label (word provider-name "  ")
+      ] [
+        set label ""
       ]
     ]
-    set prompt-idx prompt-idx + 1
   ]
 
-  print ""
-  print "Summary by provider (avg over successful responses):"
-  foreach ready-providers-list [ provider-name ->
-    let provider-results filter [ r -> item 0 r = provider-name and item 4 r > 0 ] comparison-results
-    if not empty? provider-results [
-      let avg-len precision (mean map [ r -> item 4 r ] provider-results) 1
-      let avg-latency precision (mean map [ r -> item 5 r ] provider-results) 1
-      let avg-cost precision (mean map [ r -> item 6 r ] provider-results) 6
-      let avg-quality precision (mean map [ r -> item 7 r ] provider-results) 2
-      print (word "  " provider-name
-        " | length=" avg-len
-        " | latency-ms=" avg-latency
-        " | est-cost-usd=" avg-cost
-        " | quality=" avg-quality
-        " | n=" length provider-results)
+  ;; Color patches under processed turtles (lighter version of turtle color)
+  ask patches [ set pcolor black ]
+  ask turtles with [processed? and chain-position > 0] [
+    ask patch-here [
+      ifelse [error?] of one-of turtles-here [
+        set pcolor red - 3
+      ] [
+        let d [drift-score] of one-of turtles-here
+        let r-val min (list 255 (round (80 + 100 * d)))
+        let g-val min (list 255 (round (80 + 100 * (1 - d))))
+        set pcolor rgb r-val g-val 30
+      ]
     ]
   ]
 end
 
-;; ===== CHOOSE COMPARISON =====
+;; ===== RESULTS =====
 
-to compare-choose
-  let choose-prompt "You are a turtle in a simulation. Which direction should you move?"
-  let choices ["north" "south" "east" "west"]
+to show-final-results
+  output-print ""
+  output-print "==============================================================="
+  output-print "Telephone Game Results"
+  output-print "==============================================================="
+  output-print (word "Seed: " truncate-string seed-message 70)
+  output-print ""
 
-  print ""
-  print "=== llm:choose Comparison ==="
-  print (word "Prompt: " choose-prompt)
-  print (word "Choices: " choices)
-  print ""
-
-  foreach ready-providers-list [ provider-name ->
-    carefully [
-      llm:set-provider provider-name
-      llm:set-model (get-default-model provider-name)
-      llm:clear-history
-      reset-timer
-      let chosen llm:choose choose-prompt choices
-      let latency-ms precision (timer * 1000) 0
-      print (word "  " provider-name " chose: " chosen " (" latency-ms "ms)")
-    ] [
-      print (word "  " provider-name " ERROR: " error-message)
+  foreach ready-providers-list [ prov ->
+    output-print (word "--- " prov " chain ---")
+    let chain-turtles sort-on [chain-position] turtles with [provider-name = prov]
+    foreach chain-turtles [ t ->
+      let pos [chain-position] of t
+      let msg [current-message] of t
+      let drift [drift-score] of t
+      let err [error?] of t
+      let thinking [thinking-trace] of t
+      ifelse pos = 0 [
+        output-print (word "  [seed] " truncate-string msg 60)
+      ] [
+        ifelse err [
+          output-print (word "  [" pos "] ERROR")
+        ] [
+          output-print (word "  [" pos "] drift=" (precision drift 2) " | " truncate-string msg 55)
+          if thinking != "" [
+            output-print (word "        thinking: " truncate-string thinking 50)
+          ]
+        ]
+      ]
     ]
-  ]
-  print ""
-end
-
-;; ===== SINGLE PROMPT QUICK TEST =====
-
-to compare-single
-  if custom-prompt = "" or custom-prompt = "Type a prompt here..." [
-    print "Enter a prompt in the input box first."
-    stop
-  ]
-
-  print ""
-  print "=== Custom Prompt Comparison ==="
-  print (word "Prompt: " custom-prompt)
-  print ""
-
-  foreach ready-providers-list [ provider-name ->
-    run-single-provider provider-name custom-prompt
+    ;; Final drift for this chain
+    let final-turtle last chain-turtles
+    if final-turtle != nobody [
+      output-print (word "  Final drift: " (precision [drift-score] of final-turtle 3))
+    ]
+    output-print ""
   ]
 end
-
-;; ===== PROVIDER STATUS =====
 
 to show-provider-status
-  print ""
-  print "=== Provider Status ==="
+  output-print ""
+  output-print "=== Provider Status ==="
   foreach llm:provider-status [ info ->
-    print (word "  " info)
+    output-print (word "  " info)
   ]
-  print ""
-  print (word "Ready:  " llm:providers)
-  print (word "All:    " llm:providers-all)
-  print (word "Active: " active-provider)
-  let active llm:active
-  print (word "Engine: " item 0 active " / " item 1 active)
+  output-print (word "Ready:  " llm:providers)
+  output-print (word "All:    " llm:providers-all)
+  output-print (word "Thinking provider: " thinking-provider)
+end
+
+;; ===== SEED MESSAGES =====
+
+to-report get-seed-message
+  if message-type = "custom" [
+    ifelse custom-message = "" or custom-message = "Type a custom message here..." [
+      report "The Great Wall of China was built over many centuries, stretching approximately 13,000 miles, primarily to protect against northern invasions."
+    ] [
+      report custom-message
+    ]
+  ]
+  if message-type = "factual" [
+    report "The Great Wall of China was built over many centuries starting around the 7th century BC, stretching approximately 13,000 miles across northern China to protect against invasions from nomadic groups."
+  ]
+  if message-type = "nuanced" [
+    report "While some studies suggest social media may contribute to teen anxiety, researchers emphasize that the relationship is complex and likely depends on individual usage patterns, pre-existing conditions, and the type of content consumed."
+  ]
+  if message-type = "instructional" [
+    report "To make a basic omelette, first beat three eggs with salt and pepper, then pour into a hot buttered pan, let the edges set for thirty seconds, add fillings to one half, fold the other half over, and slide onto a plate."
+  ]
+  if message-type = "creative" [
+    report "The old lighthouse keeper watched the storm roll in, her lantern casting amber circles on the wet stone walls, each flash of lightning revealing the sea's fury like a photograph frozen in silver and black."
+  ]
+  if message-type = "controversial" [
+    report "Universal basic income could reduce poverty and give people freedom to pursue education, but critics argue it may discourage work, strain government budgets, and prove difficult to implement at scale without inflation."
+  ]
+  ;; Fallback
+  report "The Great Wall of China was built over many centuries, stretching approximately 13,000 miles, primarily to protect against northern invasions."
+end
+
+;; ===== DEFAULT MODELS =====
+
+to-report get-default-model [prov]
+  if prov = "openai"    [ report "gpt-4o-mini" ]
+  if prov = "anthropic" [ report "claude-3-5-haiku-latest" ]
+  if prov = "gemini"    [ report "gemini-2.0-flash" ]
+  if prov = "ollama"    [ report "llama3.2" ]
+  report "unknown"
+end
+
+;; ===== DRIFT COMPUTATION =====
+
+to-report compute-drift [text-a text-b]
+  if text-a = "" or text-b = "" [ report 1 ]
+  let words-a to-word-set text-a
+  let words-b to-word-set text-b
+  if empty? words-a and empty? words-b [ report 0 ]
+  let inter-size count-intersection words-a words-b
+  let union-size count-union words-a words-b
+  if union-size = 0 [ report 1 ]
+  let jaccard inter-size / union-size
+  report max (list 0 (min (list 1 (1 - jaccard))))
+end
+
+to-report to-word-set [text]
+  let cleaned replace-all-chars (lowercase text) ".,;:!?\"'()-" " "
+  let words split-on-spaces cleaned
+  ;; Deduplicate
+  let result []
+  foreach words [ w ->
+    if w != "" and not member? w result [
+      set result lput w result
+    ]
+  ]
+  report result
+end
+
+to-report split-on-spaces [text]
+  let result []
+  let current-word ""
+  let i 0
+  while [i < length text] [
+    let ch item i text
+    ifelse ch = " " [
+      if current-word != "" [
+        set result lput current-word result
+        set current-word ""
+      ]
+    ] [
+      set current-word (word current-word ch)
+    ]
+    set i i + 1
+  ]
+  if current-word != "" [
+    set result lput current-word result
+  ]
+  report result
+end
+
+to-report replace-all-chars [text chars replacement]
+  let result text
+  let i 0
+  while [i < length chars] [
+    let ch (substring chars i (i + 1))
+    let new-result ""
+    let j 0
+    while [j < length result] [
+      let rc item j result
+      ifelse (word rc) = ch [
+        set new-result (word new-result replacement)
+      ] [
+        set new-result (word new-result rc)
+      ]
+      set j j + 1
+    ]
+    set result new-result
+    set i i + 1
+  ]
+  report result
+end
+
+to-report count-intersection [set-a set-b]
+  let count-val 0
+  foreach set-a [ w ->
+    if member? w set-b [ set count-val count-val + 1 ]
+  ]
+  report count-val
+end
+
+to-report count-union [set-a set-b]
+  let combined set-a
+  foreach set-b [ w ->
+    if not member? w combined [
+      set combined lput w combined
+    ]
+  ]
+  report length combined
 end
 
 ;; ===== UTILITIES =====
@@ -324,132 +514,106 @@ to-report truncate-string [s max-len]
   ]
 end
 
-to-report contains-text? [haystack needle]
-  report position needle haystack != false
-end
+;; ===== PLOT HELPERS =====
 
-to-report estimate-tokens [text]
-  report max (list 1 (round (length text / 4)))
-end
-
-to-report provider-pricing [provider-name]
-  ; Approximate USD costs per 1K tokens [input output].
-  if provider-name = "openai"    [ report (list 0.00015 0.0006) ]
-  if provider-name = "anthropic" [ report (list 0.00025 0.00125) ]
-  if provider-name = "gemini"    [ report (list 0.000075 0.0003) ]
-  if provider-name = "ollama"    [ report (list 0 0) ]
-  report (list 0 0)
-end
-
-to-report estimate-cost-usd [provider-name prompt response]
-  let pricing provider-pricing provider-name
-  let in-rate item 0 pricing
-  let out-rate item 1 pricing
-  let in-tokens estimate-tokens prompt
-  let out-tokens estimate-tokens response
-  let total-cost ((in-tokens / 1000) * in-rate) + ((out-tokens / 1000) * out-rate)
-  report precision total-cost 6
-end
-
-to-report score-response [prompt response]
-  ; Simple heuristic quality score in [0,1] for quick provider comparison.
-  let p lowercase prompt
-  let r lowercase response
-  let checks 0
-  let hits 0
-
-  if contains-text? p "capital of france" [
-    set checks checks + 1
-    if contains-text? r "paris" [ set hits hits + 1 ]
+to-report avg-drift
+  let processed-turtles turtles with [processed? and chain-position > 0 and not error?]
+  ifelse any? processed-turtles [
+    report precision (mean [drift-score] of processed-turtles) 3
+  ] [
+    report 0
   ]
-  if contains-text? p "photosynthesis" [
-    set checks checks + 1
-    if ((contains-text? r "sunlight") or (contains-text? r "chlorophyll")) [ set hits hits + 1 ]
-  ]
-  if contains-text? p "ocean tides" [
-    set checks checks + 1
-    if contains-text? r "moon" [ set hits hits + 1 ]
-  ]
-  if contains-text? p "bat and a ball" [
-    set checks checks + 1
-    if ((contains-text? r "0.05") or (contains-text? r "5 cents") or (contains-text? r "five cents")) [ set hits hits + 1 ]
-  ]
-  if contains-text? p "wallet" [
-    set checks checks + 1
-    if ((contains-text? r "return") or (contains-text? r "owner")) [ set hits hits + 1 ]
-  ]
-
-  if checks = 0 [
-    ifelse length response > 0 [ report 1 ] [ report 0 ]
-  ]
-
-  report precision (hits / checks) 2
 end
 ]]></code>
   <widgets>
-    <view x="420" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-8" height="238" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="237" tickCounterLabel="ticks" maxPycor="8" updateMode="1" maxPxcor="8" minPxcor="-8"></view>
-    <button x="15" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="setup" width="85" sizeVersion="0">setup</button>
-    <button x="110" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="go" width="85" sizeVersion="0">go</button>
-    <button x="205" y="10" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="go-all" width="85" sizeVersion="0">go</button>
-    <chooser x="15" y="55" height="45" variable="prompt-category" current="0" width="180" display="prompt-category">
+    <view x="420" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-12" height="338" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="false" width="541" tickCounterLabel="ticks" maxPycor="12" updateMode="1" maxPxcor="20" minPxcor="-20"></view>
+    <button x="15" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="setup" width="90" sizeVersion="0">setup</button>
+    <button x="115" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="step" width="90" sizeVersion="0">go</button>
+    <button x="215" y="10" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="go-all" width="90" sizeVersion="0">go</button>
+    <button x="315" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Show Results" width="95" sizeVersion="0">show-final-results</button>
+    <chooser x="15" y="55" height="45" variable="message-type" current="0" width="200" display="message-type">
       <choice type="string" value="factual"></choice>
+      <choice type="string" value="nuanced"></choice>
+      <choice type="string" value="instructional"></choice>
       <choice type="string" value="creative"></choice>
-      <choice type="string" value="reasoning"></choice>
-      <choice type="string" value="decision"></choice>
+      <choice type="string" value="controversial"></choice>
+      <choice type="string" value="custom"></choice>
     </chooser>
-    <button x="15" y="115" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Show Results" width="180" sizeVersion="0">show-results</button>
-    <button x="15" y="160" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Compare Choose" width="180" sizeVersion="0">compare-choose</button>
-    <button x="15" y="205" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Provider Status" width="180" sizeVersion="0">show-provider-status</button>
-    <button x="205" y="55" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Use OpenAI" width="130" sizeVersion="0">use-openai</button>
-    <button x="205" y="90" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Use Anthropic" width="130" sizeVersion="0">use-anthropic</button>
-    <button x="205" y="125" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Use Gemini" width="130" sizeVersion="0">use-gemini</button>
-    <button x="205" y="160" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Use Ollama" width="130" sizeVersion="0">use-ollama</button>
-    <button x="205" y="195" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Cycle Provider" width="130" sizeVersion="0">cycle-provider</button>
-    <input x="15" multiline="false" y="250" height="60" variable="custom-prompt" type="string" width="390">Type a prompt here...</input>
-    <button x="15" y="320" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Compare Custom" width="180" sizeVersion="0">compare-single</button>
+    <slider x="15" step="1" y="110" max="10" width="200" display="chain-length" height="45" min="3" direction="Horizontal" default="6.0" variable="chain-length"></slider>
+    <switch x="15" y="165" height="33" on="true" variable="show-labels?" width="200" display="show-labels?"></switch>
+    <switch x="15" y="205" height="33" on="false" variable="thinking-mode?" width="200" display="thinking-mode?"></switch>
+    <input x="15" multiline="false" y="250" height="45" variable="custom-message" type="string" width="395">Type a custom message here...</input>
+    <monitor x="225" precision="17" y="55" height="40" fontSize="11" width="95" display="Step" sizeVersion="0">current-step</monitor>
+    <monitor x="225" precision="17" y="100" height="40" fontSize="11" width="95" display="Providers" sizeVersion="0">length ready-providers-list</monitor>
+    <monitor x="325" precision="17" y="55" height="40" fontSize="11" width="85" display="Avg Drift" sizeVersion="0">avg-drift</monitor>
+    <button x="325" y="100" height="40" disableUntilTicks="false" forever="false" kind="Observer" display="Provider Status" width="85" sizeVersion="0">show-provider-status</button>
+    <plot x="15" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="Drift" y="360" xMin="0.0" height="175" legend="true" xMax="10.0" yMin="0.0" width="470" xAxis="Chain Position" display="Semantic Drift by Provider">
+      <setup>set-current-plot "Semantic Drift by Provider"</setup>
+      <update>foreach ready-providers-list [ prov ->
+  create-temporary-plot-pen prov
+  let chain-turtles sort-on [chain-position] turtles with [provider-name = prov and processed? and not error?]
+  foreach chain-turtles [ t ->
+    plotxy [chain-position] of t [drift-score] of t
+  ]
+]</update>
+    </plot>
+    <plot x="495" autoPlotX="true" yMax="200.0" autoPlotY="true" yAxis="Characters" y="360" xMin="0.0" height="175" legend="true" xMax="10.0" yMin="0.0" width="470" xAxis="Chain Position" display="Message Length by Provider">
+      <setup>set-current-plot "Message Length by Provider"</setup>
+      <update>foreach ready-providers-list [ prov ->
+  create-temporary-plot-pen prov
+  let chain-turtles sort-on [chain-position] turtles with [provider-name = prov and processed? and not error?]
+  foreach chain-turtles [ t ->
+    plotxy [chain-position] of t length [current-message] of t
+  ]
+]</update>
+    </plot>
+    <output x="420" y="545" height="180" fontSize="11" width="545"></output>
   </widgets>
   <info>## WHAT IS IT?
 
-A demo that compares how different LLM providers (OpenAI, Anthropic, Gemini, Ollama) respond to the same prompt. Reveals differences in style, length, reasoning, and decision-making across providers.
+A Telephone Game for LLMs. Parallel chains of turtles pass a seed message through repeated paraphrasing by different LLM providers. Each position in the chain asks its provider to rephrase what it received. As the message travels, semantic drift accumulates — and different providers drift at different rates and in different ways.
 
 ## HOW IT WORKS
 
-The model maintains a bank of test prompts organized by category (factual, creative, reasoning, decision). On each tick it sends the next prompt to every ready provider and records response length, latency, estimated cost, and a heuristic quality score.
+Each chain is a horizontal row of turtles connected by directed links (arrows). Position 0 holds the original seed message. At each step, the turtle at the current position receives the message from its predecessor and asks its LLM provider to paraphrase it. Drift is measured using word-level Jaccard similarity against the original seed, yielding a score from 0 (identical) to 1 (completely different).
 
-The interface also supports runtime provider switching with dedicated buttons (`Use OpenAI`, `Use Anthropic`, `Use Gemini`, `Use Ollama`, `Cycle Provider`).
+Color encodes drift: green = low drift, yellow = moderate, red = high. The optional thinking-mode chain (star-shaped turtles) uses `llm:chat-with-thinking` to expose the provider's internal reasoning process.
 
 ## HOW TO USE IT
 
-1. Edit `config-multi-provider.txt` with API keys for the providers you want to compare
-2. Click **setup** to load configuration and detect ready providers
-3. Use provider buttons to switch active provider at runtime if desired
-4. Select a **prompt-category** from the chooser
-5. Click **go** (single step) or **go-all** (run through all prompts)
-6. Click **Show Results** to inspect quality, latency, cost, and response differences
-7. Use **Compare Choose** to test constrained decisions across providers
-8. Type a custom prompt in the input box and click **Compare Custom**
+1. Edit `config-multi-provider.txt` with API keys for providers you want to compare
+2. Choose a **message-type** from the dropdown (factual, nuanced, instructional, creative, controversial, or custom)
+3. Set **chain-length** (3-10) — longer chains show more drift
+4. Toggle **thinking-mode?** to enable reasoning traces on one chain
+5. Click **setup** to create the chains
+6. Click **step** to advance one position, or **go-all** to run all positions
+7. Click **Show Results** for detailed text comparison in the output area
+8. Click **Provider Status** to see which providers are configured
 
 ## THINGS TO NOTICE
 
-- Response length varies significantly across providers
-- Latency and estimated cost can move independently from quality
-- Creative prompts usually show the most stylistic divergence
-- Reasoning prompts reveal different error patterns and confidence styles
-- `llm:choose` can expose directional bias between providers/models
+- Some providers preserve factual details (numbers, dates) better than others
+- Creative/literary messages often drift faster than factual ones
+- Instructional messages may lose step ordering at different rates
+- The drift plot reveals which providers are most and least faithful
+- Message length may grow or shrink differently per provider
+- Thinking traces (star turtles) show how the provider reasons about paraphrasing
 
 ## THINGS TO TRY
 
-- Run the same category multiple times to observe consistency
-- Compare a local Ollama model against cloud providers
-- Use custom prompts to test domain-specific sensitivity
-- Compare an inexpensive fast model against a slower stronger model
+- Run the same seed with different chain lengths to see when drift saturates
+- Compare "factual" vs "creative" messages — which drifts faster?
+- Enable thinking mode and read the reasoning traces in Show Results
+- Try a custom message with specific numbers or proper nouns to test precision
+- Run multiple times with the same settings to see provider consistency
 
 ## EXTENDING THE MODEL
 
-- Replace heuristic quality scoring with rubric-based evaluation prompts
-- Add export to CSV for plotting cost/latency/quality tradeoffs
-- Add a turtle-per-provider visualization
-- Add repeated trials and confidence intervals for each metric</info>
+- Add a "back-translation" chain where messages pass through two providers alternately
+- Implement BLEU or ROUGE scoring instead of Jaccard for finer drift measurement
+- Add a "consensus" reporter that finds the most-preserved words across all chains
+- Export chain messages to CSV for external analysis
+- Add temperature control per chain to study randomness vs fidelity</info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">
@@ -457,6 +621,23 @@ The interface also supports runtime provider switching with dedicated buttons (`
         <point x="40" y="250"></point>
         <point x="150" y="205"></point>
         <point x="260" y="250"></point>
+      </polygon>
+    </shape>
+    <shape name="circle" rotatable="false" editableColorIndex="0">
+      <circle x="35" y="35" marked="true" color="-1920102913" diameter="230" filled="true"></circle>
+    </shape>
+    <shape name="star" rotatable="false" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="151" y="1"></point>
+        <point x="185" y="108"></point>
+        <point x="298" y="108"></point>
+        <point x="207" y="175"></point>
+        <point x="242" y="282"></point>
+        <point x="151" y="216"></point>
+        <point x="59" y="282"></point>
+        <point x="94" y="175"></point>
+        <point x="3" y="108"></point>
+        <point x="116" y="108"></point>
       </polygon>
     </shape>
   </turtleShapes>
