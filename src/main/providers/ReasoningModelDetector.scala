@@ -52,9 +52,12 @@ object ReasoningModelDetector {
     if (!enabled) return None
 
     val effort = configStore.get(ConfigStore.REASONING_EFFORT)
-    val budget = configStore.get(ConfigStore.THINKING_BUDGET_TOKENS).flatMap(s =>
-      scala.util.Try(s.toInt).toOption
-    )
+    val budget = configStore.get(ConfigStore.THINKING_BUDGET_TOKENS).flatMap { s =>
+      scala.util.Try(s.toInt).toOption.orElse {
+        System.err.println(s"WARNING: Invalid thinking_budget_tokens value '$s' (not a valid integer), ignoring")
+        None
+      }
+    }
 
     Some(ThinkingConfig(
       enabled = true,

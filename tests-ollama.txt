@@ -34,6 +34,7 @@ OllamaChatHistory
 OllamaChoose
   extensions [llm]
   O> llm:load-config "demos/test-config"
+  O> llm:set-model "llama3.2:3b"
   member? (llm:choose "Pick exactly one color" ["red" "blue" "green"]) ["red" "blue" "green"] => true
 
 OllamaTemplate
@@ -69,6 +70,25 @@ OllamaThinkingWithBudget
   length result => 2
   is-string? (item 0 result) => true
   empty? (item 0 result) => false
+
+OllamaChooseHistoryClean
+  extensions [llm]
+  globals [result]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "llama3.2:3b"
+  O> llm:clear-history
+  O> set result llm:choose "Pick a fruit" ["apple" "banana" "cherry"]
+  length llm:history => 2
+  (item 0 (item 0 llm:history)) => "user"
+  (item 1 (item 0 llm:history)) => "Pick a fruit"
+  (item 0 (item 1 llm:history)) => "assistant"
+  member? (item 1 (item 1 llm:history)) ["apple" "banana" "cherry"] => true
+
+OllamaChooseExactMatch
+  extensions [llm]
+  O> llm:load-config "demos/test-config"
+  O> llm:set-model "llama3.2:3b"
+  member? (llm:choose "Pick exactly one animal" ["cat" "dog" "bird"]) ["cat" "dog" "bird"] => true
 
 OllamaMultiAgent
   extensions [llm]
