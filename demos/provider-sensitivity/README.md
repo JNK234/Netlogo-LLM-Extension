@@ -1,68 +1,56 @@
-# Demo 3: Provider Sensitivity
+# Demo 3: Provider Sensitivity — Telephone Game
 
-Compare OpenAI, Anthropic, Gemini, and Ollama on the same prompts from NetLogo.
+A visual Telephone Game that reveals how different LLM providers drift when paraphrasing the same message through a chain.
 
 ## Demo Artifacts
 
-- `provider-sensitivity.nlogox`: Main interactive demo with runtime provider switching.
+- `provider-sensitivity.nlogox`: Telephone Game ABM demo.
 - `config-multi-provider.txt`: Multi-provider config template.
 - `tests/test_provider_sensitivity.py`: Python test suite.
 
-## What This Demo Compares
+## What This Demo Reveals
 
-For each provider/model pair, the demo records:
+Each provider chain starts with the same seed message and paraphrases it through a sequence of turtles. The demo exposes:
 
-- `quality`: heuristic task score in `[0,1]` (prompt-dependent).
-- `latency-ms`: wall-clock response time measured in NetLogo.
-- `est-cost-usd`: approximate token-based cost estimate.
-- `length`: response character count.
+- **Semantic drift rate**: How quickly meaning erodes across repeated paraphrasing.
+- **Detail preservation**: Whether numbers, dates, and proper nouns survive.
+- **Tone fidelity**: Whether hedging, metaphor, and balance are maintained.
+- **Length behavior**: Whether responses grow, shrink, or stay stable over the chain.
 
 ## Setup
 
-1. Open `config-multi-provider.txt`.
-2. Fill API keys for cloud providers you want to benchmark.
-3. For Ollama, run `ollama serve` and pull the target model (for example `ollama pull llama3.2`).
-4. Open `provider-sensitivity.nlogox` in NetLogo 7.0.3.
+1. Open `config-multi-provider.txt` and fill in API keys for the providers you want.
+2. For Ollama, run `ollama serve` and pull a model (e.g., `ollama pull llama3.2`).
+3. Open `provider-sensitivity.nlogox` in NetLogo 7.0.3.
 
-## Run the Main Demo (`provider-sensitivity.nlogox`)
+## Running the Demo
 
-1. Click **setup**.
-2. Use runtime buttons to switch active provider:
-   - **Use OpenAI**
-   - **Use Anthropic**
-   - **Use Gemini**
-   - **Use Ollama**
-   - **Cycle Provider**
-3. Choose a prompt category.
-4. Click **go** or **go-all**.
-5. Click **Show Results** for side-by-side summary output.
+1. Choose a **message-type** (factual, nuanced, instructional, creative, controversial, or custom).
+2. Set **chain-length** (3–10). Longer chains amplify drift.
+3. Optionally enable **thinking-mode?** to see reasoning traces on one chain.
+4. Click **setup** to create the parallel chains.
+5. Click **step** to advance one position, or **go-all** to run through all positions.
+6. Click **Show Results** for detailed text comparison in the output area.
 
-## Compare Results: Cost, Latency, Quality
+## Thinking Mode
 
-Use these checks when reading summary output:
+When `thinking-mode?` is enabled, the first provider's chain uses `llm:chat-with-thinking` instead of `llm:chat`. These turtles appear as stars and their reasoning traces are stored and displayed in the results output.
 
-1. Latency-first: pick providers with the lowest `latency-ms` for real-time agent loops.
-2. Cost-first: compare `est-cost-usd` across the same task and run count.
-3. Quality floor: reject providers below your minimum quality threshold.
-4. Pareto choice: among providers meeting quality floor, pick the cheapest/fastest.
+## Reading the Results
 
-## Test suite
+- **Color gradient**: Green = low drift from original, yellow = moderate, red = high.
+- **Drift plot**: Shows Jaccard-based semantic drift at each chain position per provider.
+- **Length plot**: Shows message character count at each position.
+- **Output area**: Full text comparison with drift scores and thinking traces.
 
-Run the Python test suite:
+## Test Suite
 
 ```bash
 python -m pytest demos/provider-sensitivity/tests/test_provider_sensitivity.py -v
 ```
 
-Coverage includes:
-
-- File artifact and config validation
-- XML structure and widget parsing
-- NetLogo 7.0.3 format compliance
-- Behavior regression checks (deprecated primitives, procedure closure, provider switching)
-
 ## Notes
 
-- Cost values are estimates based on token heuristics and static per-provider pricing assumptions.
-- Quality scoring is heuristic by design; tune scoring logic for your domain tasks.
-- Providers without valid keys/connectivity are automatically skipped by ready-provider checks.
+- Drift is measured using word-level Jaccard similarity (pure NetLogo, no external dependencies).
+- Each paraphrase call uses `llm:clear-history` for stateless, independent prompting.
+- Providers without valid keys are automatically skipped during setup.
