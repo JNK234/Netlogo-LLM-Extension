@@ -8,6 +8,7 @@ extensions [llm]
 breed [mesh-agents mesh-agent]
 breed [hierarchy-agents hierarchy-agent]
 breed [chain-agents chain-agent]
+breed [label-agents label-agent]
 undirected-link-breed [topology-links topology-link]
 
 globals [
@@ -71,6 +72,7 @@ to build-topologies
   build-mesh-topology
   build-hierarchy-topology
   build-chain-topology
+  create-topology-labels
 
   ask topology-links [
     set color gray + 1
@@ -82,12 +84,11 @@ to build-mesh-topology
   create-mesh-agents agents-per-topology [
     set topology-name "mesh"
     set shape "circle"
-    set color blue + 2
     set size 2
   ]
 
   ;; Top-left quadrant
-  layout-circle mesh-agents 8
+  layout-circle mesh-agents 9
   ask mesh-agents [
     set xcor xcor - 13
     set ycor ycor + 10
@@ -107,7 +108,6 @@ to build-hierarchy-topology
   create-hierarchy-agents agents-per-topology [
     set topology-name "hierarchy"
     set shape "triangle"
-    set color green + 2
     set size 2
   ]
 
@@ -118,7 +118,7 @@ to build-hierarchy-topology
     let first-at-level ((2 ^ level) - 1)
     let level-position (i - first-at-level)
     let level-width (2 ^ level)
-    let x-offset 13 + (level-position - ((level-width - 1) / 2)) * 5
+    let x-offset 13 + (level-position - ((level-width - 1) / 2)) * 6
     let y-offset 20 - (level * 6)
 
     ask item i ordered [
@@ -137,7 +137,6 @@ to build-chain-topology
   create-chain-agents agents-per-topology [
     set topology-name "chain"
     set shape "square"
-    set color orange + 2
     set size 2
   ]
 
@@ -147,8 +146,10 @@ to build-chain-topology
   let start-x (0 - ((agents-per-topology - 1) * spacing / 2))
 
   foreach (range length ordered) [i ->
+    let frac (i / max list 1 (agents-per-topology - 1))
+    let arc-y -18 + 3 * cos (180 * frac)
     ask item i ordered [
-      setxy (start-x + (i * spacing)) -18
+      setxy (start-x + (i * spacing)) arc-y
     ]
 
     if i > 0 [
@@ -158,14 +159,27 @@ to build-chain-topology
   ]
 end
 
+to-report belief-color [b]
+  if b = "COLLECT"   [ report 15 ]
+  if b = "EXPLORE"   [ report 105 ]
+  if b = "STABILIZE" [ report 55 ]
+  report white
+end
+
+to create-topology-labels
+  create-label-agents 1 [ setxy -13 20  set label "MESH"      set label-color white  set size 0 ]
+  create-label-agents 1 [ setxy  13 24  set label "HIERARCHY"  set label-color white  set size 0 ]
+  create-label-agents 1 [ setxy   0 -13 set label "CHAIN"      set label-color white  set size 0 ]
+end
+
 to seed-beliefs
   assign-beliefs mesh-agents 0
   assign-beliefs hierarchy-agents 1
   assign-beliefs chain-agents 2
 
-  ask turtles [
-    set label belief
-    set label-color white
+  ask turtles with [breed != label-agents] [
+    set color belief-color belief
+    set label ""
   ]
 end
 
@@ -180,7 +194,7 @@ to assign-beliefs [group shift]
 end
 
 to initialize-agents
-  ask turtles [
+  ask turtles with [breed != label-agents] [
     set previous-belief belief
     set rounds-unchanged 0
   ]
@@ -190,10 +204,10 @@ to go
   if not tournament-running? [ stop ]
 
   ;; Snapshot beliefs for simultaneous update
-  ask turtles [ set previous-belief belief ]
+  ask turtles with [breed != label-agents] [ set previous-belief belief ]
 
   ;; Each unconverged agent decides independently
-  ask turtles [
+  ask turtles with [breed != label-agents] [
     let idx position topology-name topology-order
     if item idx convergence-times = -1 [
       decide-belief
@@ -201,6 +215,7 @@ to go
   ]
 
   check-all-convergence
+  update-convergence-visuals
 
   ;; Per-tick summary
   print (word "Tick " ticks
@@ -224,20 +239,28 @@ to decide-belief
   [ set rounds-unchanged rounds-unchanged + 1 ]
   [ set rounds-unchanged 0 ]
 
-  set label belief
+  set color belief-color belief
 end
 
 to decide-belief-llm [neighbor-beliefs]
   carefully [
+    let base-prompt (word
+      "You are agent " who " in a " topology-name " network with " length neighbor-beliefs " neighbors. "
+      "Your group is trying to reach consensus on one belief. "
+      "You can ONLY see your direct neighbors — you cannot see the whole group. "
+      "RULE: Pick the belief held by the MAJORITY of your neighbors. "
+      "If there is a tie among neighbors, keep your current belief. "
+      "If you have only one neighbor, adopt their belief."
+    )
+    let system-prompt base-prompt
+    if rounds-unchanged >= 3 [
+      set system-prompt (word base-prompt
+        " IMPORTANT: You have held the same belief for " rounds-unchanged
+        " rounds while your neighbors are split. To help the group reach consensus, switch to one of your neighbors' beliefs."
+      )
+    ]
     llm:set-history (list
-      (list "system" (word
-        "You are agent " who " in a " topology-name " network with " length neighbor-beliefs " neighbors. "
-        "Your group is trying to reach consensus on one belief. "
-        "You can ONLY see your direct neighbors — you cannot see the whole group. "
-        "RULE: Pick the belief held by the MAJORITY of your neighbors. "
-        "If there is a tie among neighbors, keep your current belief. "
-        "If you have only one neighbor, adopt their belief."
-      ))
+      (list "system" system-prompt)
     )
     let prompt (word
       "Your current belief: " belief ". "
@@ -262,8 +285,9 @@ to decide-belief-deterministic [neighbor-beliefs]
     let cnt length (filter [b -> b = candidate] all-local)
     if cnt > best-count [ set best candidate  set best-count cnt ]
   ]
-  ;; Small random chance to break symmetry and prevent oscillation
-  if best = belief and length neighbor-beliefs > 0 and random 100 < 10 [
+  ;; Random chance to break symmetry; higher when stuck 3+ rounds
+  let break-chance ifelse-value (rounds-unchanged >= 3) [40] [10]
+  if best = belief and length neighbor-beliefs > 0 and random 100 < break-chance [
     set best one-of neighbor-beliefs
   ]
   set belief best
@@ -277,6 +301,32 @@ to-report belief-count-summary [belief-list]
   ]
   ifelse empty? chunks [ report "none" ]
   [ report (reduce [[a b] -> (word a ", " b)] chunks) ]
+end
+
+to update-convergence-visuals
+  foreach (range length topology-order) [idx ->
+    if item idx convergence-times != -1 [
+      let topo-name item idx topology-order
+      let upper-name upper-case-name topo-name
+      let group (turtle-set turtles with [topology-name = topo-name and breed != label-agents])
+      ask group [
+        ask my-topology-links [ set color 45  set thickness 0.5 ]
+      ]
+      ask label-agents with [member? upper-name (word label)] [
+        if not member? "CONVERGED" (word label) [
+          set label (word label " CONVERGED")
+          set label-color 45
+        ]
+      ]
+    ]
+  ]
+end
+
+to-report upper-case-name [name]
+  if name = "mesh"      [ report "MESH" ]
+  if name = "hierarchy" [ report "HIERARCHY" ]
+  if name = "chain"     [ report "CHAIN" ]
+  report name
 end
 
 to check-all-convergence
@@ -413,11 +463,12 @@ end]]></code>
     <monitor x="15" precision="0" y="390" height="60" fontSize="11" width="195" display="Mesh Convergence">convergence-time "mesh"</monitor>
     <monitor x="15" precision="0" y="440" height="60" fontSize="11" width="195" display="Hierarchy Convergence">convergence-time "hierarchy"</monitor>
     <monitor x="15" precision="0" y="490" height="60" fontSize="11" width="195" display="Chain Convergence">convergence-time "chain"</monitor>
-    <switch x="1250" y="525" height="40" on="false" variable="use-llm?" width="280" display="use-llm?"></switch>
-    <monitor x="1415" precision="1" y="630" height="60" fontSize="11" width="280" display="Hierarchy Agreement %">agreement-pct hierarchy-agents</monitor>
-    <monitor x="1415" precision="1" y="570" height="60" fontSize="11" width="280" display="Chain Agreement %">agreement-pct chain-agents</monitor>
-    <monitor x="1135" precision="1" y="630" height="60" fontSize="11" width="280" display="Mesh Agreement %">agreement-pct mesh-agents</monitor>
-    <monitor x="1135" precision="17" y="570" height="60" fontSize="11" width="280" display="LLM Status">llm-status</monitor>
+    <switch x="995" y="500" height="40" on="true" variable="use-llm?" width="200" display="use-llm?"></switch>
+    <monitor x="1200" precision="17" y="500" height="40" fontSize="11" width="200" display="LLM Status">llm-status</monitor>
+    <monitor x="995" precision="1" y="550" height="60" fontSize="11" width="300" display="Mesh Agreement %">agreement-pct mesh-agents</monitor>
+    <monitor x="1295" precision="1" y="550" height="60" fontSize="11" width="300" display="Hierarchy Agreement %">agreement-pct hierarchy-agents</monitor>
+    <monitor x="1595" precision="1" y="550" height="60" fontSize="11" width="300" display="Chain Agreement %">agreement-pct chain-agents</monitor>
+    <note x="220" y="760" height="35" width="745" fontSize="12" backgroundDark="0" backgroundLight="0" textColorDark="-1" textColorLight="-16777216" markdown="false">BELIEFS: COLLECT (red)  EXPLORE (blue)  STABILIZE (green)  |  SHAPES: Circle=Mesh  Triangle=Hierarchy  Square=Chain</note>
     <plot x="995" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="Agreement %" y="50" xMin="0.0" height="435" legend="true" xMax="100.0" yMin="0.0" width="900" xAxis="Ticks" display="Agreement by Topology">
       <setup></setup>
       <update></update>
