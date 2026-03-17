@@ -1,3 +1,6 @@
+# ABOUTME: Test suite for the Telephone Game provider-sensitivity demo.
+# ABOUTME: Validates XML structure, procedures, widgets, seed messages, and thinking mode support.
+
 import re
 import unittest
 import xml.etree.ElementTree as ET
@@ -41,52 +44,13 @@ def parse_config(path: Path) -> dict[str, str]:
     return data
 
 
-class TestProviderSensitivityArtifacts(unittest.TestCase):
-    """Validate that all required demo files exist and contain expected content."""
+class TestRequiredFiles(unittest.TestCase):
+    """Validate that all required demo files exist."""
 
     def test_required_files_exist(self) -> None:
         required = [MODEL_PATH, CONFIG_PATH, README_PATH]
         for path in required:
             self.assertTrue(path.exists(), f"missing file: {path}")
-
-    def test_model_contains_required_procedures(self) -> None:
-        code = model_code_only()
-        procedures = [
-            "to setup",
-            "to go",
-            "to run-single-provider",
-            "to show-results",
-            "to compare-choose",
-            "to compare-single",
-            "to show-provider-status",
-            "to activate-provider",
-            "to use-openai",
-            "to use-anthropic",
-            "to use-gemini",
-            "to use-ollama",
-            "to cycle-provider",
-            "to-report build-prompt-bank",
-            "to-report get-default-model",
-            "to-report truncate-string",
-            "to-report estimate-cost-usd",
-            "to-report score-response",
-        ]
-        for proc in procedures:
-            self.assertIn(proc, code, f"missing procedure: {proc}")
-
-    def test_config_has_required_keys(self) -> None:
-        config = parse_config(CONFIG_PATH)
-        for key in ["provider", "model", "temperature", "max_tokens", "timeout_seconds"]:
-            self.assertIn(key, config, f"missing key in config: {key}")
-
-    def test_readme_has_core_sections(self) -> None:
-        readme = read(README_PATH)
-        for text in [
-            "Provider Sensitivity",
-            "Setup",
-            "Test suite",
-        ]:
-            self.assertIn(text, readme)
 
 
 class TestModelXmlParsing(unittest.TestCase):
@@ -98,6 +62,10 @@ class TestModelXmlParsing(unittest.TestCase):
     def test_model_parses_as_valid_xml(self) -> None:
         self.assertEqual(self.root.tag, "model")
 
+    def test_netlogo_version_is_7_0_3(self) -> None:
+        version = self.root.get("version")
+        self.assertEqual(version, "NetLogo 7.0.3")
+
     def test_code_element_contains_cdata_content(self) -> None:
         code_elem = self.root.find("code")
         self.assertIsNotNone(code_elem, "missing <code> element")
@@ -108,51 +76,6 @@ class TestModelXmlParsing(unittest.TestCase):
         raw = read(MODEL_PATH)
         self.assertIn("<code><![CDATA[", raw)
         self.assertIn("]]></code>", raw)
-
-    def test_widgets_section_has_expected_children(self) -> None:
-        widgets = self.root.find("widgets")
-        self.assertIsNotNone(widgets, "missing <widgets> section")
-        child_tags = [child.tag for child in widgets]
-        self.assertIn("view", child_tags)
-        self.assertIn("button", child_tags)
-        self.assertIn("chooser", child_tags)
-        self.assertIn("input", child_tags)
-
-    def test_widgets_button_count(self) -> None:
-        widgets = self.root.find("widgets")
-        buttons = widgets.findall("button")
-        self.assertEqual(
-            len(buttons), 12,
-            f"expected 12 buttons, got {len(buttons)}: "
-            + str([b.get("display") for b in buttons]),
-        )
-
-    def test_widgets_has_chooser(self) -> None:
-        widgets = self.root.find("widgets")
-        choosers = widgets.findall("chooser")
-        self.assertEqual(len(choosers), 1, "expected 1 chooser (prompt-category)")
-        chooser = choosers[0]
-        self.assertEqual(chooser.get("variable"), "prompt-category")
-        choices = [c.get("value") for c in chooser.findall("choice")]
-        self.assertEqual(choices, ["factual", "creative", "reasoning", "decision"])
-
-    def test_widgets_has_inputbox(self) -> None:
-        widgets = self.root.find("widgets")
-        inputs = widgets.findall("input")
-        self.assertGreaterEqual(len(inputs), 1, "expected at least 1 input (custom-prompt)")
-        variables = [i.get("variable") for i in inputs]
-        self.assertIn("custom-prompt", variables)
-
-
-class TestModelStructure(unittest.TestCase):
-    """Structural assertions on the NetLogo 7.x .nlogox format."""
-
-    def setUp(self) -> None:
-        self.root = parse_model()
-
-    def test_netlogo_version_is_7_0_3(self) -> None:
-        version = self.root.get("version")
-        self.assertEqual(version, "NetLogo 7.0.3")
 
     def test_required_top_level_sections_exist(self) -> None:
         required_sections = [
@@ -176,110 +99,217 @@ class TestModelStructure(unittest.TestCase):
         self.assertIsNotNone(preview)
         self.assertIn("setup", preview.text)
 
-    def test_link_shapes_has_default(self) -> None:
-        link_shapes = self.root.find("linkShapes")
-        self.assertIsNotNone(link_shapes, "missing <linkShapes>")
-        names = [s.get("name") for s in link_shapes.findall("shape")]
-        self.assertIn("default", names)
 
-    def test_turtle_shapes_has_default(self) -> None:
-        shapes = self.root.find("turtleShapes")
-        self.assertIsNotNone(shapes, "missing <turtleShapes>")
-        names = [s.get("name") for s in shapes.findall("shape")]
-        self.assertIn("default", names)
+class TestWidgets(unittest.TestCase):
+    """Validate widget structure and types."""
+
+    def setUp(self) -> None:
+        self.widgets = parse_model().find("widgets")
+        self.assertIsNotNone(self.widgets, "missing <widgets> section")
+
+    def test_has_view(self) -> None:
+        views = self.widgets.findall("view")
+        self.assertEqual(len(views), 1, "expected exactly 1 view")
+
+    def test_view_has_no_wrapping(self) -> None:
+        view = self.widgets.find("view")
+        self.assertEqual(view.get("wrappingAllowedX"), "false")
+        self.assertEqual(view.get("wrappingAllowedY"), "false")
+
+    def test_has_buttons(self) -> None:
+        buttons = self.widgets.findall("button")
+        displays = [b.get("display") for b in buttons]
+        for expected in ["setup", "step", "go-all", "Show Results", "Provider Status"]:
+            self.assertIn(expected, displays, f"missing button: {expected}")
+
+    def test_has_forever_button(self) -> None:
+        buttons = self.widgets.findall("button")
+        forever_buttons = [b for b in buttons if b.get("forever") == "true"]
+        self.assertGreaterEqual(len(forever_buttons), 1, "expected at least 1 forever button")
+
+    def test_has_chooser(self) -> None:
+        choosers = self.widgets.findall("chooser")
+        self.assertEqual(len(choosers), 1, "expected 1 chooser")
+        chooser = choosers[0]
+        self.assertEqual(chooser.get("variable"), "message-type")
+        choices = [c.get("value") for c in chooser.findall("choice")]
+        for cat in ["factual", "nuanced", "instructional", "creative", "controversial", "custom"]:
+            self.assertIn(cat, choices, f"missing choice: {cat}")
+
+    def test_has_slider(self) -> None:
+        sliders = self.widgets.findall("slider")
+        self.assertGreaterEqual(len(sliders), 1, "expected at least 1 slider")
+        variables = [s.get("variable") for s in sliders]
+        self.assertIn("chain-length", variables)
+
+    def test_has_switches(self) -> None:
+        switches = self.widgets.findall("switch")
+        variables = [s.get("variable") for s in switches]
+        self.assertIn("show-labels?", variables)
+        self.assertIn("thinking-mode?", variables)
+
+    def test_has_monitors(self) -> None:
+        monitors = self.widgets.findall("monitor")
+        self.assertGreaterEqual(len(monitors), 3, "expected at least 3 monitors")
+
+    def test_has_plots(self) -> None:
+        plots = self.widgets.findall("plot")
+        self.assertGreaterEqual(len(plots), 2, "expected at least 2 plots")
+        displays = [p.get("display") for p in plots]
+        self.assertTrue(
+            any("drift" in d.lower() for d in displays),
+            "expected a drift plot",
+        )
+
+    def test_has_input(self) -> None:
+        inputs = self.widgets.findall("input")
+        self.assertGreaterEqual(len(inputs), 1, "expected at least 1 input")
+        variables = [i.get("variable") for i in inputs]
+        self.assertIn("custom-message", variables)
+
+    def test_has_output_area(self) -> None:
+        outputs = self.widgets.findall("output")
+        self.assertGreaterEqual(len(outputs), 1, "expected at least 1 output widget")
 
 
-class TestBehaviorRegression(unittest.TestCase):
-    """Catch regressions in model syntax and LLM extension usage patterns."""
+class TestCoreProcedures(unittest.TestCase):
+    """Validate required procedures exist in the NetLogo code."""
 
     def setUp(self) -> None:
         self.code = model_code_only()
 
+    def test_required_procedures_exist(self) -> None:
+        procedures = [
+            "to setup",
+            "to go",
+            "to process-chain-step",
+            "to process-thinking-chain-step",
+            "to show-final-results",
+            "to show-provider-status",
+            "to update-all-visuals",
+            "to refresh-ready-providers",
+            "to-report get-seed-message",
+            "to-report get-default-model",
+            "to-report compute-drift",
+            "to-report to-word-set",
+            "to-report split-on-spaces",
+            "to-report replace-all-chars",
+            "to-report count-intersection",
+            "to-report count-union",
+            "to-report truncate-string",
+        ]
+        for proc in procedures:
+            self.assertIn(proc, self.code, f"missing procedure: {proc}")
+
+    def test_all_procedure_blocks_are_closed(self) -> None:
+        opens = len(re.findall(r"^to(?:-report)?\s", self.code, re.MULTILINE))
+        closes = len(re.findall(r"^end\s*$", self.code, re.MULTILINE))
+        self.assertEqual(
+            opens, closes,
+            f"mismatched procedure blocks: {opens} opens vs {closes} ends",
+        )
+
     def test_extensions_declaration_present(self) -> None:
         self.assertIn("extensions [llm]", self.code)
 
+    def test_directed_link_breed_declared(self) -> None:
+        self.assertIn("directed-link-breed [chain-links chain-link]", self.code)
+
+    def test_turtles_own_has_expected_vars(self) -> None:
+        self.assertIn("turtles-own", self.code)
+        for var in ["provider-name", "chain-position", "current-message",
+                     "original-message", "drift-score", "processed?",
+                     "error?", "thinking-trace"]:
+            self.assertIn(var, self.code, f"missing turtle variable: {var}")
+
+    def test_globals_declared(self) -> None:
+        self.assertIn("globals [", self.code)
+        for g in ["ready-providers-list", "current-step", "seed-message",
+                   "all-chains-complete?", "active-provider", "thinking-provider"]:
+            self.assertIn(g, self.code, f"missing global: {g}")
+
+
+class TestSeedMessages(unittest.TestCase):
+    """Validate seed message categories."""
+
+    def setUp(self) -> None:
+        self.code = model_code_only()
+
+    def test_all_message_categories_present(self) -> None:
+        for category in ["factual", "nuanced", "instructional",
+                         "creative", "controversial", "custom"]:
+            self.assertIn(
+                f'message-type = "{category}"',
+                self.code,
+                f"missing message category: {category}",
+            )
+
+    def test_factual_message_has_numbers(self) -> None:
+        self.assertIn("13,000", self.code)
+
+    def test_nuanced_message_has_hedging(self) -> None:
+        self.assertIn("some studies suggest", self.code.lower())
+
+    def test_instructional_message_has_steps(self) -> None:
+        self.assertIn("omelette", self.code.lower())
+
+    def test_creative_message_has_imagery(self) -> None:
+        self.assertIn("lighthouse", self.code.lower())
+
+    def test_controversial_message_has_dual_view(self) -> None:
+        code_lower = self.code.lower()
+        self.assertIn("universal basic income", code_lower)
+        self.assertIn("critics", code_lower)
+
+
+class TestThinkingMode(unittest.TestCase):
+    """Validate thinking mode support."""
+
+    def setUp(self) -> None:
+        self.code = model_code_only()
+
+    def test_thinking_primitives_used(self) -> None:
+        self.assertIn("llm:set-thinking", self.code)
+        self.assertIn("llm:chat-with-thinking", self.code)
+
+    def test_thinking_provider_global(self) -> None:
+        self.assertIn("thinking-provider", self.code)
+
+    def test_thinking_chain_step_procedure(self) -> None:
+        self.assertIn("to process-thinking-chain-step", self.code)
+
+    def test_thinking_trace_stored(self) -> None:
+        self.assertIn("thinking-trace", self.code)
+
+
+class TestNoDeprecatedPrimitives(unittest.TestCase):
+    """Guard against usage of removed or renamed LLM extension primitives."""
+
+    def setUp(self) -> None:
+        self.code = model_code_only()
+
     def test_no_deprecated_primitives(self) -> None:
-        """Guard against usage of removed or renamed LLM extension primitives."""
         deprecated = ["llm:ask", "llm:send", "llm:query", "llm:prompt"]
         for prim in deprecated:
             self.assertNotIn(prim, self.code, f"deprecated primitive: {prim}")
 
-    def test_all_procedure_blocks_are_closed(self) -> None:
-        """Every 'to' or 'to-report' must have a matching 'end'."""
-        opens = len(re.findall(r"^to(?:-report)?\s", self.code, re.MULTILINE))
-        closes = len(re.findall(r"^end\s*$", self.code, re.MULTILINE))
-        self.assertEqual(
-            opens,
-            closes,
-            f"mismatched procedure blocks: {opens} opens vs {closes} ends",
-        )
 
-    def test_globals_declared(self) -> None:
-        self.assertIn("globals [", self.code)
-        for g in ["prompt-bank", "comparison-results", "ready-providers-list",
-                   "run-complete?", "active-provider"]:
-            self.assertIn(g, self.code, f"missing global: {g}")
+class TestConfigFile(unittest.TestCase):
+    """Validate config file structure."""
 
-    def test_prompt_bank_covers_all_categories(self) -> None:
-        """Verify the prompt bank handles all four prompt categories."""
-        for category in ["factual", "creative", "reasoning", "decision"]:
-            self.assertIn(
-                f'prompt-category = "{category}"',
-                self.code,
-                f"missing prompt category: {category}",
-            )
+    def test_config_has_required_keys(self) -> None:
+        config = parse_config(CONFIG_PATH)
+        for key in ["provider", "model", "temperature", "max_tokens", "timeout_seconds"]:
+            self.assertIn(key, config, f"missing key in config: {key}")
 
-    def test_provider_switching_procedures_exist(self) -> None:
-        """Runtime provider switching is the core feature of this demo."""
-        for proc in ["to use-openai", "to use-anthropic", "to use-gemini",
-                      "to use-ollama", "to cycle-provider"]:
-            self.assertIn(proc, self.code, f"missing provider switching procedure: {proc}")
 
-    def test_score_response_checks_known_prompts(self) -> None:
-        """Quality scoring should check for known factual answers."""
-        for keyword in ["capital of france", "photosynthesis", "paris",
-                         "bat and a ball", "wallet"]:
-            self.assertIn(keyword, self.code.lower(),
-                          f"score-response missing check for: {keyword}")
+class TestReadme(unittest.TestCase):
+    """Validate README content."""
 
-    def test_estimate_cost_uses_provider_pricing(self) -> None:
-        """Cost estimation needs per-provider pricing data."""
-        self.assertIn("to-report provider-pricing", self.code)
-        self.assertIn("to-report estimate-cost-usd", self.code)
-        for provider in ["openai", "anthropic", "gemini", "ollama"]:
-            self.assertIn(
-                f'provider-name = "{provider}"',
-                self.code,
-                f"provider-pricing missing entry for: {provider}",
-            )
-
-    def test_runtime_provider_set_calls_are_intentional(self) -> None:
-        """This demo intentionally uses llm:set-provider for runtime switching.
-        Verify the calls exist in the correct procedures (activate-provider and
-        run-single-provider), not in arbitrary locations."""
-        self.assertIn("llm:set-provider", self.code)
-        self.assertIn("llm:set-model", self.code)
-        # Verify they appear within the expected procedures
-        lines = self.code.splitlines()
-        set_provider_contexts = []
-        current_proc = None
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("to ") or stripped.startswith("to-report "):
-                current_proc = stripped
-            elif stripped == "end":
-                current_proc = None
-            if "llm:set-provider" in stripped and current_proc:
-                set_provider_contexts.append(current_proc)
-        # set-provider should only appear in activate-provider, run-single-provider,
-        # and compare-choose
-        for ctx in set_provider_contexts:
-            self.assertTrue(
-                any(name in ctx for name in [
-                    "activate-provider", "run-single-provider", "compare-choose",
-                ]),
-                f"llm:set-provider found in unexpected procedure: {ctx}",
-            )
+    def test_readme_has_core_sections(self) -> None:
+        readme = read(README_PATH)
+        for text in ["Telephone Game", "Setup", "Thinking Mode", "Test Suite"]:
+            self.assertIn(text, readme, f"missing README section: {text}")
 
 
 if __name__ == "__main__":
