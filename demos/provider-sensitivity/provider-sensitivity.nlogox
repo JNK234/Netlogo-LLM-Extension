@@ -430,7 +430,7 @@ to-report compute-drift [text-a text-b]
 end
 
 to-report to-word-set [text]
-  let cleaned replace-all-chars (lowercase text) ".,;:!?\"'()-" " "
+  let cleaned replace-all-chars (lower-case text) ".,;:!?\"'()-" " "
   let words split-on-spaces cleaned
   ;; Deduplicate
   let result []
