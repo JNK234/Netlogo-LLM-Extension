@@ -8,7 +8,7 @@ import org.nlogo.extensions.llm.models.{ChatMessage, ChatResponse}
 import scala.collection.mutable.{ArrayBuffer, WeakHashMap}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{Try, Success, Failure, Random}
+import scala.util.{Try, Success, Failure}
 import scala.jdk.CollectionConverters._
 import io.circe.yaml.parser
 import io.circe.{Json, HCursor}
@@ -68,12 +68,8 @@ class LLMExtension extends DefaultClassManager {
       override def syntax: Syntax = Syntax.reporterSyntax(right = List(), ret = Syntax.StringType)
       
       override def report(context: Context, args: Array[AnyRef]): AnyRef = {
-        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
-          .flatMap(s => scala.util.Try(s.toInt).toOption)
-          .getOrElse(30)
-
         try {
-          Await.result(future, timeoutSeconds.seconds)
+          Await.result(future, getTimeoutSeconds.seconds)
         } catch {
           case e: Exception =>
             throw new ExtensionException(s"Async LLM operation failed: ${e.getMessage}")
@@ -149,6 +145,17 @@ class LLMExtension extends DefaultClassManager {
   private def getAgentHistory(agent: Agent): ArrayBuffer[ChatMessage] = {
     messageHistory.getOrElseUpdate(agent, ArrayBuffer.empty[ChatMessage])
   }
+
+  /**
+   * Get timeout from config, falling back to 30 seconds
+   */
+  private def getTimeoutSeconds: Int =
+    configStore.get(ConfigStore.TIMEOUT_SECONDS).map { s =>
+      scala.util.Try(s.toInt).getOrElse {
+        System.err.println(s"WARNING: Invalid timeout_seconds value '$s' (not a valid integer), using default 30")
+        30
+      }
+    }.getOrElse(30)
   
   /**
    * Check if a provider has an API key configured
@@ -171,11 +178,13 @@ class LLMExtension extends DefaultClassManager {
         .orElse(configStore.get(ConfigStore.BASE_URL))
         .getOrElse(ConfigStore.DEFAULT_OLLAMA_BASE_URL)
       provider.setConfig(ConfigStore.BASE_URL, baseUrl)
-      
+
       val checkFuture = provider.checkServerConnection()
       Await.result(checkFuture, 1.second)
     } catch {
-      case _: Exception => false
+      case ex: Exception =>
+        System.err.println(s"WARNING: Ollama reachability check failed: ${ex.getMessage}")
+        false
     }
   }
   
@@ -221,7 +230,9 @@ class LLMExtension extends DefaultClassManager {
         case Right(json) =>
           val cursor: HCursor = json.hcursor
           val system = cursor.downField("system").as[String].getOrElse("")
-          val template = cursor.downField("template").as[String].getOrElse("")
+          val template = cursor.downField("template").as[String].getOrElse {
+            throw new RuntimeException(s"Template file '$filename' is missing required 'template' field")
+          }
           Template(system, template)
         case Left(error) =>
           throw new RuntimeException(s"Failed to parse YAML: ${error.getMessage}")
@@ -398,24 +409,23 @@ class LLMExtension extends DefaultClassManager {
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val inputText = args(0).getString
       val agent = context.getAgent
-      
+
       try {
         val provider = ensureProvider()
         val history = getAgentHistory(agent)
-        
-        // Add user message to history
+
         val userMessage = ChatMessage.user(inputText)
+
+        // Send chat request with user message included, but don't mutate history yet
+        val responseFuture = provider.chat(history.toSeq :+ userMessage)
+        val responseMessage = Await.result(responseFuture, getTimeoutSeconds.seconds)
+
+        // Only append both messages after success
         history += userMessage
-        
-        // Send chat request
-        val responseFuture = provider.chat(history.toSeq)
-        val responseMessage = Await.result(responseFuture, 30.seconds)
-        
-        // Add response to history
         history += responseMessage
-        
+
         responseMessage.content
-        
+
       } catch {
         case e: Exception =>
           throw new ExtensionException(s"LLM chat failed: ${e.getMessage}")
@@ -432,25 +442,24 @@ class LLMExtension extends DefaultClassManager {
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val inputText = args(0).getString
       val agent = context.getAgent
-      
+
       try {
         val provider = ensureProvider()
         val history = getAgentHistory(agent)
-        
-        // Add user message to history immediately
+
         val userMessage = ChatMessage.user(inputText)
-        history += userMessage
-        
-        // Start the Future immediately but defer execution until runresult
-        val responseFuture = provider.chat(history.toSeq).map { responseMessage =>
-          // Add response to history when completed
+
+        // Send with user message included, but don't mutate history yet
+        val responseFuture = provider.chat(history.toSeq :+ userMessage).map { responseMessage =>
+          // Append both atomically on success
+          history += userMessage
           history += responseMessage
           responseMessage.content
         }
-        
+
         // Return AnonymousReporter that wraps the Future
         createAwaitableReporter(responseFuture)
-        
+
       } catch {
         case e: Exception =>
           throw new ExtensionException(s"Failed to start async LLM chat: ${e.getMessage}")
@@ -502,7 +511,7 @@ class LLMExtension extends DefaultClassManager {
         
         // Send chat request
         val responseFuture = provider.chat(tempHistory.toSeq)
-        val responseMessage = Await.result(responseFuture, 30.seconds)
+        val responseMessage = Await.result(responseFuture, getTimeoutSeconds.seconds)
         
         // Add both template message and response to permanent history
         history += userMessage
@@ -522,72 +531,61 @@ class LLMExtension extends DefaultClassManager {
       right = List(Syntax.StringType, Syntax.ListType),
       ret = Syntax.StringType
     )
-    
+
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val prompt = args(0).getString
       val choicesList = args(1).getList
       val agent = context.getAgent
-      
+
       try {
         val provider = ensureProvider()
         val history = getAgentHistory(agent)
-        
-        // Convert LogoList to Scala list of strings
+
         val choices = choicesList.map(_.toString).toList
-        
+
         if (choices.isEmpty) {
           throw new ExtensionException("Choice list cannot be empty")
         }
-        
-        // Create constrained prompt that forces selection from choices
-        val constrainedPrompt = s"""$prompt
-        
-You must respond with EXACTLY ONE of the following options (no other text):
-${choices.zipWithIndex.map { case (choice, idx) => s"${idx + 1}. $choice" }.mkString("\n")}
 
-Response:"""
+        val systemPrompt = "You are a decision-making assistant. " +
+          "When given options, respond with EXACTLY one option from the list. " +
+          "Rules: Reply with ONLY the option text. " +
+          "No explanation, no numbering, no punctuation, no quotes, no extra words. " +
+          "Copy the option exactly as written."
 
-// TODO: CHECK if the Generated output is only from the provided list.
-        
-        // Add user message to history
-        val userMessage = ChatMessage.user(constrainedPrompt)
-        history += userMessage
-        
-        // Send chat request
-        val responseFuture = provider.chat(history.toSeq)
-        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
-          .flatMap(s => scala.util.Try(s.toInt).toOption)
-          .getOrElse(30)
-        val responseMessage = Await.result(responseFuture, timeoutSeconds.seconds)
-        
-        // Add response to history
-        history += responseMessage
-        
-        // Extract the chosen option from response
-        val response = responseMessage.content.trim
-        
-        // Try to match response to one of the choices
-        val chosenOption = choices.find { choice =>
-          response.toLowerCase.contains(choice.toLowerCase) ||
-          choice.toLowerCase.contains(response.toLowerCase)
-        }.orElse {
-          // Try to match by number (1, 2, 3, etc.)
-          try {
-            val number = response.replaceAll("[^\\d]", "").toInt
-            if (number >= 1 && number <= choices.length) {
-              Some(choices(number - 1))
-            } else None
-          } catch {
-            case _: NumberFormatException => None
+        val userPrompt = s"$prompt\n\nOptions:\n${choices.mkString("\n")}\n\n" +
+          "Your choice (one option, no other text):"
+
+        // Build temp history with system prompt — don't mutate permanent history
+        val tempHistory = ArrayBuffer.from(history)
+        tempHistory.prepend(ChatMessage.system(systemPrompt))
+        tempHistory += ChatMessage.user(userPrompt)
+
+        // Use chatWithFullResponse to access thinking field for thinking models
+        val responseFuture = provider.chatWithFullResponse(tempHistory.toSeq)
+        val response = Await.result(responseFuture, getTimeoutSeconds.seconds)
+
+        // Extract text: prefer content, fall back to thinking field
+        val text = response.firstContent.filter(_.nonEmpty)
+          .orElse(response.thinking)
+          .getOrElse("")
+          .trim
+
+        // Exact match only (case-insensitive)
+        val chosenOption = choices.find(_.equalsIgnoreCase(text))
+          .getOrElse {
+            throw new ExtensionException(
+              s"llm:choose: response '$text' did not match any choice. " +
+              s"Choices: ${choices.mkString(", ")}"
+            )
           }
-        }.getOrElse {
-          // Fallback: return random choice if no match found
-          val randomIndex = Random.nextInt(choices.length)
-          choices(randomIndex)
-        }
-        
+
+        // Only on success: store clean messages in permanent history
+        history += ChatMessage.user(prompt)
+        history += ChatMessage.assistant(chosenOption)
+
         chosenOption
-        
+
       } catch {
         case e: Exception if !e.isInstanceOf[ExtensionException] =>
           throw new ExtensionException(s"LLM choice failed: ${e.getMessage}")
@@ -617,10 +615,7 @@ Response:"""
 
         // Send chat request and get full response with thinking
         val responseFuture = provider.chatWithFullResponse(history.toSeq)
-        val timeoutSeconds = configStore.get(ConfigStore.TIMEOUT_SECONDS)
-          .flatMap(s => scala.util.Try(s.toInt).toOption)
-          .getOrElse(30)
-        val response = Await.result(responseFuture, timeoutSeconds.seconds)
+        val response = Await.result(responseFuture, getTimeoutSeconds.seconds)
 
         val answerText = response.firstContent.getOrElse("")
         val thinkingText = response.thinking.getOrElse("")
