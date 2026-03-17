@@ -82,6 +82,9 @@ to setup
   ;; Communication only in stage 3 (or overridden)
   set communication-enabled? (current-stage = 3 and comms-override?)
 
+  ;; Load LLM config
+  llm:load-config "config.txt"
+
   ;; Build the arena map
   build-arena-map
   setup-map
@@ -498,13 +501,21 @@ to-report direction-name [dir]
 end
 
 ;; ============================================================
-;; ACTION SELECTION — LLM (placeholder, filled in Phase 2)
+;; ACTION SELECTION — LLM via llm:choose
 ;; ============================================================
 to choose-action
-  ;; Phase 1: random action for testing game engine
-  ;; Will be replaced with llm:choose in Phase 2
-  let actions ["move-forward" "turn-left" "turn-right" "fire" "stay"]
-  set last-action one-of actions
+  set total-llm-calls total-llm-calls + 1
+  carefully [
+    llm:clear-history
+    let action llm:choose my-observation ["move-forward" "turn-left" "turn-right" "fire" "stay"]
+    set last-action action
+    if show-observations? [
+      output-print (word "Tank " who " chose: " action)
+    ]
+  ] [
+    set last-action "stay"
+    output-print (word "LLM error for tank " who ": " error-message)
+  ]
 end
 
 ;; ============================================================
