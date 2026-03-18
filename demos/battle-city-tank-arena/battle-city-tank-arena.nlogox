@@ -113,7 +113,7 @@ end
 to build-arena-map
   ;; 31x31 symmetric arena inspired by Battle City
   ;; Legend: . = open, W = brick wall, S = steel, R = red base, B = blue base, ~ = water
-  ;; Row 0 is bottom, Row 30 is top
+  ;; Row 0 maps to y=+15 (top), Row 30 maps to y=-15 (bottom)
   ;; Each row is exactly 31 characters (columns 0-30, mapping to x: -15 to +15)
   set arena-map (list
     "...............R..............."
@@ -170,7 +170,7 @@ to setup-map
     while [col-idx < 31 and col-idx < length row-str] [
       let ch item col-idx row-str
       let px col-idx - 15
-      let py row-idx - 15
+      let py 15 - row-idx
 
       if px >= min-pxcor and px <= max-pxcor and py >= min-pycor and py <= max-pycor [
         ask patch px py [
@@ -544,12 +544,18 @@ end
 
 ;; Parse action from free-text response (for show-thinking mode)
 to-report parse-action-response [response]
-  let r lower-case (word response)
+  ;; NetLogo has no built-in lower-case, so match common casings
+  let r (word response)
   if position "move-forward" r != false [ report "move-forward" ]
+  if position "Move-forward" r != false [ report "move-forward" ]
   if position "turn-left"    r != false [ report "turn-left" ]
+  if position "Turn-left"    r != false [ report "turn-left" ]
   if position "turn-right"   r != false [ report "turn-right" ]
+  if position "Turn-right"   r != false [ report "turn-right" ]
   if position "fire"         r != false [ report "fire" ]
+  if position "Fire"         r != false [ report "fire" ]
   if position "stay"         r != false [ report "stay" ]
+  if position "Stay"         r != false [ report "stay" ]
   report "stay"
 end
 
