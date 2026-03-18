@@ -652,22 +652,28 @@ end
     <button x="250" y="450" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="Inspect Turtle" width="150" sizeVersion="0">inspect-clicked</button>
     <plot x="15" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="Drift" y="460" xMin="0.0" height="160" legend="true" xMax="10.0" yMin="0.0" width="460" xAxis="Chain Position" display="Semantic Drift by Provider">
       <setup>set-current-plot "Semantic Drift by Provider"</setup>
-      <update>foreach ready-providers-list [ prov ->
+      <update>let idx 0
+foreach ready-providers-list [ prov ->
   create-temporary-plot-pen prov
+  set-plot-pen-color item (idx mod 6) (list 55 105 25 115 15 45)
   let chain-turtles sort-on [chain-position] turtles with [provider-name = prov and processed? and not error?]
   foreach chain-turtles [ t ->
     plotxy [chain-position] of t [drift-score] of t
   ]
+  set idx idx + 1
 ]</update>
     </plot>
     <plot x="485" autoPlotX="true" yMax="200.0" autoPlotY="true" yAxis="Characters" y="460" xMin="0.0" height="160" legend="true" xMax="10.0" yMin="0.0" width="460" xAxis="Chain Position" display="Message Length by Provider">
       <setup>set-current-plot "Message Length by Provider"</setup>
-      <update>foreach ready-providers-list [ prov ->
+      <update>let idx 0
+foreach ready-providers-list [ prov ->
   create-temporary-plot-pen prov
+  set-plot-pen-color item (idx mod 6) (list 55 105 25 115 15 45)
   let chain-turtles sort-on [chain-position] turtles with [provider-name = prov and processed? and not error?]
   foreach chain-turtles [ t ->
     plotxy [chain-position] of t length [current-message] of t
   ]
+  set idx idx + 1
 ]</update>
     </plot>
     <output x="410" y="450" height="280" fontSize="11" width="535"></output>
