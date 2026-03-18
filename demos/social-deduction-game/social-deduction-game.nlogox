@@ -294,28 +294,37 @@ to run-voting-phase
       ;; Vote via template — LLM picks from constrained list
       llm:clear-history
       let vote-name ""
+
+      ;; Step 1: Try template-based vote
       carefully [
         let raw-vote llm:chat-with-template "vote-template.yaml" (list
           (list "player_name" player-name)
           (list "my_word" my-word)
           (list "transcript" full-transcript)
           (list "other_players" others-str))
-        ;; Match response against valid player names
-        set vote-name ""
+        set total-llm-calls total-llm-calls + 1
+        ;; Match response against valid player names (others only)
         foreach others-names [ n ->
           if member? n raw-vote and vote-name = "" [
             set vote-name n
           ]
         ]
-        ;; Fallback: if no valid name found, use llm:choose
-        if vote-name = "" [
-          set vote-name llm:choose (word "Pick the most suspicious player: " others-str) others-names
-          set total-llm-calls total-llm-calls + 1
-        ]
-        set total-llm-calls total-llm-calls + 1
       ] [
-        set vote-name one-of others-names
-        print (word player-name " vote error: " error-message)
+        print (word player-name " template vote error: " error-message)
+      ]
+
+      ;; Step 2: Fallback to llm:choose if template didn't yield a valid name
+      if vote-name = "" [
+        carefully [
+          llm:clear-history
+          set vote-name llm:choose
+            (word "You are " player-name ". Pick the most suspicious player from: " others-str ". You CANNOT pick yourself.")
+            others-names
+          set total-llm-calls total-llm-calls + 1
+        ] [
+          set vote-name one-of others-names
+          print (word player-name " vote fallback error: " error-message)
+        ]
       ]
 
       set my-vote vote-name
@@ -492,80 +501,32 @@ to-report detection-rate
 end
   ]]></code>
   <widgets>
-    <view x="355" y="10" width="895" height="550"
-          minPxcor="-16" maxPxcor="16" minPycor="-16" maxPycor="16"
-          patchSize="16.0" frameRate="30.0"
-          wrappingAllowedX="false" wrappingAllowedY="false"
-          showTickCounter="true" tickCounterLabel="ticks"
-          updateMode="1" fontSize="10"></view>
-
-    <!-- Setup and control buttons -->
-    <button x="10" y="10" width="100" height="40"
-            disableUntilTicks="false" kind="Observer" display="Setup" forever="false">setup</button>
-    <button x="120" y="10" width="100" height="40"
-            disableUntilTicks="false" kind="Observer" display="Go" forever="true">go</button>
-    <button x="10" y="60" width="100" height="40"
-            disableUntilTicks="false" kind="Observer" display="Step" forever="false">step-round</button>
-    <button x="120" y="60" width="100" height="40"
-            disableUntilTicks="false" kind="Observer" display="New Game" forever="false">new-game</button>
-
-    <!-- Sliders -->
-    <slider x="10" y="120" width="230" height="50"
-            variable="num-players" display="num-players"
-            min="4" max="8" default="6.0" step="1"
-            direction="Horizontal"></slider>
-    <slider x="10" y="175" width="230" height="50"
-            variable="max-rounds" display="max-rounds"
-            min="3" max="10" default="6.0" step="1"
-            direction="Horizontal"></slider>
-
-    <!-- Difficulty chooser -->
-    <chooser x="10" y="235" width="230" height="50"
-             variable="difficulty-level" display="difficulty-level" current="1">
+    <view x="285" wrappingAllowedX="false" y="29" frameRate="30.0" minPycor="-16" height="824" showTickCounter="true" patchSize="24.85" fontSize="10" wrappingAllowedY="false" width="824" tickCounterLabel="ticks" maxPycor="16" updateMode="1" maxPxcor="16" minPxcor="-16"></view>
+    <button x="10" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="Setup">setup</button>
+    <button x="120" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="100" display="Go">go</button>
+    <button x="10" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="Step">step-round</button>
+    <button x="120" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="New Game">new-game</button>
+    <slider x="10" step="1" y="120" max="8" width="230" display="num-players" height="50" min="4" direction="Horizontal" default="8.0" variable="num-players"></slider>
+    <slider x="10" step="1" y="175" max="10" width="230" display="max-rounds" height="50" min="3" direction="Horizontal" default="6.0" variable="max-rounds"></slider>
+    <chooser x="10" y="235" height="60" variable="difficulty-level" current="1" width="230" display="difficulty-level">
       <choice type="string" value="low"></choice>
       <choice type="string" value="medium"></choice>
       <choice type="string" value="high"></choice>
     </chooser>
-
-    <!-- Switches -->
-    <switch x="10" y="300" width="230" height="40"
-            variable="show-descriptions?" display="show-descriptions?" on="true"></switch>
-    <switch x="10" y="345" width="230" height="40"
-            variable="show-votes?" display="show-votes?" on="true"></switch>
-    <switch x="10" y="390" width="230" height="40"
-            variable="auto-reveal?" display="auto-reveal?" on="true"></switch>
-
-    <!-- Monitors - game state -->
-    <monitor x="10" y="450" width="110" height="40"
-             fontSize="11" display="Round" precision="17">current-round</monitor>
-    <monitor x="125" y="450" width="110" height="40"
-             fontSize="11" display="Phase" precision="17">current-phase</monitor>
-    <monitor x="10" y="495" width="110" height="40"
-             fontSize="11" display="Winner" precision="17">winner</monitor>
-    <monitor x="125" y="495" width="110" height="40"
-             fontSize="11" display="LLM Calls" precision="17">total-llm-calls</monitor>
-
-    <!-- Monitors - cumulative stats -->
-    <monitor x="10" y="555" width="110" height="40"
-             fontSize="11" display="Games Played" precision="17">total-games-played</monitor>
-    <monitor x="125" y="555" width="110" height="40"
-             fontSize="11" display="Detection %" precision="17">detection-rate</monitor>
-    <monitor x="10" y="600" width="110" height="40"
-             fontSize="11" display="Regular Wins" precision="17">total-regular-wins</monitor>
-    <monitor x="125" y="600" width="110" height="40"
-             fontSize="11" display="Spy Wins" precision="17">total-spy-wins</monitor>
-
-    <!-- Monitors - word display -->
-    <monitor x="10" y="660" width="230" height="40"
-             fontSize="11" display="Regular Word" precision="17">regular-word</monitor>
-    <monitor x="10" y="705" width="230" height="40"
-             fontSize="11" display="Spy Word" precision="17">ifelse-value game-over? [spy-word] ["(hidden)"]</monitor>
-
-    <!-- Plots -->
-    <plot x="355" y="565" width="270" height="200"
-          display="Votes Per Round" xAxis="Round" yAxis="Votes"
-          autoPlotX="true" autoPlotY="true" legend="false"
-          xMin="0.0" xMax="10.0" yMin="0.0" yMax="5.0">
+    <switch x="10" y="300" height="40" on="true" variable="show-descriptions?" width="230" display="show-descriptions?"></switch>
+    <switch x="10" y="345" height="40" on="true" variable="show-votes?" width="230" display="show-votes?"></switch>
+    <switch x="10" y="390" height="40" on="true" variable="auto-reveal?" width="230" display="auto-reveal?"></switch>
+    <monitor x="10" precision="17" y="709" height="60" fontSize="11" width="230" display="Regular Word">regular-word</monitor>
+    <monitor x="12" precision="17" y="644" height="60" fontSize="11" width="110" display="Regular Wins">total-regular-wins</monitor>
+    <monitor x="128" precision="17" y="644" height="60" fontSize="11" width="110" display="Spy Wins">total-spy-wins</monitor>
+    <monitor x="12" precision="17" y="580" height="60" fontSize="11" width="110" display="Games Played">total-games-played</monitor>
+    <monitor x="12" precision="17" y="515" height="60" fontSize="11" width="110" display="Winner">winner</monitor>
+    <monitor x="128" precision="17" y="515" height="60" fontSize="11" width="110" display="LLM Calls">total-llm-calls</monitor>
+    <monitor x="127" precision="17" y="579" height="60" fontSize="11" width="110" display="Detection %">detection-rate</monitor>
+    <monitor x="128" precision="17" y="452" height="60" fontSize="11" width="110" display="Phase">current-phase</monitor>
+    <monitor x="12" precision="17" y="450" height="60" fontSize="11" width="110" display="Round">current-round</monitor>
+    <monitor x="8" precision="17" y="776" height="60" fontSize="11" width="230" display="Spy Word">ifelse-value game-over? [spy-word] ["(hidden)"]</monitor>
+    <plot x="1141" autoPlotX="true" yMax="5.0" autoPlotY="true" yAxis="Votes" y="29" xMin="0.0" height="339" legend="false" xMax="10.0" yMin="0.0" width="575" xAxis="Round" display="Votes Per Round">
       <setup></setup>
       <update>
         let alive-players players with [alive? or elimination-round = current-round]
@@ -577,20 +538,16 @@ end
         ]
       </update>
     </plot>
-
-    <plot x="635" y="565" width="270" height="200"
-          display="Detection Rate" xAxis="Game" yAxis="% Detected"
-          autoPlotX="true" autoPlotY="true" legend="false"
-          xMin="0.0" xMax="10.0" yMin="0.0" yMax="100.0">
+    <plot x="1142" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="% Detected" y="384" xMin="0.0" height="409" legend="false" xMax="10.0" yMin="0.0" width="579" xAxis="Game" display="Detection Rate">
       <setup></setup>
       <update></update>
-      <pen display="Rate" color="-2674135" legend="true" interval="1.0" mode="0">
+      <pen interval="1.0" mode="0" display="Rate" color="-2674135" legend="true">
         <setup></setup>
-        <update>if total-games-played > 0 and game-over? [ plotxy total-games-played detection-rate ]</update>
+        <update><![CDATA[if total-games-played > 0 and game-over? [ plotxy total-games-played detection-rate ]]]></update>
       </pen>
     </plot>
   </widgets>
-  <info><![CDATA[## WHAT IS IT?
+  <info>## WHAT IS IT?
 
 A social deduction game (Undercover / Spy Words) where LLM agents try to identify a hidden spy among them. Each player receives a secret word — most players share the same word (regulars), but one player has a different but similar word (the spy). Players describe their words and vote to eliminate the suspected spy.
 
@@ -636,12 +593,14 @@ A social deduction game (Undercover / Spy Words) where LLM agents try to identif
 Inspired by the Undercover (Who Is Spy?) party game and LLMArena (ACL 2024) — social deduction games as an evaluation framework for LLM reasoning.
 
 Built using the NetLogo LLM Extension.
-  ]]></info>
+  </info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">
-        <point x="150" y="5"/><point x="40" y="250"/>
-        <point x="150" y="205"/><point x="260" y="250"/>
+        <point x="150" y="5"></point>
+        <point x="40" y="250"></point>
+        <point x="150" y="205"></point>
+        <point x="260" y="250"></point>
       </polygon>
     </shape>
     <shape name="person" rotatable="false" editableColorIndex="0">
@@ -698,4 +657,5 @@ Built using the NetLogo LLM Extension.
       </indicator>
     </shape>
   </linkShapes>
+  <previewCommands>setup repeat 75 [ go ]</previewCommands>
 </model>
