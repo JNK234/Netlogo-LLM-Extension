@@ -289,23 +289,29 @@ to run-voting-phase
     ask p [
       ;; Build list of other alive player names
       let others-names map [q -> [player-name] of q] filter [q -> q != self] alive-players
+      let others-str reduce [[ a b ] -> (word a ", " b)] others-names
 
-      ;; Build vote prompt
-      let vote-prompt (word
-        "You are " player-name " in a social deduction game called Undercover.\n"
-        "Your secret word is: " my-word "\n"
-        "Most players share the same word, but ONE player (the spy) has a different similar word.\n"
-        "The spy's descriptions will be subtly different because they are describing a different word.\n\n"
-        "Here are all descriptions so far:\n"
-        full-transcript "\n"
-        "Based on the descriptions, which player do you think is the SPY?\n"
-        "Look for descriptions that seem slightly off or describe a different concept.\n"
-        "Vote for the player you find most suspicious.")
-
+      ;; Vote via template — LLM picks from constrained list
       llm:clear-history
       let vote-name ""
       carefully [
-        set vote-name llm:choose vote-prompt others-names
+        let raw-vote llm:chat-with-template "vote-template.yaml" (list
+          (list "player_name" player-name)
+          (list "my_word" my-word)
+          (list "transcript" full-transcript)
+          (list "other_players" others-str))
+        ;; Match response against valid player names
+        set vote-name ""
+        foreach others-names [ n ->
+          if member? n raw-vote and vote-name = "" [
+            set vote-name n
+          ]
+        ]
+        ;; Fallback: if no valid name found, use llm:choose
+        if vote-name = "" [
+          set vote-name llm:choose (word "Pick the most suspicious player: " others-str) others-names
+          set total-llm-calls total-llm-calls + 1
+        ]
         set total-llm-calls total-llm-calls + 1
       ] [
         set vote-name one-of others-names
@@ -566,9 +572,7 @@ end
         ask alive-players [
           create-temporary-plot-pen player-name
           set-current-plot-pen player-name
-          ifelse is-spy?
-            [ set-plot-pen-color red ]
-            [ set-plot-pen-color sky ]
+          set-plot-pen-color base-color
           plotxy current-round vote-count
         ]
       </update>
@@ -594,7 +598,7 @@ A social deduction game (Undercover / Spy Words) where LLM agents try to identif
 
 1. **Setup**: Players are arranged in a circle. One random player is assigned the spy word; the rest get the regular word.
 2. **Description Phase**: Each alive player uses the LLM to generate a 1-2 sentence description of their word without saying it.
-3. **Voting Phase**: Each alive player uses `llm:choose` to vote for the most suspicious player based on all descriptions so far.
+3. **Voting Phase**: Each alive player uses `llm:chat-with-template` to vote for the most suspicious player based on all descriptions so far.
 4. **Elimination**: The player with the most votes is eliminated. Ties broken by historical vote totals.
 5. **Win Check**: Regulars win if the spy is eliminated. The spy wins if 2 or fewer players remain or max rounds are reached.
 

@@ -1,0 +1,18 @@
+system: |
+  You are {player_name} in a social deduction game called Undercover.
+  Most players share the same word, but ONE player (the spy) has a different similar word.
+  The spy's descriptions will be subtly different because they are describing a different word.
+  You must vote to eliminate the player you find most suspicious.
+  Respond with ONLY the name of the player you vote for (e.g. "Player 3"). Nothing else.
+
+template: |
+  Your secret word is: {my_word}
+
+  Here are all descriptions so far:
+  {transcript}
+
+  The alive players you can vote for: {other_players}
+
+  Based on the descriptions, which player do you think is the SPY?
+  Look for descriptions that seem slightly off or describe a different concept.
+  Respond with ONLY the player name.
