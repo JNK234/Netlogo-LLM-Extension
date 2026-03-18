@@ -206,9 +206,11 @@ to run-description-phase
       llm:clear-history
       let desc ""
       carefully [
-        set desc llm:chat-with-template "description-template.yaml"
-          (list "player_name" player-name "my_word" my-word
-                "round_number" (word current-round) "transcript" transcript-text)
+        set desc llm:chat-with-template "description-template.yaml" (list
+          (list "player_name" player-name)
+          (list "my_word" my-word)
+          (list "round_number" (word current-round))
+          (list "transcript" transcript-text))
         set total-llm-calls total-llm-calls + 1
       ] [
         set desc "My word relates to something common and familiar."
@@ -410,13 +412,13 @@ end
 
     <!-- Setup and control buttons -->
     <button x="10" y="10" width="100" height="40"
-            kind="Observer" display="Setup" forever="false">setup</button>
+            disableUntilTicks="false" kind="Observer" display="Setup" forever="false">setup</button>
     <button x="120" y="10" width="100" height="40"
-            kind="Observer" display="Go" forever="true">go</button>
+            disableUntilTicks="false" kind="Observer" display="Go" forever="true">go</button>
     <button x="10" y="60" width="100" height="40"
-            kind="Observer" display="Step" forever="false">step-round</button>
+            disableUntilTicks="false" kind="Observer" display="Step" forever="false">step-round</button>
     <button x="120" y="60" width="100" height="40"
-            kind="Observer" display="New Game" forever="false">new-game</button>
+            disableUntilTicks="false" kind="Observer" display="New Game" forever="false">new-game</button>
 
     <!-- Sliders -->
     <slider x="10" y="120" width="230" height="50"
@@ -446,34 +448,35 @@ end
 
     <!-- Monitors - game state -->
     <monitor x="10" y="450" width="110" height="40"
-             display="Round" precision="0">current-round</monitor>
+             fontSize="11" display="Round" precision="17">current-round</monitor>
     <monitor x="125" y="450" width="110" height="40"
-             display="Phase" precision="0">current-phase</monitor>
+             fontSize="11" display="Phase" precision="17">current-phase</monitor>
     <monitor x="10" y="495" width="110" height="40"
-             display="Winner" precision="0">winner</monitor>
+             fontSize="11" display="Winner" precision="17">winner</monitor>
     <monitor x="125" y="495" width="110" height="40"
-             display="LLM Calls" precision="0">total-llm-calls</monitor>
+             fontSize="11" display="LLM Calls" precision="17">total-llm-calls</monitor>
 
     <!-- Monitors - cumulative stats -->
     <monitor x="10" y="555" width="110" height="40"
-             display="Games Played" precision="0">total-games-played</monitor>
+             fontSize="11" display="Games Played" precision="17">total-games-played</monitor>
     <monitor x="125" y="555" width="110" height="40"
-             display="Detection %" precision="1">detection-rate</monitor>
+             fontSize="11" display="Detection %" precision="17">detection-rate</monitor>
     <monitor x="10" y="600" width="110" height="40"
-             display="Regular Wins" precision="0">total-regular-wins</monitor>
+             fontSize="11" display="Regular Wins" precision="17">total-regular-wins</monitor>
     <monitor x="125" y="600" width="110" height="40"
-             display="Spy Wins" precision="0">total-spy-wins</monitor>
+             fontSize="11" display="Spy Wins" precision="17">total-spy-wins</monitor>
 
     <!-- Monitors - word display -->
     <monitor x="10" y="660" width="230" height="40"
-             display="Regular Word" precision="0">regular-word</monitor>
+             fontSize="11" display="Regular Word" precision="17">regular-word</monitor>
     <monitor x="10" y="705" width="230" height="40"
-             display="Spy Word" precision="0">ifelse-value game-over? [spy-word] ["(hidden)"]</monitor>
+             fontSize="11" display="Spy Word" precision="17">ifelse-value game-over? [spy-word] ["(hidden)"]</monitor>
 
     <!-- Plots -->
     <plot x="355" y="565" width="270" height="200"
           display="Votes Per Round" xAxis="Round" yAxis="Votes"
-          autoPlotOn="true" xmin="0.0" xmax="10.0" ymin="0.0" ymax="5.0">
+          autoPlotX="true" autoPlotY="true" legend="false"
+          xMin="0.0" xMax="10.0" yMin="0.0" yMax="5.0">
       <setup></setup>
       <update>
         let alive-players players with [alive? or elimination-round = current-round]
@@ -490,7 +493,8 @@ end
 
     <plot x="635" y="565" width="270" height="200"
           display="Detection Rate" xAxis="Game" yAxis="% Detected"
-          autoPlotOn="true" xmin="0.0" xmax="10.0" ymin="0.0" ymax="100.0">
+          autoPlotX="true" autoPlotY="true" legend="false"
+          xMin="0.0" xMax="10.0" yMin="0.0" yMax="100.0">
       <setup></setup>
       <update></update>
       <pen display="Rate" color="-2674135" legend="true" interval="1.0" mode="0">
