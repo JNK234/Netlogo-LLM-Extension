@@ -901,7 +901,7 @@ end
 ;; EXPLOSIONS
 ;; ============================================================
 to spawn-explosion [ex ey]
-  create-explosions 1 [
+  hatch-explosions 1 [
     setxy ex ey
     set shape "star"
     set color orange
