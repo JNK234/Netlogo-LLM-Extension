@@ -1,0 +1,740 @@
+<?xml version="1.0" encoding="utf-8"?>
+<model version="NetLogo 7.0.3" snapToGrid="false">
+  <code><![CDATA[
+;; ABOUTME: Baba Is AI — LLM agent solves puzzles by pushing word-blocks that define the rules
+;; ABOUTME: Demonstrates the knowing-doing gap: LLMs understand rules but struggle with spatial execution
+
+extensions [llm]
+
+breed [word-blocks word-block]
+breed [babas baba]
+breed [walls wall]
+breed [rocks rock]
+breed [flags flag]
+
+word-blocks-own [ word-text word-type ]  ;; type: "noun" "verb" "property"
+babas-own [ last-action last-action-succeeded? ]
+
+globals [
+  active-rules
+  total-moves
+  total-llm-calls
+  llm-config-loaded?
+  game-state
+  move-history
+]
+
+;; ============================================================
+;; SETUP
+;; ============================================================
+
+to setup
+  clear-all
+  set active-rules []
+  set total-moves 0
+  set total-llm-calls 0
+  set game-state "playing"
+  set move-history []
+
+  carefully [
+    llm:load-config "demos/baba-is-ai/config"
+    set llm-config-loaded? true
+  ] [
+    output-print (word "Config error: " error-message)
+    set llm-config-loaded? false
+  ]
+
+  resize-world 0 8 0 8
+  set-patch-size 40.0
+  ask patches [ set pcolor 1 ]
+
+  let level-num read-from-string (substring level-choice 0 1)
+  if level-num = 1 [ setup-level-1 ]
+  if level-num = 2 [ setup-level-2 ]
+  if level-num = 3 [ setup-level-3 ]
+
+  evaluate-rules
+  reset-ticks
+end
+
+;; ============================================================
+;; LEVEL LAYOUTS
+;; ============================================================
+
+to setup-level-1
+  ;; Level 1: Navigate — walk right to the flag
+  ;; Word-blocks: BABA IS YOU (top), FLAG IS WIN (bottom)
+  create-word-block-at 1 7 "BABA" "noun"
+  create-word-block-at 2 7 "IS"   "verb"
+  create-word-block-at 3 7 "YOU"  "property"
+
+  create-word-block-at 5 1 "FLAG" "noun"
+  create-word-block-at 6 1 "IS"   "verb"
+  create-word-block-at 7 1 "WIN"  "property"
+
+  create-babas 1 [
+    setxy 1 4
+    set shape "person"
+    set color white
+    set size 0.9
+    set last-action ""
+    set last-action-succeeded? true
+  ]
+
+  create-flags 1 [
+    setxy 7 4
+    set shape "flag"
+    set color yellow
+    set size 0.9
+  ]
+end
+
+to setup-level-2
+  ;; Level 2: Break the Wall — push STOP away to pass through walls
+  create-word-block-at 1 8 "BABA" "noun"
+  create-word-block-at 2 8 "IS"   "verb"
+  create-word-block-at 3 8 "YOU"  "property"
+
+  create-word-block-at 1 4 "WALL" "noun"
+  create-word-block-at 2 4 "IS"   "verb"
+  create-word-block-at 3 4 "STOP" "property"
+
+  create-word-block-at 5 0 "FLAG" "noun"
+  create-word-block-at 6 0 "IS"   "verb"
+  create-word-block-at 7 0 "WIN"  "property"
+
+  create-babas 1 [
+    setxy 1 6
+    set shape "person"
+    set color white
+    set size 0.9
+    set last-action ""
+    set last-action-succeeded? true
+  ]
+
+  ;; Wall column at x=5
+  let wall-y 2
+  while [wall-y <= 6] [
+    create-walls 1 [
+      setxy 5 wall-y
+      set shape "square"
+      set color gray
+      set size 0.9
+    ]
+    set wall-y wall-y + 1
+  ]
+
+  create-flags 1 [
+    setxy 7 4
+    set shape "flag"
+    set color yellow
+    set size 0.9
+  ]
+end
+
+to setup-level-3
+  ;; Level 3: Push and Rearrange — navigate around rocks, break wall rule, reach flag
+  create-word-block-at 0 8 "BABA" "noun"
+  create-word-block-at 1 8 "IS"   "verb"
+  create-word-block-at 2 8 "YOU"  "property"
+
+  create-word-block-at 0 5 "ROCK" "noun"
+  create-word-block-at 1 5 "IS"   "verb"
+  create-word-block-at 2 5 "PUSH" "property"
+
+  create-word-block-at 0 2 "WALL" "noun"
+  create-word-block-at 1 2 "IS"   "verb"
+  create-word-block-at 2 2 "STOP" "property"
+
+  create-word-block-at 6 0 "FLAG" "noun"
+  create-word-block-at 7 0 "IS"   "verb"
+  create-word-block-at 8 0 "WIN"  "property"
+
+  create-babas 1 [
+    setxy 0 7
+    set shape "person"
+    set color white
+    set size 0.9
+    set last-action ""
+    set last-action-succeeded? true
+  ]
+
+  ;; Rocks near the WALL IS STOP rule
+  create-rocks 1 [ setxy 3 3  set shape "circle" set color orange set size 0.9 ]
+  create-rocks 1 [ setxy 3 2  set shape "circle" set color orange set size 0.9 ]
+
+  ;; Wall column at x=5
+  let wall-y 1
+  while [wall-y <= 7] [
+    create-walls 1 [
+      setxy 5 wall-y
+      set shape "square"
+      set color gray
+      set size 0.9
+    ]
+    set wall-y wall-y + 1
+  ]
+
+  create-flags 1 [
+    setxy 8 4
+    set shape "flag"
+    set color yellow
+    set size 0.9
+  ]
+end
+
+;; ============================================================
+;; WORD-BLOCK HELPER
+;; ============================================================
+
+to create-word-block-at [ px py txt typ ]
+  create-word-blocks 1 [
+    setxy px py
+    set word-text txt
+    set word-type typ
+    set shape "square"
+    set size 0.9
+    set label word-text
+    set label-color black
+
+    ;; Color by type
+    if typ = "noun"     [ set color magenta ]
+    if typ = "verb"     [ set color white ]
+    if typ = "property" [ set color yellow ]
+  ]
+end
+
+;; ============================================================
+;; RULE ENGINE
+;; ============================================================
+
+to evaluate-rules
+  set active-rules []
+
+  ;; Scan horizontal 3-tuples
+  let px min-pxcor
+  while [px <= max-pxcor - 2] [
+    let py min-pycor
+    while [py <= max-pycor] [
+      let wb1 word-block-at px py
+      let wb2 word-block-at (px + 1) py
+      let wb3 word-block-at (px + 2) py
+      if wb1 != nobody and wb2 != nobody and wb3 != nobody [
+        if [word-type] of wb1 = "noun" and [word-text] of wb2 = "IS" and [word-type] of wb3 = "property" [
+          let rule-str (word [word-text] of wb1 " IS " [word-text] of wb3)
+          if not member? rule-str active-rules [
+            set active-rules lput rule-str active-rules
+          ]
+        ]
+      ]
+      set py py + 1
+    ]
+    set px px + 1
+  ]
+
+  ;; Scan vertical 3-tuples
+  set px min-pxcor
+  while [px <= max-pxcor] [
+    let py min-pycor
+    while [py <= max-pycor - 2] [
+      let wb1 word-block-at px py
+      let wb2 word-block-at px (py + 1)
+      let wb3 word-block-at px (py + 2)
+      if wb1 != nobody and wb2 != nobody and wb3 != nobody [
+        if [word-type] of wb1 = "noun" and [word-text] of wb2 = "IS" and [word-type] of wb3 = "property" [
+          let rule-str (word [word-text] of wb1 " IS " [word-text] of wb3)
+          if not member? rule-str active-rules [
+            set active-rules lput rule-str active-rules
+          ]
+        ]
+      ]
+      set py py + 1
+    ]
+    set px px + 1
+  ]
+end
+
+to-report word-block-at [ px py ]
+  let target patch px py
+  if target = nobody [ report nobody ]
+  let wbs (word-blocks-on target)
+  ifelse any? wbs [ report one-of wbs ] [ report nobody ]
+end
+
+to-report has-property? [ noun-name prop-name ]
+  let rule-str (word noun-name " IS " prop-name)
+  report member? rule-str active-rules
+end
+
+;; ============================================================
+;; MOVEMENT & PUSH SYSTEM
+;; ============================================================
+
+to try-move [ direction ]
+  ;; Calculate delta from direction string
+  let move-dx 0
+  let move-dy 0
+  if direction = "up"    [ set move-dy 1 ]
+  if direction = "down"  [ set move-dy -1 ]
+  if direction = "left"  [ set move-dx -1 ]
+  if direction = "right" [ set move-dx 1 ]
+
+  let target-x xcor + move-dx
+  let target-y ycor + move-dy
+
+  ;; Boundary check
+  let target-patch patch target-x target-y
+  if target-patch = nobody [
+    set last-action-succeeded? false
+    stop
+  ]
+
+  ;; Check for STOP entities on target
+  if is-blocked? target-patch [
+    set last-action-succeeded? false
+    stop
+  ]
+
+  ;; Check for pushable entities on target
+  let pushables get-pushables-on target-patch
+  if any? pushables [
+    let push-ok try-push-chain target-patch move-dx move-dy
+    if not push-ok [
+      set last-action-succeeded? false
+      stop
+    ]
+  ]
+
+  ;; Move baba
+  setxy target-x target-y
+  set last-action-succeeded? true
+end
+
+to-report is-blocked? [ target-patch ]
+  ;; Check if any breed with STOP property is on the patch
+  if has-property? "WALL" "STOP" and any? (walls-on target-patch) [ report true ]
+  if has-property? "ROCK" "STOP" and any? (rocks-on target-patch) [ report true ]
+  if has-property? "BABA" "STOP" and any? (other babas-on target-patch) [ report true ]
+  report false
+end
+
+to-report get-pushables-on [ target-patch ]
+  ;; Word-blocks are always pushable
+  let result (word-blocks-on target-patch)
+
+  ;; Breed entities with PUSH property
+  if has-property? "ROCK" "PUSH" [
+    set result (turtle-set result (rocks-on target-patch))
+  ]
+  if has-property? "WALL" "PUSH" [
+    set result (turtle-set result (walls-on target-patch))
+  ]
+  if has-property? "FLAG" "PUSH" [
+    set result (turtle-set result (flags-on target-patch))
+  ]
+
+  report result
+end
+
+to-report try-push-chain [ start-patch move-dx move-dy ]
+  ;; Check if we can push everything in the chain
+  let current-patch start-patch
+  let chain-patches (list)
+
+  ;; Walk the chain
+  let keep-going true
+  while [keep-going] [
+    let pushables-here get-pushables-on current-patch
+    ifelse any? pushables-here [
+      set chain-patches lput current-patch chain-patches
+      let next-x ([pxcor] of current-patch) + move-dx
+      let next-y ([pycor] of current-patch) + move-dy
+      set current-patch patch next-x next-y
+      if current-patch = nobody [ report false ]  ;; boundary
+      if is-blocked? current-patch [ report false ] ;; STOP entity
+    ] [
+      set keep-going false
+    ]
+  ]
+
+  ;; Push from the end of the chain backward
+  let chain-idx (length chain-patches) - 1
+  while [chain-idx >= 0] [
+    let p item chain-idx chain-patches
+    let pushables-here get-pushables-on p
+    ask pushables-here [
+      setxy (xcor + move-dx) (ycor + move-dy)
+    ]
+    set chain-idx chain-idx - 1
+  ]
+
+  report true
+end
+
+;; ============================================================
+;; LLM INTEGRATION
+;; ============================================================
+
+to go
+  if game-state != "playing" [ stop ]
+  if not llm-config-loaded? [
+    output-print "LLM config not loaded. Check config file."
+    set game-state "error"
+    stop
+  ]
+
+  ask babas [
+    if has-property? "BABA" "YOU" [
+      let obs build-observation
+      if show-observations? [ output-print obs ]
+
+      set total-llm-calls total-llm-calls + 1
+      carefully [
+        let action llm:choose obs ["up" "down" "left" "right"]
+        set last-action action
+        set total-moves total-moves + 1
+        set move-history lput action move-history
+        try-move action
+      ] [
+        output-print (word "LLM error: " error-message)
+      ]
+    ]
+  ]
+
+  evaluate-rules
+  check-win-defeat
+  tick
+end
+
+to step
+  go
+end
+
+;; ============================================================
+;; OBSERVATION BUILDER
+;; ============================================================
+
+to-report build-observation
+  let obs ""
+  let baba-x [xcor] of one-of babas
+  let baba-y [ycor] of one-of babas
+
+  set obs (word obs "You are BABA at position (" baba-x ", " baba-y ").\n")
+  set obs (word obs "Goal: Reach the FLAG to win. You can push word-blocks to change rules.\n\n")
+
+  ;; Active rules
+  set obs (word obs "Active Rules:\n")
+  foreach active-rules [ r ->
+    set obs (word obs "- " r "\n")
+  ]
+  set obs (word obs "\n")
+
+  ;; Grid
+  set obs (word obs "Grid (9x9, @=you, W=wall, F=flag, R=rock, [WORD]=word-block):\n")
+  let grid-y max-pycor
+  while [grid-y >= min-pycor] [
+    let row ""
+    let grid-x min-pxcor
+    while [grid-x <= max-pxcor] [
+      let p patch grid-x grid-y
+      let cell " . "
+      ;; Check what's on this patch (priority: baba > word-block > wall > rock > flag)
+      if any? (flags-on p)       [ set cell " F " ]
+      if any? (rocks-on p)       [ set cell " R " ]
+      if any? (walls-on p)       [ set cell " W " ]
+      if any? (word-blocks-on p) [
+        let wb one-of (word-blocks-on p)
+        let txt [word-text] of wb
+        ;; Pad to 4 chars for alignment
+        if length txt < 4 [ set txt (word txt "  ") ]
+        set cell (word "[" txt "]")
+      ]
+      if any? (babas-on p)       [ set cell " @ " ]
+      set row (word row cell)
+      set grid-x grid-x + 1
+    ]
+    set obs (word obs row "\n")
+    set grid-y grid-y - 1
+  ]
+  set obs (word obs "\n")
+
+  ;; Adjacent info
+  set obs (word obs "Adjacent:\n")
+  set obs (word obs "  up: " (describe-adjacent baba-x (baba-y + 1)) "\n")
+  set obs (word obs "  down: " (describe-adjacent baba-x (baba-y - 1)) "\n")
+  set obs (word obs "  left: " (describe-adjacent (baba-x - 1) baba-y) "\n")
+  set obs (word obs "  right: " (describe-adjacent (baba-x + 1) baba-y) "\n")
+  set obs (word obs "\n")
+
+  ;; Last action feedback
+  if [last-action] of one-of babas != "" [
+    let b one-of babas
+    let result ifelse-value [last-action-succeeded?] of b [ "succeeded" ] [ "FAILED - blocked" ]
+    set obs (word obs "Last action: " [last-action] of b " (" result ")\n\n")
+  ]
+
+  set obs (word obs "Choose your move: up, down, left, or right.")
+  report obs
+end
+
+to-report describe-adjacent [ adj-x adj-y ]
+  let p patch adj-x adj-y
+  if p = nobody [ report "boundary (impassable)" ]
+
+  let descriptions []
+
+  if any? (babas-on p)       [ set descriptions lput "you" descriptions ]
+  if any? (word-blocks-on p) [
+    let wb one-of (word-blocks-on p)
+    set descriptions lput (word "word-block [" [word-text] of wb "] (pushable)") descriptions
+  ]
+  if any? (walls-on p) [
+    ifelse has-property? "WALL" "STOP"
+      [ set descriptions lput "wall (blocking)" descriptions ]
+      [ set descriptions lput "wall (passable)" descriptions ]
+  ]
+  if any? (rocks-on p) [
+    ifelse has-property? "ROCK" "PUSH"
+      [ set descriptions lput "rock (pushable)" descriptions ]
+      [ set descriptions lput "rock" descriptions ]
+  ]
+  if any? (flags-on p) [
+    ifelse has-property? "FLAG" "WIN"
+      [ set descriptions lput "flag (WIN!)" descriptions ]
+      [ set descriptions lput "flag" descriptions ]
+  ]
+
+  ifelse empty? descriptions
+    [ report "empty" ]
+    [ report reduce [ [a b] -> (word a ", " b) ] descriptions ]
+end
+
+;; ============================================================
+;; WIN/DEFEAT CHECK
+;; ============================================================
+
+to check-win-defeat
+  ;; Check if BABA IS YOU rule is broken
+  if not has-property? "BABA" "YOU" [
+    set game-state "lost - BABA IS YOU rule broken"
+    output-print "DEFEAT: The BABA IS YOU rule was broken!"
+    stop
+  ]
+
+  ;; Check if baba is on a flag with WIN property
+  ask babas [
+    if any? (flags-on patch-here) and has-property? "FLAG" "WIN" [
+      set game-state "won"
+      output-print (word "VICTORY! Solved in " total-moves " moves and " total-llm-calls " LLM calls.")
+    ]
+  ]
+
+  ;; Check move limit
+  if total-moves >= max-moves and game-state = "playing" [
+    set game-state "out of moves"
+    output-print (word "OUT OF MOVES after " total-moves " moves.")
+  ]
+end
+
+;; ============================================================
+;; REPORTERS FOR MONITORS
+;; ============================================================
+
+to-report level-report
+  report (word "Level " (substring level-choice 0 1))
+end
+
+to-report moves-report
+  report total-moves
+end
+
+to-report llm-calls-report
+  report total-llm-calls
+end
+
+to-report status-report
+  report game-state
+end
+
+to-report rules-report
+  ifelse empty? active-rules
+    [ report "none" ]
+    [ report reduce [ [a b] -> (word a ", " b) ] active-rules ]
+end
+  ]]></code>
+  <widgets>
+    <view x="220" y="10" width="380" height="380"
+          minPxcor="0" maxPxcor="8" minPycor="0" maxPycor="8"
+          patchSize="40.0" frameRate="5.0"
+          wrappingAllowedX="false" wrappingAllowedY="false"
+          updateMode="1" showTickCounter="true" tickCounterLabel="ticks"/>
+    <button x="15" y="10" width="90" height="40"
+            disableUntilTicks="false" kind="Observer" display="Setup" forever="false">setup</button>
+    <button x="110" y="10" width="90" height="40"
+            disableUntilTicks="false" kind="Observer" display="Go" forever="true">go</button>
+    <button x="15" y="55" width="185" height="40"
+            disableUntilTicks="false" kind="Observer" display="Step" forever="false">step</button>
+    <chooser x="15" y="100" width="185" height="55" variable="level-choice" current="0">
+      <choice type="string" value="1: Navigate"></choice>
+      <choice type="string" value="2: Break the Wall"></choice>
+      <choice type="string" value="3: Push and Rearrange"></choice>
+    </chooser>
+    <switch x="15" y="170" width="185" height="40" variable="show-observations?" on="false"/>
+    <slider x="15" y="220" width="185" height="40"
+            variable="max-moves" min="10" max="100" default="50.0" step="5"
+            direction="Horizontal" display="max-moves"/>
+    <monitor x="15" y="280" width="90" height="40"
+             fontSize="11" display="Level" precision="17">level-report</monitor>
+    <monitor x="110" y="280" width="90" height="40"
+             fontSize="11" display="Moves" precision="17">moves-report</monitor>
+    <monitor x="15" y="325" width="90" height="40"
+             fontSize="11" display="LLM Calls" precision="17">llm-calls-report</monitor>
+    <monitor x="110" y="325" width="90" height="40"
+             fontSize="11" display="Status" precision="17">status-report</monitor>
+    <monitor x="15" y="375" width="185" height="55"
+             fontSize="11" display="Active Rules" precision="17">rules-report</monitor>
+    <plot x="620" y="10" width="280" height="180"
+          display="Moves Over Time" xAxis="tick" yAxis="moves"
+          autoPlotX="true" autoPlotY="true" legend="false"
+          xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0">
+      <setup></setup>
+      <update></update>
+      <pen display="Moves" color="-2674135" legend="true" interval="1.0" mode="0">
+        <setup></setup>
+        <update>plot total-moves</update>
+      </pen>
+    </plot>
+    <plot x="620" y="200" width="280" height="150"
+          display="LLM Calls" xAxis="tick" yAxis="calls"
+          autoPlotX="true" autoPlotY="true" legend="false"
+          xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0">
+      <setup></setup>
+      <update></update>
+      <pen display="Calls" color="-10899396" legend="true" interval="1.0" mode="0">
+        <setup></setup>
+        <update>plot total-llm-calls</update>
+      </pen>
+    </plot>
+    <output x="620" y="360" width="280" height="100" fontSize="10"/>
+  </widgets>
+  <info><![CDATA[## Baba Is AI
+
+### What Is It?
+
+A simplified recreation of "Baba Is You" where an LLM agent must solve puzzles by pushing word-blocks that define the rules of the world. Three consecutive word-blocks in a row or column form a rule like "BABA IS YOU" or "WALL IS STOP". The agent can push these word-blocks apart to change or break rules.
+
+### How It Works
+
+**Rules are physical objects.** Word-blocks sit on a 9x9 grid. When three blocks align as [NOUN] IS [PROPERTY], that rule takes effect. Push a block out of alignment and the rule breaks.
+
+**The LLM decides each move.** Every tick, the agent receives a text observation of the grid and chooses up/down/left/right via `llm:choose`. History accumulates so the agent can learn from failed moves.
+
+**The knowing-doing gap.** Based on the BALROG benchmark, LLMs score near 0% on Baba Is You despite understanding the rules perfectly when quizzed. They *know* rules are pushable but *cannot execute* the spatial reasoning to rearrange them.
+
+### Levels
+
+1. **Navigate** — Walk right to the flag. No rule manipulation needed.
+2. **Break the Wall** — A wall blocks the path. Push the STOP word-block away from "WALL IS STOP" to make walls passable.
+3. **Push and Rearrange** — Rocks and walls block the path. Navigate around rocks, break the wall rule, reach the flag.
+
+### How to Use
+
+1. Select a level from the chooser
+2. Click **Setup** to initialize the level
+3. Click **Go** to let the LLM agent play, or **Step** for one move at a time
+4. Toggle **show-observations?** to see what the LLM receives each turn
+5. Watch the Active Rules monitor — it updates when word-blocks are pushed
+
+### Things to Notice
+
+- Level 1 is usually solved quickly (simple navigation)
+- Level 2 requires the agent to realize it must push STOP away — most LLMs struggle here
+- Level 3 adds rocks and more complex spatial reasoning — rarely solved
+- The Active Rules monitor shows rules changing in real-time as blocks move
+
+### Extending
+
+- Edit `config` to try different LLM providers (OpenAI, Claude, Gemini)
+- Add new word types (DEFEAT, SINK) for more complex puzzles
+- Create levels where the agent must *construct* rules, not just break them
+  ]]></info>
+  <turtleShapes>
+    <shape name="default" rotatable="true" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="5"></point>
+        <point x="40" y="250"></point>
+        <point x="150" y="205"></point>
+        <point x="260" y="250"></point>
+      </polygon>
+    </shape>
+    <shape name="circle" rotatable="false" editableColorIndex="0">
+      <circle x="0" y="0" marked="true" color="-1920102913" diameter="300" filled="true"></circle>
+    </shape>
+    <shape name="flag" rotatable="false" editableColorIndex="0">
+      <rectangle endX="75" startY="15" marked="true" color="-1920102913" endY="300" startX="60" filled="true"></rectangle>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="90" y="150"></point>
+        <point x="270" y="90"></point>
+        <point x="90" y="30"></point>
+      </polygon>
+      <line endX="90" startY="135" marked="true" color="-1920102913" endY="135" startX="75"></line>
+      <line endX="90" startY="45" marked="true" color="-1920102913" endY="45" startX="75"></line>
+    </shape>
+    <shape name="person" rotatable="false" editableColorIndex="0">
+      <circle x="110" y="5" marked="true" color="-1920102913" diameter="80" filled="true"></circle>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="105" y="90"></point>
+        <point x="120" y="195"></point>
+        <point x="90" y="285"></point>
+        <point x="105" y="300"></point>
+        <point x="135" y="300"></point>
+        <point x="150" y="225"></point>
+        <point x="165" y="300"></point>
+        <point x="195" y="300"></point>
+        <point x="210" y="285"></point>
+        <point x="180" y="195"></point>
+        <point x="195" y="90"></point>
+      </polygon>
+      <rectangle endX="172" startY="79" marked="true" color="-1920102913" endY="94" startX="127" filled="true"></rectangle>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="195" y="90"></point>
+        <point x="240" y="150"></point>
+        <point x="225" y="180"></point>
+        <point x="165" y="105"></point>
+      </polygon>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="105" y="90"></point>
+        <point x="60" y="150"></point>
+        <point x="75" y="180"></point>
+        <point x="135" y="105"></point>
+      </polygon>
+    </shape>
+    <shape name="square" rotatable="false" editableColorIndex="0">
+      <rectangle endX="270" startY="30" marked="true" color="-1920102913" endY="270" startX="30" filled="true"></rectangle>
+    </shape>
+  </turtleShapes>
+  <linkShapes>
+    <shape name="default" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+        </shape>
+      </indicator>
+    </shape>
+  </linkShapes>
+</model>
