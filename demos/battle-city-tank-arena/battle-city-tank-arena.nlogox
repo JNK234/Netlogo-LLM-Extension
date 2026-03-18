@@ -399,25 +399,25 @@ to-report build-observation
   set obs (word obs "Map (7x7, you=X):\n")
   let my-x pxcor
   let my-y pycor
-  let dy 3
-  while [dy >= -3] [
-    let dx -3
-    while [dx <= 3] [
-      let p patch-at dx dy
+  let map-y 3
+  while [map-y >= -3] [
+    let map-x -3
+    while [map-x <= 3] [
+      let p patch-at map-x map-y
       ifelse p = nobody [
         set obs (word obs "#")
       ] [
-        ifelse dx = 0 and dy = 0 [
+        ifelse map-x = 0 and map-y = 0 [
           set obs (word obs "X")
         ] [
           let ch map-char p
           set obs (word obs ch)
         ]
       ]
-      set dx dx + 1
+      set map-x map-x + 1
     ]
     set obs (word obs "\n")
-    set dy dy - 1
+    set map-y map-y - 1
   ]
 
   ;; Visible enemies (in-cone 8 90)
