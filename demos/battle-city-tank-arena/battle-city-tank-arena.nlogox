@@ -1002,7 +1002,7 @@ to-report game-status
 end
 ]]></code>
   <widgets>
-    <view x="295" y="10" height="540" frameRate="10" fontSize="10" wrappingAllowedX="false" wrappingAllowedY="false" patchSize="17" maxPycor="15" maxPxcor="15" minPycor="-15" minPxcor="-15" width="540" updateMode="1"></view>
+    <view x="295" y="10" height="540" frameRate="10" fontSize="10" wrappingAllowedX="false" wrappingAllowedY="false" patchSize="17" maxPycor="15" maxPxcor="15" minPycor="-15" minPxcor="-15" width="540" updateMode="1" showTickCounter="true" tickCounterLabel="ticks"></view>
 
     <button x="15" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="80" display="Setup">setup</button>
     <button x="105" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="80" display="Go">go</button>
