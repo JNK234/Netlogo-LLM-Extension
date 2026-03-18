@@ -26,6 +26,7 @@ globals [
   all-chains-complete?
   active-provider
   thinking-provider    ;; which provider uses thinking mode (or "")
+  provider-colors      ;; list of base colors per provider for plots
 ]
 
 ;; ===== SETUP =====
@@ -36,47 +37,60 @@ to setup
   set current-step 1
   set active-provider "none"
   set thinking-provider ""
+  set provider-colors (list 55 105 45 25 85 15)
 
   carefully [
     llm:load-config "config-multi-provider.txt"
-    output-print "Loaded config-multi-provider.txt."
+    output-print ">> Loaded config-multi-provider.txt"
   ] [
-    output-print (word "Config load failed: " error-message)
+    output-print (word ">> Config load failed: " error-message)
     carefully [
       llm:load-config "config"
-      output-print "Loaded fallback config."
+      output-print ">> Loaded fallback config."
     ] [
-      output-print (word "Fallback config load failed: " error-message)
-      output-print "Update config-multi-provider.txt with your provider keys."
+      output-print (word ">> Fallback config load failed: " error-message)
+      output-print ">> Update config-multi-provider.txt with your provider keys."
     ]
   ]
 
   refresh-ready-providers
   if empty? ready-providers-list [
-    output-print "WARNING: No providers are ready."
-    output-print "Run llm:provider-help for setup guidance."
+    output-print "!! WARNING: No providers are ready."
+    output-print "!! Run llm:provider-help for setup guidance."
     stop
   ]
 
   set seed-message get-seed-message
+  output-print ""
+  output-print (word "SEED MESSAGE (" message-type "):")
+  output-print seed-message
+  output-print ""
 
   ;; Decide thinking provider
   if thinking-mode? and not empty? ready-providers-list [
     set thinking-provider first ready-providers-list
+    output-print (word ">> Thinking mode ON for: " thinking-provider)
   ]
 
   ;; Create chains
   let num-providers length ready-providers-list
   if num-providers = 0 [ stop ]
 
+  ;; Layout: spread chains vertically with generous spacing
   let y-spacing (world-height / (num-providers + 1))
-  let x-start min-pxcor + 2
-  let x-end max-pxcor - 2
+  let x-start min-pxcor + 3
+  let x-end max-pxcor - 1
   let x-spacing (x-end - x-start) / max (list 1 (chain-length - 1))
 
   let chain-idx 0
   foreach ready-providers-list [ prov ->
     let chain-y max-pycor - (y-spacing * (chain-idx + 1))
+    let base-col item (chain-idx mod length provider-colors) provider-colors
+
+    ;; Paint a subtle lane for this chain
+    ask patches with [pycor >= chain-y - 1 and pycor <= chain-y + 1] [
+      set pcolor base-col - 4
+    ]
 
     ;; Create turtles for this chain
     let prev-turtle nobody
@@ -92,18 +106,18 @@ to setup
         set length-ratio 1
         set error? false
         set thinking-trace ""
-        set size 1.8
+        set size 2.5
+        set label-color white
 
         ;; Seed turtle gets the original message
         ifelse pos = 0 [
           set current-message seed-message
           set processed? true
-          set color green
-          set label-color white
+          set color green + 1
         ] [
           set current-message ""
           set processed? false
-          set color gray
+          set color gray - 1
         ]
 
         ;; Star shape for thinking-mode chain
@@ -116,7 +130,8 @@ to setup
         ;; Link from previous turtle
         if prev-turtle != nobody [
           create-chain-link-from prev-turtle [
-            set color gray + 2
+            set color base-col + 2
+            set thickness 0.3
           ]
         ]
         set prev-turtle self
@@ -126,36 +141,35 @@ to setup
     set chain-idx chain-idx + 1
   ]
 
-  ;; Label seed turtles with provider name
-  ask turtles with [chain-position = 0] [
-    set label (word provider-name "  ")
-  ]
-
   update-all-visuals
   reset-ticks
 end
 
 to refresh-ready-providers
   set ready-providers-list sort llm:providers
-  output-print (word "Ready providers: " ready-providers-list)
+  output-print (word ">> Ready providers: " ready-providers-list)
 end
 
 ;; ===== MAIN LOOP =====
 
 to go
   if all-chains-complete? [
-    output-print "All chains complete. Click 'Show Results' for summary."
+    output-print ">> All chains complete. Click 'Show Results' for full text."
     stop
   ]
 
   if current-step >= chain-length [
     set all-chains-complete? true
-    output-print "=== All chains complete ==="
+    output-print ""
+    output-print "========================================"
+    output-print "  ALL CHAINS COMPLETE"
+    output-print "========================================"
     show-final-results
     stop
   ]
 
-  output-print (word "--- Step " current-step " of " (chain-length - 1) " ---")
+  output-print ""
+  output-print (word "-- STEP " current-step " / " (chain-length - 1) " --")
 
   ;; Process position current-step for every chain
   foreach ready-providers-list [ prov ->
@@ -179,7 +193,6 @@ end
 ;; ===== CHAIN PROCESSING =====
 
 to process-chain-step
-  ;; Get the message from the previous turtle in the chain
   let prev-turtle one-of in-chain-link-neighbors
   if prev-turtle = nobody or [current-message] of prev-turtle = "" [
     set error? true
@@ -209,9 +222,10 @@ to process-chain-step
     set processed? true
     set error? false
 
-    output-print (word "  [" provider-name " pos=" chain-position "] drift=" (precision drift-score 2))
+    output-print (word "  [" provider-name " #" chain-position "] drift=" (precision drift-score 2))
+    output-print (word "    " response)
   ] [
-    output-print (word "  [" provider-name " pos=" chain-position "] ERROR: " error-message)
+    output-print (word "  [" provider-name " #" chain-position "] ERROR: " error-message)
     set current-message (word "ERROR: " error-message)
     set error? true
     set processed? true
@@ -220,7 +234,6 @@ to process-chain-step
 end
 
 to process-thinking-chain-step
-  ;; Same as process-chain-step but uses chat-with-thinking
   let prev-turtle one-of in-chain-link-neighbors
   if prev-turtle = nobody or [current-message] of prev-turtle = "" [
     set error? true
@@ -257,13 +270,14 @@ to process-thinking-chain-step
 
     llm:set-thinking false
 
-    output-print (word "  [" provider-name " pos=" chain-position " THINKING] drift=" (precision drift-score 2))
+    output-print (word "  [" provider-name " #" chain-position " THINKING] drift=" (precision drift-score 2))
+    output-print (word "    " response)
     if thinking != "" [
-      output-print (word "    Thinking: " truncate-string thinking 80)
+      output-print (word "    >> Reasoning: " truncate-string thinking 120)
     ]
   ] [
     llm:set-thinking false
-    output-print (word "  [" provider-name " pos=" chain-position "] THINKING ERROR: " error-message)
+    output-print (word "  [" provider-name " #" chain-position "] THINKING ERROR: " error-message)
     set current-message (word "ERROR: " error-message)
     set error? true
     set processed? true
@@ -277,7 +291,7 @@ to update-all-visuals
   ask turtles [
     ifelse processed? [
       ifelse error? [
-        set color red
+        set color red + 1
       ] [
         ;; Green (low drift) -> Yellow -> Red (high drift)
         let r-val min (list 255 (round (255 * drift-score)))
@@ -285,41 +299,39 @@ to update-all-visuals
         set color rgb r-val g-val 0
       ]
     ] [
-      set color gray
+      set color gray - 1
     ]
 
-    ;; Labels
-    ifelse show-labels? [
-      ifelse chain-position = 0 [
-        set label (word provider-name "  ")
+    ;; Labels: show provider name on seed, drift score on others
+    ifelse chain-position = 0 [
+      set label (word "  " provider-name)
+    ] [
+      ifelse show-labels? and processed? and not error? [
+        set label (word "  " (precision drift-score 2))
       ] [
-        ifelse processed? and not error? [
-          set label (word truncate-string current-message 20 "  ")
+        ifelse show-labels? and error? [
+          set label "  ERR"
         ] [
           set label ""
         ]
       ]
-    ] [
-      ifelse chain-position = 0 [
-        set label (word provider-name "  ")
-      ] [
-        set label ""
-      ]
     ]
   ]
 
-  ;; Color patches under processed turtles (lighter version of turtle color)
-  ask patches [ set pcolor black ]
-  ask turtles with [processed? and chain-position > 0] [
-    ask patch-here [
-      ifelse [error?] of one-of turtles-here [
-        set pcolor red - 3
+  ;; Update link colors to match drift gradient
+  ask chain-links [
+    let target-turtle end2
+    ifelse [processed?] of target-turtle [
+      ifelse [error?] of target-turtle [
+        set color red - 2
       ] [
-        let d [drift-score] of one-of turtles-here
-        let r-val min (list 255 (round (80 + 100 * d)))
-        let g-val min (list 255 (round (80 + 100 * (1 - d))))
-        set pcolor rgb r-val g-val 30
+        let d [drift-score] of target-turtle
+        let r-val min (list 255 (round (200 * d)))
+        let g-val min (list 255 (round (200 * (1 - d))))
+        set color rgb r-val g-val 50
       ]
+    ] [
+      set color gray
     ]
   ]
 end
@@ -328,14 +340,16 @@ end
 
 to show-final-results
   output-print ""
-  output-print "==============================================================="
-  output-print "Telephone Game Results"
-  output-print "==============================================================="
-  output-print (word "Seed: " truncate-string seed-message 70)
+  output-print "========================================================"
+  output-print "  TELEPHONE GAME RESULTS"
+  output-print "========================================================"
+  output-print ""
+  output-print "ORIGINAL SEED:"
+  output-print seed-message
   output-print ""
 
   foreach ready-providers-list [ prov ->
-    output-print (word "--- " prov " chain ---")
+    output-print (word "--- " (upper-case-string prov) " CHAIN ---")
     let chain-turtles sort-on [chain-position] turtles with [provider-name = prov]
     foreach chain-turtles [ t ->
       let pos [chain-position] of t
@@ -344,25 +358,45 @@ to show-final-results
       let err [error?] of t
       let thinking [thinking-trace] of t
       ifelse pos = 0 [
-        output-print (word "  [seed] " truncate-string msg 60)
+        output-print "  [SEED]"
+        output-print (word "    " msg)
       ] [
         ifelse err [
           output-print (word "  [" pos "] ERROR")
         ] [
-          output-print (word "  [" pos "] drift=" (precision drift 2) " | " truncate-string msg 55)
+          output-print (word "  [" pos "] drift=" (precision drift 3) " | len=" (length msg) " chars")
+          output-print (word "    " msg)
           if thinking != "" [
-            output-print (word "        thinking: " truncate-string thinking 50)
+            output-print ""
+            output-print "    >> REASONING TRACE:"
+            output-print (word "    " thinking)
           ]
         ]
       ]
+      output-print ""
     ]
     ;; Final drift for this chain
     let final-turtle last chain-turtles
     if final-turtle != nobody [
-      output-print (word "  Final drift: " (precision [drift-score] of final-turtle 3))
+      output-print (word "  FINAL DRIFT: " (precision [drift-score] of final-turtle 3))
     ]
     output-print ""
   ]
+
+  output-print "========================================================"
+  output-print "  SUMMARY"
+  output-print "========================================================"
+  foreach ready-providers-list [ prov ->
+    let chain-turtles turtles with [provider-name = prov and chain-position > 0 and processed? and not error?]
+    if any? chain-turtles [
+      let final-t max-one-of chain-turtles [chain-position]
+      let avg-d precision (mean [drift-score] of chain-turtles) 3
+      let final-d precision [drift-score] of final-t 3
+      let avg-len precision (mean [length current-message] of chain-turtles) 0
+      output-print (word "  " prov ": avg-drift=" avg-d " | final-drift=" final-d " | avg-len=" avg-len)
+    ]
+  ]
+  output-print ""
 end
 
 to show-provider-status
@@ -374,6 +408,35 @@ to show-provider-status
   output-print (word "Ready:  " llm:providers)
   output-print (word "All:    " llm:providers-all)
   output-print (word "Thinking provider: " thinking-provider)
+end
+
+;; ===== INSPECT TURTLE =====
+;; Click a turtle to see its full message in the output
+
+to inspect-clicked
+  if mouse-down? [
+    let clicked-turtle min-one-of turtles [distancexy mouse-xcor mouse-ycor]
+    if clicked-turtle != nobody and [distancexy mouse-xcor mouse-ycor] of clicked-turtle < 2 [
+      output-print ""
+      output-print (word "=== " [provider-name] of clicked-turtle " position " [chain-position] of clicked-turtle " ===")
+      ifelse [error?] of clicked-turtle [
+        output-print "STATUS: ERROR"
+      ] [
+        output-print (word "Drift: " (precision [drift-score] of clicked-turtle 3))
+        output-print (word "Length: " (length [current-message] of clicked-turtle) " chars")
+      ]
+      output-print ""
+      output-print [current-message] of clicked-turtle
+      if [thinking-trace] of clicked-turtle != "" [
+        output-print ""
+        output-print ">> REASONING:"
+        output-print [thinking-trace] of clicked-turtle
+      ]
+      output-print ""
+      ;; Wait for mouse release
+      while [mouse-down?] [ ]
+    ]
+  ]
 end
 
 ;; ===== SEED MESSAGES =====
@@ -505,7 +568,7 @@ to-report count-union [set-a set-b]
 end
 
 ;; ===== CASE CONVERSION =====
-;; NetLogo has no built-in lower-case primitive; these follow the
+;; NetLogo has no built-in lower/upper-case primitives; these follow the
 ;; standard pattern from the Case Conversion Example model.
 
 to-report lower-case-string [s]
@@ -520,6 +583,20 @@ to-report lower-case-char [c]
   ifelse pos = false
     [ report c ]
     [ report item pos "abcdefghijklmnopqrstuvwxyz" ]
+end
+
+to-report upper-case-string [s]
+  ifelse empty? s
+    [ report "" ]
+    [ report word (upper-case-char first s)
+                  (upper-case-string butfirst s) ]
+end
+
+to-report upper-case-char [c]
+  let pos position c "abcdefghijklmnopqrstuvwxyz"
+  ifelse pos = false
+    [ report c ]
+    [ report item pos "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
 end
 
 ;; ===== UTILITIES =====
@@ -544,12 +621,12 @@ to-report avg-drift
 end
 ]]></code>
   <widgets>
-    <view x="420" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-12" height="338" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="false" width="541" tickCounterLabel="ticks" maxPycor="12" updateMode="1" maxPxcor="20" minPxcor="-20"></view>
-    <button x="15" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="setup" width="90" sizeVersion="0">setup</button>
-    <button x="115" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="step" width="90" sizeVersion="0">go</button>
-    <button x="215" y="10" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="go-all" width="90" sizeVersion="0">go</button>
-    <button x="315" y="10" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Show Results" width="95" sizeVersion="0">show-final-results</button>
-    <chooser x="15" y="55" height="45" variable="message-type" current="0" width="200" display="message-type">
+    <view x="250" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-16" height="430" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="false" width="689" tickCounterLabel="ticks" maxPycor="16" updateMode="1" maxPxcor="26" minPxcor="-26"></view>
+    <button x="15" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" display="setup" width="110" sizeVersion="0">setup</button>
+    <button x="135" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" display="step" width="110" sizeVersion="0">go</button>
+    <button x="15" y="60" height="40" disableUntilTicks="false" forever="true" kind="Observer" display="go-all" width="110" sizeVersion="0">go</button>
+    <button x="135" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" display="Show Results" width="110" sizeVersion="0">show-final-results</button>
+    <chooser x="15" y="115" height="45" variable="message-type" current="0" width="230" display="message-type">
       <choice type="string" value="factual"></choice>
       <choice type="string" value="nuanced"></choice>
       <choice type="string" value="instructional"></choice>
@@ -557,15 +634,16 @@ end
       <choice type="string" value="controversial"></choice>
       <choice type="string" value="custom"></choice>
     </chooser>
-    <slider x="15" step="1" y="110" max="10" width="200" display="chain-length" height="45" min="3" direction="Horizontal" default="6.0" variable="chain-length"></slider>
-    <switch x="15" y="165" height="33" on="true" variable="show-labels?" width="200" display="show-labels?"></switch>
-    <switch x="15" y="205" height="33" on="false" variable="thinking-mode?" width="200" display="thinking-mode?"></switch>
-    <input x="15" multiline="false" y="250" height="45" variable="custom-message" type="string" width="395">Type a custom message here...</input>
-    <monitor x="225" precision="17" y="55" height="40" fontSize="11" width="95" display="Step" sizeVersion="0">current-step</monitor>
-    <monitor x="225" precision="17" y="100" height="40" fontSize="11" width="95" display="Providers" sizeVersion="0">length ready-providers-list</monitor>
-    <monitor x="325" precision="17" y="55" height="40" fontSize="11" width="85" display="Avg Drift" sizeVersion="0">avg-drift</monitor>
-    <button x="325" y="100" height="40" disableUntilTicks="false" forever="false" kind="Observer" display="Provider Status" width="85" sizeVersion="0">show-provider-status</button>
-    <plot x="15" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="Drift" y="360" xMin="0.0" height="175" legend="true" xMax="10.0" yMin="0.0" width="470" xAxis="Chain Position" display="Semantic Drift by Provider">
+    <slider x="15" step="1" y="170" max="10" width="230" display="chain-length" height="45" min="3" direction="Horizontal" default="6.0" variable="chain-length"></slider>
+    <switch x="15" y="225" height="33" on="true" variable="show-labels?" width="230" display="show-labels?"></switch>
+    <switch x="15" y="265" height="33" on="false" variable="thinking-mode?" width="230" display="thinking-mode?"></switch>
+    <input x="15" multiline="false" y="310" height="45" variable="custom-message" type="string" width="230">Type a custom message here...</input>
+    <monitor x="15" precision="17" y="370" height="40" fontSize="11" width="70" display="Step" sizeVersion="0">current-step</monitor>
+    <monitor x="95" precision="17" y="370" height="40" fontSize="11" width="70" display="Providers" sizeVersion="0">length ready-providers-list</monitor>
+    <monitor x="175" precision="17" y="370" height="40" fontSize="11" width="70" display="Avg Drift" sizeVersion="0">avg-drift</monitor>
+    <button x="15" y="420" height="33" disableUntilTicks="false" forever="false" kind="Observer" display="Provider Status" width="230" sizeVersion="0">show-provider-status</button>
+    <button x="250" y="450" height="33" disableUntilTicks="false" forever="true" kind="Observer" display="Inspect Turtle" width="150" sizeVersion="0">inspect-clicked</button>
+    <plot x="15" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="Drift" y="460" xMin="0.0" height="160" legend="true" xMax="10.0" yMin="0.0" width="460" xAxis="Chain Position" display="Semantic Drift by Provider">
       <setup>set-current-plot "Semantic Drift by Provider"</setup>
       <update>foreach ready-providers-list [ prov ->
   create-temporary-plot-pen prov
@@ -575,7 +653,7 @@ end
   ]
 ]</update>
     </plot>
-    <plot x="495" autoPlotX="true" yMax="200.0" autoPlotY="true" yAxis="Characters" y="360" xMin="0.0" height="175" legend="true" xMax="10.0" yMin="0.0" width="470" xAxis="Chain Position" display="Message Length by Provider">
+    <plot x="485" autoPlotX="true" yMax="200.0" autoPlotY="true" yAxis="Characters" y="460" xMin="0.0" height="160" legend="true" xMax="10.0" yMin="0.0" width="460" xAxis="Chain Position" display="Message Length by Provider">
       <setup>set-current-plot "Message Length by Provider"</setup>
       <update>foreach ready-providers-list [ prov ->
   create-temporary-plot-pen prov
@@ -585,7 +663,7 @@ end
   ]
 ]</update>
     </plot>
-    <output x="420" y="545" height="180" fontSize="11" width="545"></output>
+    <output x="410" y="450" height="280" fontSize="11" width="535"></output>
   </widgets>
   <info>## WHAT IS IT?
 
@@ -606,7 +684,8 @@ Color encodes drift: green = low drift, yellow = moderate, red = high. The optio
 5. Click **setup** to create the chains
 6. Click **step** to advance one position, or **go-all** to run all positions
 7. Click **Show Results** for detailed text comparison in the output area
-8. Click **Provider Status** to see which providers are configured
+8. Click **Inspect Turtle** then click a turtle to see its full message
+9. Click **Provider Status** to see which providers are configured
 
 ## THINGS TO NOTICE
 
@@ -616,6 +695,7 @@ Color encodes drift: green = low drift, yellow = moderate, red = high. The optio
 - The drift plot reveals which providers are most and least faithful
 - Message length may grow or shrink differently per provider
 - Thinking traces (star turtles) show how the provider reasons about paraphrasing
+- Colored lanes behind each chain help distinguish providers visually
 
 ## THINGS TO TRY
 
@@ -624,6 +704,7 @@ Color encodes drift: green = low drift, yellow = moderate, red = high. The optio
 - Enable thinking mode and read the reasoning traces in Show Results
 - Try a custom message with specific numbers or proper nouns to test precision
 - Run multiple times with the same settings to see provider consistency
+- Click "Inspect Turtle" and click individual turtles to read their full messages
 
 ## EXTENDING THE MODEL
 
