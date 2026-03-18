@@ -9,10 +9,10 @@ temperature=0.4
 max_tokens=250
 timeout_seconds=45
 
-# Cloud API keys
-openai_api_key=YOUR_OPENAI_API_KEY_HERE
-anthropic_api_key=YOUR_ANTHROPIC_API_KEY_HERE
-gemini_api_key=YOUR_GEMINI_API_KEY_HERE
+# Cloud API keys (leave empty to skip provider, fill in to enable)
+openai_api_key=
+anthropic_api_key=
+gemini_api_key=
 
 # Ollama local endpoint (no key required)
 # Start with: ollama serve
