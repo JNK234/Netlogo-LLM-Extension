@@ -484,8 +484,8 @@ to-report map-char [p]
   if tt = "flag"      [ report "F" ]
 
   ;; Check for tanks/bullets on patch
-  if any? tanks-on p with [tank-health > 0 and team-id != [team-id] of myself] [ report "E" ]
-  if any? tanks-on p with [tank-health > 0 and team-id = [team-id] of myself and self != myself] [ report "A" ]
+  if any? (tanks-on p) with [tank-health > 0 and team-id != [team-id] of myself] [ report "E" ]
+  if any? (tanks-on p) with [tank-health > 0 and team-id = [team-id] of myself and self != myself] [ report "A" ]
 
   report "."
 end
