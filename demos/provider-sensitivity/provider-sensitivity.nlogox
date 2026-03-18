@@ -430,7 +430,7 @@ to-report compute-drift [text-a text-b]
 end
 
 to-report to-word-set [text]
-  let cleaned replace-all-chars (lower-case text) ".,;:!?\"'()-" " "
+  let cleaned replace-all-chars (lower-case-string text) ".,;:!?\"'()-" " "
   let words split-on-spaces cleaned
   ;; Deduplicate
   let result []
@@ -502,6 +502,24 @@ to-report count-union [set-a set-b]
     ]
   ]
   report length combined
+end
+
+;; ===== CASE CONVERSION =====
+;; NetLogo has no built-in lower-case primitive; these follow the
+;; standard pattern from the Case Conversion Example model.
+
+to-report lower-case-string [s]
+  ifelse empty? s
+    [ report "" ]
+    [ report word (lower-case-char first s)
+                  (lower-case-string butfirst s) ]
+end
+
+to-report lower-case-char [c]
+  let pos position c "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  ifelse pos = false
+    [ report c ]
+    [ report item pos "abcdefghijklmnopqrstuvwxyz" ]
 end
 
 ;; ===== UTILITIES =====
