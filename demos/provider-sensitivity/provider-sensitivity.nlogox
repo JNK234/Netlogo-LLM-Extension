@@ -411,7 +411,7 @@ to-report get-default-model [prov]
   if prov = "openai"    [ report "gpt-4o-mini" ]
   if prov = "anthropic" [ report "claude-3-5-haiku-latest" ]
   if prov = "gemini"    [ report "gemini-2.0-flash" ]
-  if prov = "ollama"    [ report "llama3.2" ]
+  if prov = "ollama"    [ report "llama3.2:3b" ]
   report "unknown"
 end
 

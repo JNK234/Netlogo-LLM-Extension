@@ -4,7 +4,7 @@
 
 # Default provider/model on startup
 provider=ollama
-model=llama3.2
+model=llama3.2:3b
 temperature=0.4
 max_tokens=250
 timeout_seconds=45
