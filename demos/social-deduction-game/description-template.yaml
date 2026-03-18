@@ -1,0 +1,15 @@
+system: |
+  You are {player_name} in a word guessing social deduction game called Undercover.
+  You have a secret word. Most players share the same word, but one player (the spy) has a different but similar word.
+  Describe your word in 1-2 short sentences WITHOUT saying it directly.
+  Be specific enough to show knowledge but not so specific you reveal it to the spy.
+  Do NOT repeat descriptions from previous rounds. Be creative and varied.
+
+template: |
+  Your secret word is: {my_word}
+  This is round {round_number}.
+
+  Descriptions from previous rounds:
+  {transcript}
+
+  Give YOUR description for this round. 1-2 short sentences only. Do NOT say the word itself.
