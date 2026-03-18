@@ -7,6 +7,8 @@
 extensions [llm]
 
 breed [players player]
+breed [indicators indicator]
+directed-link-breed [vote-arrows vote-arrow]
 
 players-own [
   player-name
@@ -18,6 +20,9 @@ players-own [
   vote-count
   total-votes-received
   elimination-round
+  base-color
+  home-x
+  home-y
 ]
 
 globals [
@@ -84,12 +89,20 @@ to setup
   set spy-detected? false
   set rounds-to-detection -1
 
+  ;; Draw noir background and table
+  draw-background
+
+  ;; Color palette for up to 8 players
+  let palette (list 15 105 55 25 125 85 45 65)
+
   ;; Create players in a circle
   set-default-shape players "person"
   create-players num-players [
-    set size 3.0
-    set color sky
-    set player-name (word "Player " (who + 1))
+    set size 4.0
+    let idx who
+    set base-color item idx palette
+    set color base-color
+    set player-name (word "Player " (idx + 1))
     set is-spy? false
     set alive? true
     set my-description ""
@@ -98,11 +111,13 @@ to setup
     set total-votes-received 0
     set elimination-round -1
 
-    ;; Arrange in circle
-    let angle (360 / num-players) * who
-    setxy (12 * sin angle) (12 * cos angle)
+    ;; Arrange in circle — radius 10, starting at 12 o'clock (-90 offset)
+    let angle -90 + (360 / num-players) * idx
+    set home-x (10 * cos angle)
+    set home-y (10 * sin angle)
+    setxy home-x home-y
     set label player-name
-    set label-color white
+    set label-color base-color + 2
   ]
 
   ;; Assign one random spy
@@ -117,9 +132,14 @@ to setup
       [ set my-word regular-word ]
   ]
 
-  ;; Draw the discussion table (center ring)
-  ask patches with [abs pxcor <= 4 and abs pycor <= 4 and (distancexy 0 0) >= 3 and (distancexy 0 0) <= 4] [
-    set pcolor 3
+  ;; Create center phase indicator
+  create-indicators 1 [
+    setxy 0 0
+    set size 0.1
+    set shape "default"
+    set color black
+    set label (word "ROUND " current-round)
+    set label-color white
   ]
 
   reset-ticks
@@ -196,6 +216,15 @@ end
 to run-description-phase
   set current-phase "describing"
 
+  ;; Clear vote arrows from previous round
+  ask vote-arrows [ die ]
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "ROUND " current-round " — DESCRIBING...")
+    set label-color white
+  ]
+
   let transcript-text full-transcript
   if transcript-text = "" [ set transcript-text "No descriptions yet." ]
 
@@ -244,6 +273,12 @@ end
 to run-voting-phase
   set current-phase "voting"
 
+  ;; Update center indicator
+  ask indicators [
+    set label (word "ROUND " current-round " — VOTING...")
+    set label-color white
+  ]
+
   ;; Reset vote counts
   ask players with [alive?] [
     set vote-count 0
@@ -288,6 +323,14 @@ to run-voting-phase
         ]
       ]
 
+      ;; Draw vote arrow from voter to target
+      if target != nobody [
+        create-vote-arrow-to target [
+          set color [base-color] of myself
+          set thickness 0.3
+        ]
+      ]
+
       if show-votes? [
         set label (word player-name " -> " vote-name)
         print (word player-name " votes for " vote-name)
@@ -313,14 +356,20 @@ to run-elimination
   ask eliminated-player [
     set alive? false
     set elimination-round current-round
-    set color gray
-    set size 1.5
+    set color base-color - 4
+    set size 2.0
     set label (word player-name " [OUT R" current-round "]")
-    set label-color gray
+    set label-color base-color - 4
 
     print (word ">>> " player-name " eliminated in round " current-round
       " with " vote-count " votes"
       (ifelse-value is-spy? [" (SPY!)"] [" (regular)"]))
+  ]
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "ELIMINATED: " [player-name] of eliminated-player)
+    set label-color 15
   ]
 end
 
@@ -339,6 +388,7 @@ to check-win-condition
     set total-games-played total-games-played + 1
     set total-regular-wins total-regular-wins + 1
     print "*** REGULARS WIN! The spy has been eliminated. ***"
+    ask indicators [ set label "REGULARS WIN!" set label-color 55 ]
     if auto-reveal? [ reveal-spy ]
     stop
   ]
@@ -351,6 +401,7 @@ to check-win-condition
     set total-games-played total-games-played + 1
     set total-spy-wins total-spy-wins + 1
     print "*** SPY WINS! Too few players remain. ***"
+    ask indicators [ set label "SPY WINS!" set label-color 15 ]
     if auto-reveal? [ reveal-spy ]
     stop
   ]
@@ -363,6 +414,7 @@ to check-win-condition
     set total-games-played total-games-played + 1
     set total-spy-wins total-spy-wins + 1
     print "*** SPY WINS! Max rounds reached. ***"
+    ask indicators [ set label "SPY WINS!" set label-color 15 ]
     if auto-reveal? [ reveal-spy ]
     stop
   ]
@@ -371,19 +423,50 @@ end
 ;;; ========== REVEAL & UTILITIES ==========
 
 to reveal-spy
-  ask players [
-    ifelse is-spy? [
-      set color red
-      set size 3.0
-      set label (word player-name " [SPY: " my-word "]")
-      set label-color red
+  let the-spy one-of players with [is-spy?]
+  let spy-name [player-name] of the-spy
+
+  ask the-spy [
+    set color 15
+    set size 5.0
+    set label (word "SPY: " my-word)
+    set label-color 15
+  ]
+
+  ask players with [not is-spy?] [
+    ifelse alive? [
+      set label (word player-name " [" my-word "]")
+      set label-color base-color + 2
     ] [
-      if alive? [
-        set label (word player-name " [" my-word "]")
-      ]
+      set label (word "[OUT R" elimination-round "] " my-word)
+      set label-color base-color - 4
     ]
   ]
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "SPY WAS " spy-name "!")
+    set label-color 15
+  ]
+
   print (word "Regular word: " regular-word " | Spy word: " spy-word)
+end
+
+to draw-background
+  ;; Dark navy/charcoal gradient — lighter near center
+  ask patches [
+    let dist distancexy 0 0
+    set pcolor scale-color 3 dist 25 0
+  ]
+
+  ;; Circular table: ring at distance 5-6 from center
+  ask patches with [distancexy 0 0 >= 5 and distancexy 0 0 <= 6] [
+    set pcolor 13
+  ]
+  ;; Inner table fill
+  ask patches with [distancexy 0 0 < 5] [
+    set pcolor 12
+  ]
 end
 
 to new-game
@@ -587,5 +670,28 @@ Built using the NetLogo LLM Extension.
       </polygon>
     </shape>
   </turtleShapes>
-  <linkShapes/>
+  <linkShapes>
+    <shape name="default" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+        </shape>
+      </indicator>
+    </shape>
+  </linkShapes>
 </model>
