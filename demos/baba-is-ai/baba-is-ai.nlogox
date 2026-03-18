@@ -37,7 +37,7 @@ to setup
   set move-history []
 
   carefully [
-    llm:load-config "demos/baba-is-ai/config"
+    llm:load-config "config"
     set llm-config-loaded? true
   ] [
     output-print (word "Config error: " error-message)
@@ -53,6 +53,21 @@ to setup
   if level-num = 2 [ setup-level-2 ]
   if level-num = 3 [ setup-level-3 ]
 
+  ;; Inject game-aware system message so the LLM knows what it's playing
+  ask babas [
+    llm:set-history (list
+      (list "system" (word
+        "You are playing Baba Is AI, a puzzle game on a 9x9 grid. "
+        "You move one square per turn: up, down, left, or right. "
+        "Word-blocks form rules when 3 align: [NOUN] IS [PROPERTY]. "
+        "WALL IS STOP means walls block you. FLAG IS WIN means reaching the flag wins. "
+        "You can PUSH word-blocks by walking into them to break rules. "
+        "If walls block your path, push the STOP word-block away to break WALL IS STOP. "
+        "Always move toward the FLAG. If blocked, push word-blocks to change the rules."
+      ))
+    )
+  ]
+
   evaluate-rules
   reset-ticks
 end
@@ -64,13 +79,14 @@ end
 to setup-level-1
   ;; Level 1: Navigate — walk right to the flag
   ;; Word-blocks: BABA IS YOU (top), FLAG IS WIN (bottom)
-  create-word-block-at 1 7 "BABA" "noun"
-  create-word-block-at 2 7 "IS"   "verb"
-  create-word-block-at 3 7 "YOU"  "property"
+  ;; Rules at top row — safe from accidental pushing
+  create-word-block-at 0 8 "BABA" "noun"
+  create-word-block-at 1 8 "IS"   "verb"
+  create-word-block-at 2 8 "YOU"  "property"
 
-  create-word-block-at 5 1 "FLAG" "noun"
-  create-word-block-at 6 1 "IS"   "verb"
-  create-word-block-at 7 1 "WIN"  "property"
+  create-word-block-at 6 8 "FLAG" "noun"
+  create-word-block-at 7 8 "IS"   "verb"
+  create-word-block-at 8 8 "WIN"  "property"
 
   create-babas 1 [
     setxy 1 4
@@ -91,17 +107,19 @@ end
 
 to setup-level-2
   ;; Level 2: Break the Wall — push STOP away to pass through walls
-  create-word-block-at 1 8 "BABA" "noun"
-  create-word-block-at 2 8 "IS"   "verb"
-  create-word-block-at 3 8 "YOU"  "property"
+  ;; Rules at top — safe from accidental pushing
+  create-word-block-at 0 8 "BABA" "noun"
+  create-word-block-at 1 8 "IS"   "verb"
+  create-word-block-at 2 8 "YOU"  "property"
 
+  create-word-block-at 6 8 "FLAG" "noun"
+  create-word-block-at 7 8 "IS"   "verb"
+  create-word-block-at 8 8 "WIN"  "property"
+
+  ;; WALL IS STOP — the rule to break. STOP is at (3,4), pushable right
   create-word-block-at 1 4 "WALL" "noun"
   create-word-block-at 2 4 "IS"   "verb"
   create-word-block-at 3 4 "STOP" "property"
-
-  create-word-block-at 5 0 "FLAG" "noun"
-  create-word-block-at 6 0 "IS"   "verb"
-  create-word-block-at 7 0 "WIN"  "property"
 
   create-babas 1 [
     setxy 1 6
@@ -146,9 +164,9 @@ to setup-level-3
   create-word-block-at 1 2 "IS"   "verb"
   create-word-block-at 2 2 "STOP" "property"
 
-  create-word-block-at 6 0 "FLAG" "noun"
-  create-word-block-at 7 0 "IS"   "verb"
-  create-word-block-at 8 0 "WIN"  "property"
+  create-word-block-at 6 8 "FLAG" "noun"
+  create-word-block-at 7 8 "IS"   "verb"
+  create-word-block-at 8 8 "WIN"  "property"
 
   create-babas 1 [
     setxy 0 7
@@ -419,37 +437,74 @@ to-report build-observation
   let baba-x [xcor] of one-of babas
   let baba-y [ycor] of one-of babas
 
-  set obs (word obs "You are BABA at position (" baba-x ", " baba-y ").\n")
-  set obs (word obs "Goal: Reach the FLAG to win. You can push word-blocks to change rules.\n\n")
+  ;; Find flag position
+  let flag-x -1
+  let flag-y -1
+  if any? flags [
+    set flag-x [xcor] of one-of flags
+    set flag-y [ycor] of one-of flags
+  ]
+
+  ;; Game context
+  set obs (word obs "BABA IS AI PUZZLE GAME\n")
+  set obs (word obs "You control BABA. Move up/down/left/right on a 9x9 grid.\n")
+  set obs (word obs "Word-blocks like [BABA] [IS] [YOU] form rules when aligned.\n")
+  set obs (word obs "You can push word-blocks by walking into them.\n\n")
+
+  ;; Position and goal with explicit direction
+  set obs (word obs "Your position: (" baba-x ", " baba-y ")\n")
+  if flag-x >= 0 [
+    set obs (word obs "FLAG position: (" flag-x ", " flag-y ")\n")
+    ;; Explicit directional hint
+    let dir-hint ""
+    if flag-x > baba-x [ set dir-hint (word dir-hint "right") ]
+    if flag-x < baba-x [ set dir-hint (word dir-hint "left") ]
+    if flag-y > baba-y [
+      if dir-hint != "" [ set dir-hint (word dir-hint " and ") ]
+      set dir-hint (word dir-hint "up")
+    ]
+    if flag-y < baba-y [
+      if dir-hint != "" [ set dir-hint (word dir-hint " and ") ]
+      set dir-hint (word dir-hint "down")
+    ]
+    if dir-hint != "" [
+      set obs (word obs "FLAG is " dir-hint " from you.\n")
+    ]
+  ]
+  set obs (word obs "\n")
 
   ;; Active rules
   set obs (word obs "Active Rules:\n")
   foreach active-rules [ r ->
     set obs (word obs "- " r "\n")
   ]
+  if has-property? "WALL" "STOP" [
+    set obs (word obs "(Walls block movement. Push the STOP word-block away to break this rule.)\n")
+  ]
   set obs (word obs "\n")
 
-  ;; Grid
-  set obs (word obs "Grid (9x9, @=you, W=wall, F=flag, R=rock, [WORD]=word-block):\n")
+  ;; Grid map — fixed-width for readability
+  set obs (word obs "Map (row 8=top, row 0=bottom, col 0=left, col 8=right):\n")
+  set obs (word obs "     0    1    2    3    4    5    6    7    8\n")
   let grid-y max-pycor
   while [grid-y >= min-pycor] [
-    let row ""
+    let row (word grid-y "  ")
+    if grid-y < 10 [ set row (word " " row) ]
     let grid-x min-pxcor
     while [grid-x <= max-pxcor] [
       let p patch grid-x grid-y
-      let cell " . "
-      ;; Check what's on this patch (priority: baba > word-block > wall > rock > flag)
-      if any? (flags-on p)       [ set cell " F " ]
-      if any? (rocks-on p)       [ set cell " R " ]
-      if any? (walls-on p)       [ set cell " W " ]
+      let cell "  .  "
+      if any? (flags-on p)       [ set cell "  F  " ]
+      if any? (rocks-on p)       [ set cell "  R  " ]
+      if any? (walls-on p)       [ set cell "  W  " ]
       if any? (word-blocks-on p) [
         let wb one-of (word-blocks-on p)
         let txt [word-text] of wb
-        ;; Pad to 4 chars for alignment
-        if length txt < 4 [ set txt (word txt "  ") ]
-        set cell (word "[" txt "]")
+        ;; Pad/trim to 4 chars
+        while [length txt < 4] [ set txt (word txt " ") ]
+        set cell (word "[" substring txt 0 4 "]")
       ]
-      if any? (babas-on p)       [ set cell " @ " ]
+      if any? (babas-on p)       [ set cell " YOU " ]
       set row (word row cell)
       set grid-x grid-x + 1
     ]
@@ -459,21 +514,40 @@ to-report build-observation
   set obs (word obs "\n")
 
   ;; Adjacent info
-  set obs (word obs "Adjacent:\n")
+  set obs (word obs "What is next to you:\n")
   set obs (word obs "  up: " (describe-adjacent baba-x (baba-y + 1)) "\n")
   set obs (word obs "  down: " (describe-adjacent baba-x (baba-y - 1)) "\n")
   set obs (word obs "  left: " (describe-adjacent (baba-x - 1) baba-y) "\n")
   set obs (word obs "  right: " (describe-adjacent (baba-x + 1) baba-y) "\n")
   set obs (word obs "\n")
 
+  ;; Recent move history — helps prevent looping
+  if not empty? move-history [
+    let recent-count min (list 5 (length move-history))
+    let recent sublist move-history (length move-history - recent-count) (length move-history)
+    set obs (word obs "Your last " recent-count " moves: " reduce [ [a b] -> (word a ", " b) ] recent "\n")
+    ;; Detect looping
+    if recent-count >= 4 [
+      let unique-moves remove-duplicates recent
+      if length unique-moves <= 2 [
+        set obs (word obs "WARNING: You are stuck in a loop! Try a completely different direction.\n")
+      ]
+    ]
+    set obs (word obs "\n")
+  ]
+
   ;; Last action feedback
   if [last-action] of one-of babas != "" [
     let b one-of babas
     let result ifelse-value [last-action-succeeded?] of b [ "succeeded" ] [ "FAILED - blocked" ]
-    set obs (word obs "Last action: " [last-action] of b " (" result ")\n\n")
+    set obs (word obs "Last action: " [last-action] of b " (" result ")\n")
+    if not [last-action-succeeded?] of b [
+      set obs (word obs "That direction is blocked. Try a different direction.\n")
+    ]
+    set obs (word obs "\n")
   ]
 
-  set obs (word obs "Choose your move: up, down, left, or right.")
+  set obs (word obs "Which direction should you move?")
   report obs
 end
 
@@ -563,61 +637,41 @@ to-report rules-report
 end
   ]]></code>
   <widgets>
-    <view x="220" y="10" width="380" height="380"
-          minPxcor="0" maxPxcor="8" minPycor="0" maxPycor="8"
-          patchSize="40.0" frameRate="5.0"
-          wrappingAllowedX="false" wrappingAllowedY="false"
-          updateMode="1" showTickCounter="true" tickCounterLabel="ticks"/>
-    <button x="15" y="10" width="90" height="40"
-            disableUntilTicks="false" kind="Observer" display="Setup" forever="false">setup</button>
-    <button x="110" y="10" width="90" height="40"
-            disableUntilTicks="false" kind="Observer" display="Go" forever="true">go</button>
-    <button x="15" y="55" width="185" height="40"
-            disableUntilTicks="false" kind="Observer" display="Step" forever="false">step</button>
-    <chooser x="15" y="100" width="185" height="55" variable="level-choice" current="0">
+    <view x="220" wrappingAllowedX="false" y="10" frameRate="5.0" minPycor="0" height="380" showTickCounter="true" patchSize="40.0" fontSize="10" wrappingAllowedY="false" width="380" tickCounterLabel="ticks" maxPycor="8" updateMode="1" maxPxcor="8" minPxcor="0"></view>
+    <button x="15" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Setup">setup</button>
+    <button x="110" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="90" display="Go">go</button>
+    <button x="15" y="55" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="185" display="Step">step</button>
+    <chooser x="15" y="100" height="60" variable="level-choice" current="0" width="185" display="level-choice">
       <choice type="string" value="1: Navigate"></choice>
       <choice type="string" value="2: Break the Wall"></choice>
       <choice type="string" value="3: Push and Rearrange"></choice>
     </chooser>
-    <switch x="15" y="170" width="185" height="40" variable="show-observations?" on="false"/>
-    <slider x="15" y="220" width="185" height="40"
-            variable="max-moves" min="10" max="100" default="50.0" step="5"
-            direction="Horizontal" display="max-moves"/>
-    <monitor x="15" y="280" width="90" height="40"
-             fontSize="11" display="Level" precision="17">level-report</monitor>
-    <monitor x="110" y="280" width="90" height="40"
-             fontSize="11" display="Moves" precision="17">moves-report</monitor>
-    <monitor x="15" y="325" width="90" height="40"
-             fontSize="11" display="LLM Calls" precision="17">llm-calls-report</monitor>
-    <monitor x="110" y="325" width="90" height="40"
-             fontSize="11" display="Status" precision="17">status-report</monitor>
-    <monitor x="15" y="375" width="185" height="55"
-             fontSize="11" display="Active Rules" precision="17">rules-report</monitor>
-    <plot x="620" y="10" width="280" height="180"
-          display="Moves Over Time" xAxis="tick" yAxis="moves"
-          autoPlotX="true" autoPlotY="true" legend="false"
-          xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0">
+    <switch x="15" y="170" height="40" on="false" variable="show-observations?" width="185" display="show-observations?"></switch>
+    <slider x="15" step="5" y="220" max="100" width="185" display="max-moves" height="50" min="10" direction="Horizontal" default="50.0" variable="max-moves"></slider>
+    <monitor x="15" precision="17" y="280" height="60" fontSize="11" width="100" display="Level">level-report</monitor>
+    <monitor x="110" precision="17" y="280" height="60" fontSize="11" width="100" display="Moves">moves-report</monitor>
+    <monitor x="15" precision="17" y="325" height="60" fontSize="11" width="100" display="LLM Calls">llm-calls-report</monitor>
+    <monitor x="110" precision="17" y="325" height="60" fontSize="11" width="100" display="Status">status-report</monitor>
+    <monitor x="15" precision="17" y="375" height="60" fontSize="11" width="185" display="Active Rules">rules-report</monitor>
+    <plot x="620" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="moves" y="10" xMin="0.0" height="180" legend="false" xMax="10.0" yMin="0.0" width="280" xAxis="tick" display="Moves Over Time">
       <setup></setup>
       <update></update>
-      <pen display="Moves" color="-2674135" legend="true" interval="1.0" mode="0">
+      <pen interval="1.0" mode="0" display="Moves" color="-2674135" legend="true">
         <setup></setup>
         <update>plot total-moves</update>
       </pen>
     </plot>
-    <plot x="620" y="200" width="280" height="150"
-          display="LLM Calls" xAxis="tick" yAxis="calls"
-          autoPlotX="true" autoPlotY="true" legend="false"
-          xMin="0.0" xMax="10.0" yMin="0.0" yMax="10.0">
+    <plot x="620" autoPlotX="true" yMax="10.0" autoPlotY="true" yAxis="calls" y="200" xMin="0.0" height="150" legend="false" xMax="10.0" yMin="0.0" width="280" xAxis="tick" display="LLM Calls">
       <setup></setup>
       <update></update>
-      <pen display="Calls" color="-10899396" legend="true" interval="1.0" mode="0">
+      <pen interval="1.0" mode="0" display="Calls" color="-10899396" legend="true">
         <setup></setup>
         <update>plot total-llm-calls</update>
       </pen>
     </plot>
-    <output x="620" y="360" width="280" height="100" fontSize="10"/>
+    <output x="620" y="360" height="100" fontSize="10" width="280"></output>
   </widgets>
-  <info><![CDATA[## Baba Is AI
+  <info>## Baba Is AI
 
 ### What Is It?
 
@@ -657,7 +711,7 @@ A simplified recreation of "Baba Is You" where an LLM agent must solve puzzles b
 - Edit `config` to try different LLM providers (OpenAI, Claude, Gemini)
 - Add new word types (DEFEAT, SINK) for more complex puzzles
 - Create levels where the agent must *construct* rules, not just break them
-  ]]></info>
+  </info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">
@@ -737,4 +791,5 @@ A simplified recreation of "Baba Is You" where an LLM agent must solve puzzles b
       </indicator>
     </shape>
   </linkShapes>
+  <previewCommands>setup repeat 75 [ go ]</previewCommands>
 </model>
