@@ -61,23 +61,40 @@ abstract class BaseHttpProvider(implicit ec: ExecutionContext) extends LLMProvid
   }
 
   /**
-   * Simplified chat method that takes messages directly
+   * Build a ChatRequest from current config and messages, resolving ThinkingConfig
    */
-  override def chat(messages: Seq[ChatMessage]): Future[ChatMessage] = {
+  protected def buildRequest(messages: Seq[ChatMessage]): ChatRequest = {
     val model = configStore.getOrElse(ConfigStore.MODEL, defaultModel)
     val temperature = configStore.get(ConfigStore.TEMPERATURE).map(_.toDouble)
     val maxTokens = configStore.get(ConfigStore.MAX_TOKENS).map(_.toInt)
+    val thinkingConfig = ReasoningModelDetector.resolveThinkingConfig(providerName, model, configStore)
 
-    val request = ChatRequest(
+    ChatRequest(
       model = model,
       messages = messages,
       maxTokens = maxTokens,
-      temperature = temperature
+      temperature = temperature,
+      thinkingConfig = thinkingConfig
     )
+  }
+
+  /**
+   * Simplified chat method that takes messages directly
+   */
+  override def chat(messages: Seq[ChatMessage]): Future[ChatMessage] = {
+    val request = buildRequest(messages)
 
     chat(request).map(_.firstMessage.getOrElse(
       throw new RuntimeException(s"No response message received from $providerName")
     ))
+  }
+
+  /**
+   * Chat method that returns the full response including thinking text
+   */
+  override def chatWithFullResponse(messages: Seq[ChatMessage]): Future[ChatResponse] = {
+    val request = buildRequest(messages)
+    chat(request)
   }
 
   /**

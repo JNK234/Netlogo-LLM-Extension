@@ -1,0 +1,19 @@
+# Provider Sensitivity Demo - Multi-Provider Configuration
+# This config enables ALL providers simultaneously for comparison.
+# Fill in your API keys for each cloud provider you want to test.
+
+# Active provider (used as default on startup)
+provider=openai
+model=gpt-4o-mini
+temperature=0.7
+max_tokens=300
+timeout_seconds=30
+
+# Provider-specific API keys (set each one you have)
+openai_api_key=YOUR_OPENAI_API_KEY_HERE
+anthropic_api_key=YOUR_ANTHROPIC_API_KEY_HERE
+gemini_api_key=YOUR_GEMINI_API_KEY_HERE
+
+# Ollama (local) - no API key needed
+# Ensure Ollama is running: ollama serve
+ollama_base_url=http://localhost:11434

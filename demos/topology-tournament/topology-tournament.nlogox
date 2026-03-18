@@ -1,802 +1,561 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.3" snapToGrid="true">
-  <code><![CDATA[; ABOUTME: Emergent treasure hunt where agents discover what treasure is and where to find it through LLM-mediated communication in a maze
-; ABOUTME: Agents share partial knowledge clues and use collaborative reasoning to solve the mystery
+  <code><![CDATA[;; ABOUTME: Topology tournament demo comparing mesh, hierarchy, and chain
+;; ABOUTME: communication structures for per-agent LLM-driven collective convergence
 
-extensions [ llm ]
+extensions [llm]
 
-breed [treasure-hunters hunter]
-breed [treasures treasure]
+breed [mesh-agents mesh-agent]
+breed [hierarchy-agents hierarchy-agent]
+breed [chain-agents chain-agent]
+breed [label-agents label-agent]
+undirected-link-breed [topology-links topology-link]
 
 globals [
-  maze-width
-  maze-height
-  treasure-discovered?
-  treasure-definition
-  treasure-location
-  communication-pairs
-  ; Interface widget variables
-  ; num-hunters              ; Number of treasure hunters (slider)
-   ;communication-range      ; Range for agent communication (slider)
-  ; confidence-threshold     ; Confidence level needed to manifest treasure (slider)
-  ; show-trails?            ; Whether to show agent trails (switch)
-  ; show-communications?    ; Whether to show communication visuals (switch)
-  ; default-strategy        ; Default exploration strategy (chooser)
-  ; llm-config-file        ; Path to LLM configuration file (input)
-
+  llm-ready?
+  tournament-running?
+  topology-order
+  convergence-times
+  winner-topology
+  belief-options
 ]
 
-patches-own [
-  wall?                  ; true if this patch is a wall
-  explored?              ; true if an agent has been here
-  meeting-glow          ; visual effect when agents meet here
-  path-color            ; color for path visualization
-]
-
-treasure-hunters-own [
-  knowledge-fragment    ; the one clue each agent knows
-  learned-facts         ; accumulated knowledge from conversations
-  current-goal          ; what agent is trying to do now
-  confidence-level      ; how confident agent is in their understanding
-  last-communication   ; tick when last communicated
-  exploration-strategy  ; how this agent moves through maze
-  memory-trail         ; patches this agent has visited
-]
-
-treasures-own [
-  glow-phase           ; for animation effect
-  discovered-by        ; which agents found it
+turtles-own [
+  belief
+  previous-belief
+  topology-name
+  rounds-unchanged
 ]
 
 to setup
   clear-all
 
-  ; Initialize interface variables with defaults if not set
-  if num-hunters = 0 [ set num-hunters 5 ]
-  if communication-range = 0 [ set communication-range 2 ]
-  if confidence-threshold = 0 [ set confidence-threshold 0.7 ]
-  if default-strategy = 0 [ set default-strategy "mixed" ]
-  ; For config file, try to use the one in the same directory as the model
-  if llm-config-file = 0 [
-    ; Try just the filename first (works if model saved and opened from same location)
-    set llm-config-file "demos/config"
-  ]
-  ; Initialize boolean switches (0 means not set by interface)
-  if show-trails? = 0 [ set show-trails? true ]
-  if show-communications? = 0 [ set show-communications? true ]
+  set llm-ready? false
+  set tournament-running? true
+  set topology-order ["mesh" "hierarchy" "chain"]
+  set convergence-times (list -1 -1 -1)
+  set winner-topology "pending"
+  set belief-options ["COLLECT" "EXPLORE" "STABILIZE"]
 
-  ; Initialize LLM extension with default configuration
-  setup-llm
+  load-llm-config
+  build-topologies
+  seed-beliefs
+  initialize-agents
 
-  ; Set world dimensions for good maze
-  set maze-width 21   ; odd number for proper maze generation
-  set maze-height 21
-  resize-world 0 (maze-width - 1) 0 (maze-height - 1)
-
-  ; Initialize global variables
-  set treasure-discovered? false
-  set treasure-definition ""
-  set treasure-location nobody
-  set communication-pairs []
-
-  ; Generate the maze
-  generate-maze
-
-  ; Create treasure-hunting agents with unique knowledge
-  create-treasure-hunters num-hunters [
-    setup-hunter
-  ]
-
-  ; Visual setup
-  setup-visual-appearance
+  print ""
+  print "=== TOPOLOGY TOURNAMENT ==="
+  print (word "Agents per topology: " agents-per-topology)
+  print (word "Mode: " llm-status)
+  print (word "Belief options: " belief-options)
+  print ""
+  print (word "Mesh initial:      " belief-summary mesh-agents)
+  print (word "Hierarchy initial:  " belief-summary hierarchy-agents)
+  print (word "Chain initial:      " belief-summary chain-agents)
+  print "==========================="
+  print ""
 
   reset-ticks
 end
 
-to setup-llm
-  ; Load LLM configuration from file if it exists
-  if llm-config-file != 0 and llm-config-file != "" [
-    ; Try loading the config file
-    ; Note: The file should be in the same directory as the model
-    ; or you can use an absolute path
-    carefully [
-      llm:load-config llm-config-file
-    ] [
-      ; If loading fails, use Ollama as default
-      print (word "Note: Could not load " llm-config-file ". Please configure your LLM provider.")
-      print "To use OpenAI: llm:set-provider \"openai\" and llm:set-api-key \"your-api-key\""
-      print "To use Ollama: llm:set-provider \"ollama\" (no API key needed)"
-      error "LLM configuration required - see instructions above"
-    ]
-  ]
-end
-
-to generate-maze
-  ; Initialize all patches as walls
-  ask patches [
-    set wall? true
-    set explored? false
-    set meeting-glow 0
-    set path-color gray - 2
-    set pcolor gray - 2  ; dark gray walls
-  ]
-
-  ; Create a simple maze using recursive backtracking algorithm
-  ; Start with a grid of walls and carve out passages
-  let start-patch patch 1 1
-  ask start-patch [
-    set wall? false
-    set pcolor brown + 1  ; light tan path
-  ]
-
-  ; Carve maze paths
-  carve-maze-from start-patch
-
-  ; Ensure there are some open meeting areas
-  create-meeting-areas
-
-  ; Create dead ends and complexity
-  add-maze-complexity
-end
-
-to carve-maze-from [current-patch]
-  ; Recursive backtracking maze generation
-  ask current-patch [
-    set wall? false
-    set pcolor brown + 1
-
-    ; Get possible directions (2 patches away to maintain walls)
-    let possible-directions []
-
-    ; Check each cardinal direction
-    if pxcor + 2 < maze-width [
-      let east-patch patch (pxcor + 2) pycor
-      if east-patch != nobody and [wall?] of east-patch [
-        set possible-directions lput east-patch possible-directions
-      ]
-    ]
-
-    if pycor + 2 < maze-height [
-      let north-patch patch pxcor (pycor + 2)
-      if north-patch != nobody and [wall?] of north-patch [
-        set possible-directions lput north-patch possible-directions
-      ]
-    ]
-
-    if pxcor - 2 >= 0 [
-      let west-patch patch (pxcor - 2) pycor
-      if west-patch != nobody and [wall?] of west-patch [
-        set possible-directions lput west-patch possible-directions
-      ]
-    ]
-
-    if pycor - 2 >= 0 [
-      let south-patch patch pxcor (pycor - 2)
-      if south-patch != nobody and [wall?] of south-patch [
-        set possible-directions lput south-patch possible-directions
-      ]
-    ]
-
-    ; Randomly visit unvisited neighbors
-    while [length possible-directions > 0] [
-      let next-patch one-of possible-directions
-      set possible-directions remove next-patch possible-directions
-
-      if [wall?] of next-patch [
-        ; Carve path to next cell
-        let between-patch patch (([pxcor] of next-patch + pxcor) / 2) (([pycor] of next-patch + pycor) / 2)
-        ask between-patch [
-          set wall? false
-          set pcolor brown + 1
-        ]
-
-        ; Recursively carve from next cell
-        carve-maze-from next-patch
-      ]
-    ]
-  ]
-end
-
-to create-meeting-areas
-  ; Create some larger open areas where agents can meet
-  let meeting-spots []
-  repeat 3 [
-    let spot one-of patches with [not wall? and pxcor > 2 and pxcor < maze-width - 3 and pycor > 2 and pycor < maze-height - 3]
-    if spot != nobody [
-      ask spot [
-        ask patches in-radius 1 [
-          if wall? [
-            set wall? false
-            set pcolor brown + 2  ; slightly different color for meeting areas
-          ]
-        ]
-      ]
-      set meeting-spots lput spot meeting-spots
-    ]
-  ]
-end
-
-to add-maze-complexity
-  ; Add some additional paths to make the maze more interesting
-  repeat 5 [
-    let wall-patch one-of patches with [wall? and count neighbors with [not wall?] >= 2]
-    if wall-patch != nobody [
-      ask wall-patch [
-        set wall? false
-        set pcolor brown + 1
-      ]
-    ]
-  ]
-end
-
-to setup-hunter
-  ; Place hunter at a random open patch
-  let open-patches patches with [not wall?]
-  if any? open-patches [
-    move-to one-of open-patches
-  ]
-
-  ; Assign unique knowledge fragment
-  set knowledge-fragment assign-knowledge-fragment
-  set learned-facts []
-  set current-goal "explore"
-  set confidence-level 0
-  set last-communication 0
-  set memory-trail []
-
-  ; Visual appearance with unique shapes and colors
-  set shape one-of ["person" "circle" "triangle" "square" "star"]
-  set color one-of [red blue green yellow magenta cyan orange pink]
-  set size 0.9
-
-  ; Set exploration strategy
-  ifelse default-strategy = "mixed" [
-    set exploration-strategy one-of ["methodical" "random" "wall-follower"]
+to load-llm-config
+  carefully [
+    llm:load-config llm-config-path
+    set llm-ready? true
   ] [
-    set exploration-strategy default-strategy
+    print (word "LLM config load failed: " error-message)
+    print "Falling back to deterministic coordinator policy."
+    set llm-ready? false
   ]
-
-  ; Enable pen for trail with agent's color (based on switch)
-  ifelse show-trails? = true [
-    pen-down
-    set pen-size 2
-  ] [
-    pen-up
-  ]
-
-  ; Log agent creation
-  print (word "Hunter " who " created with clue: \"" knowledge-fragment "\"")
-  print (word "  Strategy: " exploration-strategy ", Starting at (" pxcor ", " pycor ")")
 end
 
-to-report assign-knowledge-fragment
-  ; Each agent gets one piece of the treasure puzzle
-  let fragments [
-    "The treasure is golden and round like the sun"
-    "Look where two main paths cross each other"
-    "The special place has coordinates that add up to exactly 15"
-    "It only appears when all clues are combined"
-    "The treasure glows and makes everyone happy"
-    "Find the spot furthest from any wall"
-  ]
+to build-topologies
+  build-mesh-topology
+  build-hierarchy-topology
+  build-chain-topology
+  create-topology-labels
 
-  ; Assign unique fragments (cycle through if more agents than fragments)
-  let my-index who mod length fragments
-  report item my-index fragments
+  ask topology-links [
+    set color gray + 1
+    set thickness 0.2
+  ]
 end
 
-to setup-visual-appearance
-  ; Set patch colors and visual effects
-  ask patches [
-    if not wall? [
-      set path-color brown + 1
+to build-mesh-topology
+  create-mesh-agents agents-per-topology [
+    set topology-name "mesh"
+    set shape "circle"
+    set size 2
+  ]
+
+  ;; Top-left quadrant
+  layout-circle mesh-agents 9
+  ask mesh-agents [
+    set xcor xcor - 13
+    set ycor ycor + 10
+  ]
+
+  let ordered sort mesh-agents
+  foreach (range length ordered) [i ->
+    let source item i ordered
+    foreach (range (i + 1) (length ordered)) [j ->
+      let target item j ordered
+      ask source [ create-topology-link-with target ]
     ]
   ]
+end
 
-  ; Create visual border
-  ask patches with [pxcor = 0 or pxcor = maze-width - 1 or pycor = 0 or pycor = maze-height - 1] [
-    set pcolor black
+to build-hierarchy-topology
+  create-hierarchy-agents agents-per-topology [
+    set topology-name "hierarchy"
+    set shape "triangle"
+    set size 2
+  ]
+
+  ;; Top-right quadrant
+  let ordered sort hierarchy-agents
+  foreach (range length ordered) [i ->
+    let level floor (ln (i + 1) / ln 2)
+    let first-at-level ((2 ^ level) - 1)
+    let level-position (i - first-at-level)
+    let level-width (2 ^ level)
+    let x-offset 13 + (level-position - ((level-width - 1) / 2)) * 6
+    let y-offset 20 - (level * 6)
+
+    ask item i ordered [
+      setxy x-offset y-offset
+    ]
+
+    if i > 0 [
+      let parent-index floor ((i - 1) / 2)
+      let parent-node item parent-index ordered
+      ask item i ordered [ create-topology-link-with parent-node ]
+    ]
+  ]
+end
+
+to build-chain-topology
+  create-chain-agents agents-per-topology [
+    set topology-name "chain"
+    set shape "square"
+    set size 2
+  ]
+
+  ;; Bottom row, centered
+  let ordered sort chain-agents
+  let spacing 4
+  let start-x (0 - ((agents-per-topology - 1) * spacing / 2))
+
+  foreach (range length ordered) [i ->
+    let frac (i / max list 1 (agents-per-topology - 1))
+    let arc-y -18 + 3 * cos (180 * frac)
+    ask item i ordered [
+      setxy (start-x + (i * spacing)) arc-y
+    ]
+
+    if i > 0 [
+      let prev-node item (i - 1) ordered
+      ask item i ordered [ create-topology-link-with prev-node ]
+    ]
+  ]
+end
+
+to-report belief-color [b]
+  if b = "COLLECT"   [ report 15 ]
+  if b = "EXPLORE"   [ report 105 ]
+  if b = "STABILIZE" [ report 55 ]
+  report white
+end
+
+to create-topology-labels
+  create-label-agents 1 [ setxy -13 20  set label "MESH"      set label-color white  set size 0 ]
+  create-label-agents 1 [ setxy  13 24  set label "HIERARCHY"  set label-color white  set size 0 ]
+  create-label-agents 1 [ setxy   0 -13 set label "CHAIN"      set label-color white  set size 0 ]
+end
+
+to seed-beliefs
+  assign-beliefs mesh-agents 0
+  assign-beliefs hierarchy-agents 1
+  assign-beliefs chain-agents 2
+
+  ask turtles with [breed != label-agents] [
+    set color belief-color belief
+    set label ""
+  ]
+end
+
+to assign-beliefs [group shift]
+  let ordered sort group
+  foreach (range length ordered) [i ->
+    let slot ((i + shift) mod length belief-options)
+    ask item i ordered [
+      set belief item slot belief-options
+    ]
+  ]
+end
+
+to initialize-agents
+  ask turtles with [breed != label-agents] [
+    set previous-belief belief
+    set rounds-unchanged 0
   ]
 end
 
 to go
-  ; Main simulation loop
-  if not any? treasure-hunters [ stop ]
+  if not tournament-running? [ stop ]
 
-  ; Agent actions
-  ask treasure-hunters [
-    move-through-maze
-    detect-nearby-agents
-    analyze-current-situation
-    take-action-based-on-goal
-    update-exploration-memory
-    update-agent-appearance
+  ;; Snapshot beliefs for simultaneous update
+  ask turtles with [breed != label-agents] [ set previous-belief belief ]
+
+  ;; Each unconverged agent decides independently
+  ask turtles with [breed != label-agents] [
+    let idx position topology-name topology-order
+    if item idx convergence-times = -1 [
+      decide-belief
+    ]
   ]
 
-  ; Update environment
-  update-visual-effects
-  check-treasure-conditions
+  check-all-convergence
+  update-convergence-visuals
 
+  ;; Per-tick summary
+  print (word "Tick " ticks
+    " | mesh: " belief-summary mesh-agents " (" precision agreement-pct mesh-agents 0 "%)"
+    " | hierarchy: " belief-summary hierarchy-agents " (" precision agreement-pct hierarchy-agents 0 "%)"
+    " | chain: " belief-summary chain-agents " (" precision agreement-pct chain-agents 0 "%)")
+
+  update-tournament-state
   tick
-
-  ; Stop if treasure is found and celebrated
-  if treasure-discovered? and any? treasures [
-    if ticks mod 30 = 0 [  ; celebration effect every 30 ticks
-      celebrate-success
-    ]
-  ]
 end
 
-to move-through-maze
-  ; Different movement strategies
-  if exploration-strategy = "random" [
-    let possible-moves patches with [not wall? and distance myself <= 1]
-    if any? possible-moves [
-      move-to one-of possible-moves
-    ]
-  ]
+to decide-belief
+  let neighbor-beliefs [previous-belief] of link-neighbors
+  if empty? neighbor-beliefs [ stop ]
 
-  if exploration-strategy = "methodical" [
-    ; Try to explore unseen areas
-    let unexplored patches with [not wall? and not explored? and distance myself <= 1]
-    ifelse any? unexplored [
-      move-to one-of unexplored
-    ] [
-      ; If no unexplored nearby, move randomly
-      let possible-moves patches with [not wall? and distance myself <= 1]
-      if any? possible-moves [
-        move-to one-of possible-moves
-      ]
-    ]
-  ]
+  ifelse use-llm? and llm-ready?
+  [ decide-belief-llm neighbor-beliefs ]
+  [ decide-belief-deterministic neighbor-beliefs ]
 
-  if exploration-strategy = "wall-follower" [
-    ; Follow walls (right-hand rule) - safe implementation
-    right 90
-    while [patch-ahead 1 = nobody or [wall?] of patch-ahead 1] [
-      right 90
-    ]
-    ; Only move if destination is valid and not a wall
-    let target-patch patch-ahead 1
-    if target-patch != nobody and not [wall?] of target-patch [
-      move-to target-patch
-    ]
-  ]
+  ifelse belief = previous-belief
+  [ set rounds-unchanged rounds-unchanged + 1 ]
+  [ set rounds-unchanged 0 ]
 
-  ; Mark current location as explored
-  ask patch-here [
-    set explored? true
-    set pcolor path-color + 0.5  ; slightly brighter for explored areas
-  ]
+  set color belief-color belief
 end
 
-to detect-nearby-agents
-  ; Check for other agents within communication range
-  let nearby-hunters other treasure-hunters in-radius communication-range
-
-  if any? nearby-hunters and (ticks - last-communication) > 5 [
-    let communication-partner one-of nearby-hunters
-
-    ; Enhanced visual effect for communication
-    ask patch-here [
-      set meeting-glow 15  ; bright glow effect
-      set pcolor yellow
-    ]
-
-    ; Create spreading communication effect
-    ask patches in-radius 1.5 [
-      if not wall? [
-        set meeting-glow 8
-        set pcolor yellow - 1
-      ]
-    ]
-
-    ; Visual connection between communicating agents
-    ask communication-partner [
-      set color color + 3  ; brighten communicating agent
-      pen-up
-      move-to patch-here
-      pen-down
-      move-to [patch-here] of myself
-      pen-up
-    ]
-
-    ; Initiate LLM-based conversation
-    communicate-with communication-partner
-    set last-communication ticks
-  ]
-end
-
-to communicate-with [partner]
-  ; Share knowledge using LLM
-  let my-info (word knowledge-fragment ". I have learned: " learned-facts)
-  let partner-info (word [knowledge-fragment] of partner ". They have learned: " [learned-facts] of partner)
-  let combined-info (word "I know: " my-info ". My partner knows: " partner-info)
-
-  ; Log the interaction
-  print (word "=== AGENT INTERACTION at tick " ticks " ===")
-  print (word "Hunter " who " meets Hunter " [who] of partner)
-  print (word "Location: (" pxcor ", " pycor ")")
-  print "Sharing knowledge..."
-
-  ; Use LLM to synthesize information
-  let conversation-result ""
+to decide-belief-llm [neighbor-beliefs]
   carefully [
-    print "Consulting LLM for insights..."
-    set conversation-result llm:chat (word combined-info ". What can we conclude about finding a treasure? Give me new insights.")
-    print (word "LLM Response: " conversation-result)
+    let base-prompt (word
+      "You are agent " who " in a " topology-name " network with " length neighbor-beliefs " neighbors. "
+      "Your group is trying to reach consensus on one belief. "
+      "You can ONLY see your direct neighbors — you cannot see the whole group. "
+      "RULE: Pick the belief held by the MAJORITY of your neighbors. "
+      "If there is a tie among neighbors, keep your current belief. "
+      "If you have only one neighbor, adopt their belief."
+    )
+    let system-prompt base-prompt
+    if rounds-unchanged >= 3 [
+      set system-prompt (word base-prompt
+        " IMPORTANT: You have held the same belief for " rounds-unchanged
+        " rounds while your neighbors are split. To help the group reach consensus, switch to one of your neighbors' beliefs."
+      )
+    ]
+    llm:set-history (list
+      (list "system" system-prompt)
+    )
+    let prompt (word
+      "Your current belief: " belief ". "
+      "Your " length neighbor-beliefs " neighbor(s) believe: " belief-count-summary neighbor-beliefs ". "
+      "What belief do you choose?"
+    )
+    let chosen llm:choose prompt belief-options
+    print (word "  Agent " who " (" topology-name ", " length neighbor-beliefs " nbrs): "
+      belief " -> " chosen " [neighbors: " belief-count-summary neighbor-beliefs "]")
+    set belief chosen
   ] [
-    ; If LLM call fails, log the error details
-    print (word "ERROR: LLM call failed with: " error-message)
-    print "Falling back to simple combination"
-    set conversation-result (word "Combining clues: " [knowledge-fragment] of partner)
+    print (word "  Agent " who " LLM error: " error-message " — using deterministic")
+    decide-belief-deterministic neighbor-beliefs
   ]
-
-  ; Update learned facts
-  if conversation-result != "" [
-    set learned-facts lput conversation-result learned-facts
-    print (word "Hunter " who " learned: " conversation-result)
-
-    ; Partner also learns
-    ask partner [
-      set learned-facts lput conversation-result learned-facts
-      print (word "Hunter " who " also learned this insight")
-    ]
-  ]
-
-  ; Update confidence based on information gained
-  set confidence-level confidence-level + 0.2
-  if confidence-level > 1 [ set confidence-level 1 ]
-  print (word "Confidence levels updated. Hunter " who ": " precision confidence-level 2)
-  print "================================"
 end
 
-to analyze-current-situation
-  ; Use LLM to determine next goal based on current knowledge
-  if length learned-facts > 1 and confidence-level > 0.3 [
-    let situation-summary (word "My original clue: " knowledge-fragment
-                               ". What I've learned from others: " learned-facts
-                               ". I'm currently at coordinates " pxcor " " pycor
-                               ". What should be my next goal?")
+to decide-belief-deterministic [neighbor-beliefs]
+  let all-local lput belief neighbor-beliefs
+  let best belief
+  let best-count 0
+  foreach belief-options [candidate ->
+    let cnt length (filter [b -> b = candidate] all-local)
+    if cnt > best-count [ set best candidate  set best-count cnt ]
+  ]
+  ;; Random chance to break symmetry; higher when stuck 3+ rounds
+  let break-chance ifelse-value (rounds-unchanged >= 3) [40] [10]
+  if best = belief and length neighbor-beliefs > 0 and random 100 < break-chance [
+    set best one-of neighbor-beliefs
+  ]
+  set belief best
+end
 
-    let possible-goals ["explore-more" "find-center" "find-crossing" "search-systematically" "gather-more-info"]
+to-report belief-count-summary [belief-list]
+  let chunks []
+  foreach belief-options [candidate ->
+    let cnt length (filter [b -> b = candidate] belief-list)
+    if cnt > 0 [ set chunks lput (word candidate ":" cnt) chunks ]
+  ]
+  ifelse empty? chunks [ report "none" ]
+  [ report (reduce [[a b] -> (word a ", " b)] chunks) ]
+end
 
-    carefully [
-      print (word "Hunter " who " analyzing situation...")
-      let old-goal current-goal
-      set current-goal llm:choose situation-summary possible-goals
-      if current-goal != old-goal [
-        print (word "Hunter " who " changed goal from '" old-goal "' to '" current-goal "'")
+to update-convergence-visuals
+  foreach (range length topology-order) [idx ->
+    if item idx convergence-times != -1 [
+      let topo-name item idx topology-order
+      let upper-name upper-case-name topo-name
+      let group (turtle-set turtles with [topology-name = topo-name and breed != label-agents])
+      ask group [
+        ask my-topology-links [ set color 45  set thickness 0.5 ]
       ]
-    ] [
-      ; Fallback if LLM fails
-      print (word "ERROR in goal analysis: " error-message)
-      set current-goal one-of possible-goals
-      print (word "Hunter " who " randomly selected goal: " current-goal)
-    ]
-  ]
-end
-
-to take-action-based-on-goal
-  ; Act based on current goal
-  if current-goal = "find-center" [
-    ; Move toward center of maze
-    let center-patch patch (maze-width / 2) (maze-height / 2)
-    if center-patch != nobody [
-      face center-patch
-    ]
-  ]
-
-  if current-goal = "find-crossing" [
-    ; Look for intersection points
-    let crossings patches with [not wall? and count neighbors with [not wall?] >= 3]
-    if any? crossings [
-      let nearest-crossing min-one-of crossings [distance myself]
-      face nearest-crossing
-    ]
-  ]
-
-  if current-goal = "search-systematically" [
-    ; Check if current location matches learned criteria
-    check-treasure-location
-  ]
-end
-
-to check-treasure-location
-  ; Check if current location might be treasure location based on accumulated knowledge
-  let location-matches? false
-
-  ; Analyze learned facts to see if current location fits
-  if length learned-facts > 2 [
-    let location-description (word "I am at coordinates " pxcor " " pycor
-                                  ". The sum is " (pxcor + pycor)
-                                  ". This location has " count neighbors with [not wall?] " open neighbors."
-                                  ". Based on what I know: " learned-facts
-                                  ". Could this be the treasure location?")
-
-    carefully [
-      let location-assessment llm:choose location-description ["yes-likely" "no-unlikely" "need-more-info"]
-      if location-assessment = "yes-likely" [
-        set location-matches? true
-      ]
-    ] [
-      ; Simple fallback check
-      if (pxcor + pycor) = 15 and count neighbors with [not wall?] >= 3 [
-        set location-matches? true
-      ]
-    ]
-  ]
-
-  ; If location seems right and we have enough knowledge, try to manifest treasure
-  if location-matches? and confidence-level > confidence-threshold [
-    attempt-treasure-manifestation
-  ]
-end
-
-to attempt-treasure-manifestation
-  ; Try to make treasure appear based on collective knowledge
-  if not treasure-discovered? [
-    print "=== TREASURE MANIFESTATION ATTEMPT ==="
-    print (word "Hunter " who " attempting to manifest treasure at (" pxcor ", " pycor ")")
-
-    let all-knowledge []
-    ask treasure-hunters [
-      set all-knowledge lput knowledge-fragment all-knowledge
-      set all-knowledge sentence all-knowledge learned-facts
-    ]
-
-    let combined-knowledge reduce word all-knowledge
-    print "Combining all collective knowledge..."
-
-    carefully [
-      print "Asking LLM to describe the treasure..."
-      let treasure-description llm:chat (word "Based on all our clues: " combined-knowledge
-                                             ". What exactly is the treasure and what does it look like?")
-      print (word "LLM treasure description: " treasure-description)
-
-      if length treasure-description > 10 [  ; Got a substantial description
-        set treasure-definition treasure-description
-        set treasure-location patch-here
-        print (word "TREASURE MANIFESTED! " treasure-definition)
-        manifest-treasure
-      ]
-    ] [
-      ; Fallback treasure manifestation
-      print (word "ERROR in treasure description: " error-message)
-      print "Checking if we have enough clues for fallback..."
-      if length all-knowledge > 4 [  ; Enough clues gathered
-        set treasure-definition "A glowing golden orb that brings joy"
-        set treasure-location patch-here
-        print "TREASURE MANIFESTED using fallback description!"
-        manifest-treasure
-      ]
-    ]
-    print "================================"
-  ]
-end
-
-to manifest-treasure
-  ; Create the treasure at the determined location
-  set treasure-discovered? true
-
-  ask treasure-location [
-    sprout-treasures 1 [
-      set shape "circle"
-      set color yellow
-      set size 1.2
-      set glow-phase 0
-      set discovered-by nobody
-    ]
-    set pcolor (yellow + 2)  ; golden color
-  ]
-
-  ; Visual celebration
-  ask treasure-hunters [
-    set color color + 2  ; brighten colors
-    face treasure-location
-  ]
-end
-
-to update-exploration-memory
-  ; Track where agent has been
-  if not member? patch-here memory-trail [
-    set memory-trail lput patch-here memory-trail
-  ]
-
-  ; Keep memory manageable
-  if length memory-trail > 50 [
-    set memory-trail but-first memory-trail
-  ]
-end
-
-to update-agent-appearance
-  ; Visual feedback based on confidence level
-  let base-color color
-
-  ; Size increases with confidence
-  set size (0.9 + 0.4 * confidence-level)
-
-  ; Brightness increases with confidence
-  if confidence-level > 0.5 [
-    set color (base-color + 2)
-  ]
-
-  ; High-confidence agents get special effects
-  if confidence-level > 0.8 [
-    ; Create halo effect around high-confidence agents
-    ask patches in-radius 1 [
-      if not wall? and meeting-glow <= 0 [
-        set pcolor (pcolor + 0.5)
-      ]
-    ]
-  ]
-end
-
-to update-visual-effects
-  ; Update meeting glow effects
-  ask patches with [meeting-glow > 0] [
-    set meeting-glow meeting-glow - 1
-    if meeting-glow <= 0 [
-      set pcolor path-color
-      if explored? [ set pcolor path-color + 0.5 ]
-    ]
-  ]
-
-  ; Enhanced treasure glow and surrounding effects
-  if any? treasures [
-    ask treasures [
-      set glow-phase glow-phase + 0.3
-      ; Pulsing treasure colors
-      set color (yellow + 2 + 2 * sin(glow-phase * 180))  ; pulsing golden
-      set size (1.2 + 0.3 * sin(glow-phase * 90))
-
-      ; Treasure radiates light to surrounding patches
-      ask patches in-radius 2 [
-        if not wall? [
-          let distance-from-treasure distance myself
-          let glow-intensity (3 - distance-from-treasure) / 3
-          set pcolor (yellow + glow-intensity * 2)  ; golden glow
-        ]
-      ]
-
-      ; Sparkle effect
-      if random 10 < 3 [
-        ask one-of patches in-radius 1.5 with [not wall?] [
-          set pcolor white
-          set meeting-glow 3
+      ask label-agents with [member? upper-name (word label)] [
+        if not member? "CONVERGED" (word label) [
+          set label (word label " CONVERGED")
+          set label-color 45
         ]
       ]
     ]
   ]
 end
 
-to check-treasure-conditions
-  ; Check if treasure has been found by agents
-  if treasure-discovered? and any? treasures [
-    let treasure-patch [patch-here] of one-of treasures
-    let hunters-at-treasure treasure-hunters-on treasure-patch
+to-report upper-case-name [name]
+  if name = "mesh"      [ report "MESH" ]
+  if name = "hierarchy" [ report "HIERARCHY" ]
+  if name = "chain"     [ report "CHAIN" ]
+  report name
+end
 
-    if any? hunters-at-treasure [
-      ask one-of treasures [
-        set discovered-by hunters-at-treasure
-      ]
-    ]
+to check-all-convergence
+  check-topology-convergence "mesh" mesh-agents
+  check-topology-convergence "hierarchy" hierarchy-agents
+  check-topology-convergence "chain" chain-agents
+end
+
+to check-topology-convergence [name group]
+  let idx position name topology-order
+  if item idx convergence-times != -1 [ stop ]
+  if converged? group [
+    set convergence-times replace-item idx convergence-times ticks
+    print ""
+    print (word ">>> " name " CONVERGED at tick " ticks " on belief: " [belief] of one-of group " <<<")
+    print ""
   ]
 end
 
-to celebrate-success
-  ; Visual celebration when treasure is found
-  if any? treasures [
-    ask one-of treasures [
-      ask patches in-radius 3 [
-        set pcolor (pcolor + random 3 - 1)
-      ]
-    ]
+to-report converged? [group]
+  if not any? group [ report false ]
+  report (length remove-duplicates [belief] of group) = 1
+end
 
-    ask treasure-hunters [
-      right random 60 - 30  ; dance movement
+to-report majority-belief [group]
+  let best-belief first belief-options
+  let best-count -1
+
+  foreach belief-options [candidate ->
+    let candidate-count count group with [belief = candidate]
+    if candidate-count > best-count [
+      set best-belief candidate
+      set best-count candidate-count
     ]
+  ]
+
+  report best-belief
+end
+
+to-report belief-summary [group]
+  let chunks []
+  foreach belief-options [candidate ->
+    set chunks lput (word candidate ":" count group with [belief = candidate]) chunks
+  ]
+  report (reduce [[a b] -> (word a ", " b)] chunks)
+end
+
+to update-tournament-state
+  if not member? -1 convergence-times [
+    set tournament-running? false
+    set winner-topology fastest-topology
+    print-tournament-results
+    stop
+  ]
+
+  if ticks >= max-ticks [
+    set tournament-running? false
+    set winner-topology fastest-topology
+    print-tournament-results
   ]
 end
 
-; Utility reporters
-to-report knowledge-summary
-  ; Report summary of all agent knowledge
-  let summary ""
-  ask treasure-hunters [
-    set summary (word summary "Agent " who ": " knowledge-fragment " | ")
+to print-tournament-results
+  print ""
+  print "=== TOURNAMENT RESULTS ==="
+  print (word "Mode: " llm-status " | Agents per topology: " agents-per-topology)
+  foreach (range length topology-order) [i ->
+    let name item i topology-order
+    let result item i convergence-times
+    ifelse result != -1
+    [ print (word "  " name ": converged at tick " result) ]
+    [ print (word "  " name ": did NOT converge (max-ticks=" max-ticks ")") ]
   ]
-  report summary
+  print (word "Winner: " winner-topology)
+  print "==========================="
+  print ""
 end
 
-to-report treasure-status
-  ; Report current treasure discovery status
-  if treasure-discovered? [
-    report (word "DISCOVERED: " treasure-definition)
+to stop-tournament
+  set tournament-running? false
+  set winner-topology fastest-topology
+  print "Tournament stopped by user."
+end
+
+to-report fastest-topology
+  let best-name "none"
+  let best-time (max-ticks + 1)
+
+  foreach (range length topology-order) [i ->
+    let result item i convergence-times
+    if result != -1 and result < best-time [
+      set best-time result
+      set best-name item i topology-order
+    ]
   ]
-  report "Still searching..."
+
+  report best-name
+end
+
+to-report agreement-pct [group]
+  if not any? group [ report 0 ]
+  let majority majority-belief group
+  report 100 * (count group with [belief = majority]) / count group
+end
+
+to-report convergence-time [name]
+  report item (position name topology-order) convergence-times
+end
+
+to-report status-summary
+  report (word
+    "mesh=" convergence-time "mesh"
+    " hierarchy=" convergence-time "hierarchy"
+    " chain=" convergence-time "chain"
+    " winner=" winner-topology
+  )
+end
+
+to-report llm-status
+  ifelse use-llm? and llm-ready?
+  [ report "Connected" ]
+  [ report "Deterministic" ]
 end]]></code>
   <widgets>
-    <view x="368" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="0" height="273" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="273" tickCounterLabel="ticks" maxPycor="20" updateMode="0" maxPxcor="20" minPxcor="0"></view>
-    <button x="25" y="35" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="60" display="setup">setup</button>
-    <button x="100" y="35" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55" display="go">go</button>
-    <button x="165" y="35" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="66" display="go-once">go</button>
-    <monitor x="20" precision="17" y="120" height="60" fontSize="11" width="100" display="Treasure Status">treasure-status</monitor>
-    <monitor x="135" precision="17" y="120" height="60" fontSize="11" width="100" display="Ticks">ticks</monitor>
-    <monitor x="20" precision="17" y="205" height="60" fontSize="11" width="100" display="Active Hunters">count treasure-hunters</monitor>
-    <monitor x="135" precision="17" y="205" height="60" fontSize="11" width="100" display="Agent Knowledge">knowledge-summary</monitor>
-    <slider x="25" step="1" y="385" max="10" width="250" display="num-hunters" height="50" min="2" direction="Horizontal" default="5.0" variable="num-hunters"></slider>
-    <slider x="25" step="0.5" y="460" max="5" width="250" display="communication-range" height="50" min="1" direction="Horizontal" default="2.0" variable="communication-range"></slider>
-    <slider x="25" step="0.1" y="535" max="1" width="250" display="confidence-threshold" height="50" min="0.5" direction="Horizontal" default="1.0" variable="confidence-threshold"></slider>
-    <switch x="345" y="385" height="40" on="false" variable="show-trails?" width="101" display="show-trails?"></switch>
-    <switch x="350" y="450" height="40" on="false" variable="show-communications?" width="171" display="show-communications?"></switch>
-    <plot x="675" autoPlotX="true" yMax="1.0" autoPlotY="true" yAxis="Avg Confidence" y="370" xMin="0.0" height="175" legend="false" xMax="500.0" yMin="0.0" width="230" xAxis="Time" display="Agent Confidence">
+    <view x="220" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-25" height="745" showTickCounter="true" patchSize="14.53" fontSize="10" wrappingAllowedY="false" width="745" tickCounterLabel="ticks" maxPycor="25" updateMode="1" maxPxcor="25" minPxcor="-25"></view>
+    <button x="15" y="55" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="90" display="Go">go</button>
+    <button x="110" y="55" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Step">go</button>
+    <button x="110" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Stop">stop-tournament</button>
+    <slider x="15" step="1" y="110" max="12" width="195" display="agents-per-topology" height="50" min="3" direction="Horizontal" default="6.0" variable="agents-per-topology"></slider>
+    <slider x="15" step="1" y="165" max="400" width="195" display="max-ticks" height="50" min="20" direction="Horizontal" default="150.0" variable="max-ticks"></slider>
+    <input x="15" multiline="false" y="220" height="60" variable="llm-config-path" type="string" width="195">config.txt</input>
+    <monitor x="15" precision="17" y="290" height="60" fontSize="11" width="195" display="Winner">winner-topology</monitor>
+    <monitor x="15" precision="17" y="340" height="60" fontSize="11" width="195" display="Status">status-summary</monitor>
+    <monitor x="15" precision="0" y="390" height="60" fontSize="11" width="195" display="Mesh Convergence">convergence-time "mesh"</monitor>
+    <monitor x="15" precision="0" y="440" height="60" fontSize="11" width="195" display="Hierarchy Convergence">convergence-time "hierarchy"</monitor>
+    <monitor x="15" precision="0" y="490" height="60" fontSize="11" width="195" display="Chain Convergence">convergence-time "chain"</monitor>
+    <switch x="995" y="500" height="40" on="true" variable="use-llm?" width="200" display="use-llm?"></switch>
+    <monitor x="1200" precision="17" y="500" height="40" fontSize="11" width="200" display="LLM Status">llm-status</monitor>
+    <monitor x="995" precision="1" y="550" height="60" fontSize="11" width="300" display="Mesh Agreement %">agreement-pct mesh-agents</monitor>
+    <monitor x="1295" precision="1" y="550" height="60" fontSize="11" width="300" display="Hierarchy Agreement %">agreement-pct hierarchy-agents</monitor>
+    <monitor x="1595" precision="1" y="550" height="60" fontSize="11" width="300" display="Chain Agreement %">agreement-pct chain-agents</monitor>
+    <note x="220" y="760" height="35" width="745" fontSize="12" backgroundDark="0" backgroundLight="0" textColorDark="-1" textColorLight="-16777216" markdown="false">BELIEFS: COLLECT (red)  EXPLORE (blue)  STABILIZE (green)  |  SHAPES: Circle=Mesh  Triangle=Hierarchy  Square=Chain</note>
+    <plot x="995" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="Agreement %" y="50" xMin="0.0" height="435" legend="true" xMax="100.0" yMin="0.0" width="900" xAxis="Ticks" display="Agreement by Topology">
       <setup></setup>
       <update></update>
-      <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
-        <setup>set-current-plot "Agent Confidence"
-create-temporary-plot-pen "confidence"
-set-plot-pen-color blue</setup>
-        <update>if any? treasure-hunters [
-  plot mean [confidence-level] of treasure-hunters
-]</update>
-      </pen>
-    </plot>
-    <plot x="995" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="Total Facts" y="370" xMin="0.0" height="175" legend="false" xMax="500.0" yMin="0.0" width="230" xAxis="Time" display="Knowledge Graph">
-      <setup></setup>
-      <update></update>
-      <pen interval="1.0" mode="0" display="default" color="-16777216" legend="true">
+      <pen interval="1.0" mode="0" display="mesh" color="-13345367" legend="true">
         <setup></setup>
-        <update>if any? treasure-hunters [
-  plot sum [length learned-facts] of treasure-hunters
-]</update>
+        <update>plot agreement-pct mesh-agents</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="hierarchy" color="-10899396" legend="true">
+        <setup></setup>
+        <update>plot agreement-pct hierarchy-agents</update>
+      </pen>
+      <pen interval="1.0" mode="0" display="chain" color="-955883" legend="true">
+        <setup></setup>
+        <update>plot agreement-pct chain-agents</update>
       </pen>
     </plot>
-    <chooser x="760" y="75" height="60" variable="default-strategy" current="0" width="250" display="default-strategy">
-      <choice type="string" value="random"></choice>
-      <choice type="string" value="methodical"></choice>
-      <choice type="string" value="wall-follower"></choice>
-      <choice type="string" value="mixed"></choice>
-    </chooser>
-    <input x="765" multiline="false" y="170" height="60" variable="llm-config-file" type="string" width="250">demos/config</input>
-    <output x="1150" y="75" height="61" fontSize="12" width="216"></output>
+    <button x="15" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="90" display="Setup">setup</button>
   </widgets>
   <info>## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+This model compares three communication topologies — **mesh**, **hierarchy**, and **chain** — in a collective coordination task. Each agent independently observes only its `link-neighbors` and uses `llm:choose` (or a deterministic local-majority fallback) to pick a belief. Topology genuinely constrains information flow, replicating the MARBLE paper's core finding that network structure affects convergence speed.
+
+The question: when agents can only see their direct neighbors, does network structure determine how quickly a group reaches consensus?
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+Each tick follows this cycle:
+
+1. **Snapshot** — all agents save their current belief to `previous-belief` (simultaneous update semantics).
+2. **Decide** — each unconverged agent gathers its `link-neighbors`' snapshotted beliefs, then:
+   - **LLM mode**: calls `llm:set-history` with a per-agent system prompt, then `llm:choose` to pick from the belief options.
+   - **Deterministic mode**: applies local majority rule (self + neighbors; ties broken by current belief).
+3. **Check convergence** — if all agents in a topology share one belief, record the tick.
+4. **Update tournament** — when all topologies converge or `max-ticks` is reached, declare a winner.
+
+**Why topology matters**: Mesh agents have degree n-1 (see all peers), hierarchy agents have degree 1-3 (parent + children), and chain agents have degree 1-2 (left + right neighbors). Higher connectivity means more information per decision, leading to faster convergence.
+
+The tournament ends when all three topologies have converged, or `max-ticks` is reached.
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+1. Set `llm-config-path` to a valid config file (default points to `demos/topology-tournament/config.txt`).
+2. Add a real API key in the config file.
+3. Click **Setup** to build topologies and seed beliefs.
+4. Click **Go** for continuous execution, or **Step** for single-tick stepping.
+5. Toggle **use-llm?** to switch between LLM-driven and deterministic per-agent decisions.
+6. Watch convergence monitors (left panel) and agreement-percentage monitors (right panel).
+7. The **Agreement by Topology** plot shows real-time convergence curves.
+8. **LLM Status** monitor shows "Connected" or "Deterministic".
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+- **Mesh** converges fastest because each agent sees all peers (degree n-1) — full information every tick.
+- **Hierarchy** converges in the middle: agents near the root see more neighbors, but leaf agents see only their parent.
+- **Chain** is the slowest because each agent sees at most 2 neighbors — information propagates one hop per tick.
+- In deterministic mode, the local-majority rule makes topology differences especially visible since there is no LLM reasoning to compensate for limited visibility.
+- With LLM mode on, agents may make more strategic choices, but the topology constraint still limits what they can observe.
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+- Toggle **use-llm?** on and off between runs to compare LLM vs deterministic convergence speeds.
+- Vary **agents-per-topology** from 3 to 12 and observe how group size affects convergence time.
+- Change the model in `config.txt` (e.g., `gpt-4o` vs `gpt-4o-mini`) and compare LLM decision quality.
+- Increase **max-ticks** to give slower topologies more time to converge.
+- Run multiple trials and note whether the winner is consistent.
 
 ## EXTENDING THE MODEL
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+- Add a **ring** or **star** topology for additional comparison.
+- Give agents memory of past rounds so beliefs evolve over longer time horizons.
+- Add noise: randomly flip one agent's belief each tick to test robustness.
+- Let agents weight neighbor opinions differently based on how long neighbors have held their beliefs.
+- Experiment with different LLM temperature settings to vary decision randomness.
 
 ## NETLOGO FEATURES
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
-
-## RELATED MODELS
-
-(models in the NetLogo Models Library and elsewhere which are of related interest)
+- **`llm:choose`** constrains the LLM to select from a fixed list of belief options.
+- **`llm:set-history`** sets per-agent conversation context, reset each tick to prevent token growth.
+- **`link-neighbors`** provides topology-aware neighbor queries — each agent only sees directly connected peers.
+- **Simultaneous update** via `previous-belief` snapshot ensures agents decide from the same time-step state.
+- **Breeds** (`mesh-agents`, `hierarchy-agents`, `chain-agents`) separate agents by topology.
+- **`foreach (range ...)`** replaces imperative while-loops for cleaner iteration.
+- **`position name topology-order`** replaces a manual if-chain for topology index lookup.
 
 ## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
-</info>
+Inspired by the MARBLE paper (arXiv:2503.01935) on how network topology affects multi-agent LLM convergence. Part of the NetLogo LLM Extension demo suite. See the [extension README](../../README.md) for setup and API documentation.</info>
   <turtleShapes>
     <shape name="default" rotatable="true" editableColorIndex="0">
       <polygon color="-1920102913" filled="true" marked="true">
@@ -1629,6 +1388,28 @@ set-plot-pen-color blue</setup>
         </shape>
       </indicator>
     </shape>
+    <shape name="directed" curviness="2.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+        </shape>
+      </indicator>
+    </shape>
   </linkShapes>
-  <previewCommands>setup repeat 75 [ go ]</previewCommands>
+  <previewCommands>setup</previewCommands>
 </model>

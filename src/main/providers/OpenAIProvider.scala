@@ -39,10 +39,14 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
   )
 
   override protected def createProviderRequest(request: ChatRequest): ujson.Value = {
+    val isReasoning = request.thinkingConfig.exists(_.enabled)
+
     val messages = ujson.Arr(
       request.messages.map { msg =>
+        // For reasoning models, convert system role to developer role
+        val role = if (isReasoning && msg.role == "system") "developer" else msg.role
         ujson.Obj(
-          "role" -> msg.role,
+          "role" -> role,
           "content" -> msg.content
         )
       }*
@@ -53,12 +57,23 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       "messages" -> messages
     )
 
-    request.maxTokens.foreach { maxTokens =>
-      baseRequest("max_tokens") = maxTokens
-    }
-
-    request.temperature.foreach { temp =>
-      baseRequest("temperature") = temp
+    if (isReasoning) {
+      // Reasoning models: use max_completion_tokens, no temperature
+      request.maxTokens.foreach { maxTokens =>
+        baseRequest("max_completion_tokens") = maxTokens
+      }
+      // Add reasoning_effort if specified
+      request.thinkingConfig.flatMap(_.reasoningEffort).foreach { effort =>
+        baseRequest("reasoning_effort") = effort
+      }
+    } else {
+      // Standard models: use max_tokens and temperature
+      request.maxTokens.foreach { maxTokens =>
+        baseRequest("max_tokens") = maxTokens
+      }
+      request.temperature.foreach { temp =>
+        baseRequest("temperature") = temp
+      }
     }
 
     baseRequest
@@ -86,7 +101,7 @@ class OpenAIProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
       ChatResponse(id, created, model, choices)
     } catch {
       case e: Exception =>
-        throw new RuntimeException(s"Failed to parse OpenAI response: ${e.getMessage}\nResponse: $responseBody")
+        throw new RuntimeException(s"Failed to parse OpenAI response: ${e.getMessage}\nResponse: $responseBody", e)
     }
   }
 }

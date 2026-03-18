@@ -1,0 +1,4 @@
+system: "You are a concise assistant. Reply in one short sentence."
+template: |
+  Task: {task}
+  Input: {input}

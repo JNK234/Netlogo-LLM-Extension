@@ -31,7 +31,8 @@ case class ChatResponse(
   id: String,
   created: Long,
   model: String,
-  choices: Array[Choice]
+  choices: Array[Choice],
+  thinking: Option[String] = None
 ) {
   /**
    * Get the first (and usually only) response message

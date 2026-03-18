@@ -113,6 +113,7 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
     // Add generation config if parameters are specified
     val generationConfig = ujson.Obj()
     var hasConfig = false
+    val isThinking = request.thinkingConfig.exists(_.enabled)
 
     request.temperature.foreach { temp =>
       generationConfig("temperature") = temp
@@ -121,6 +122,19 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
 
     request.maxTokens.foreach { maxTokens =>
       generationConfig("maxOutputTokens") = maxTokens
+      hasConfig = true
+    }
+
+    if (isThinking) {
+      val thinkingObj = ujson.Obj()
+      // Map reasoning effort or set budget
+      request.thinkingConfig.flatMap(_.budgetTokens).foreach { budget =>
+        thinkingObj("thinkingBudget") = budget
+      }
+      request.thinkingConfig.flatMap(_.reasoningEffort).foreach { effort =>
+        thinkingObj("thinkingLevel") = effort.toUpperCase
+      }
+      generationConfig("thinkingConfig") = thinkingObj
       hasConfig = true
     }
 
@@ -137,15 +151,57 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
   override protected def parseProviderResponse(responseBody: String, model: String): ChatResponse = {
     try {
       val parsed = ujson.read(responseBody)
-      val candidate = parsed("candidates").arr.head
-      val finishReason = candidate("finishReason").str
-
-      // Handle cases where parts may be missing (e.g., MAX_TOKENS)
-      val text = try {
-        candidate("content")("parts").arr.head("text").str
-      } catch {
-        case _: Exception => s"[No content - $finishReason]"
+      val candidates = parsed("candidates").arr
+      if (candidates.isEmpty) {
+        val feedback = scala.util.Try(parsed("promptFeedback")).toOption
+          .map(f => s" promptFeedback: $f").getOrElse("")
+        throw new RuntimeException(s"Gemini returned empty candidates array.$feedback")
       }
+      val candidate = candidates.head
+      val finishReason = scala.util.Try(candidate("finishReason").str).getOrElse {
+        System.err.println(s"WARNING: Could not extract finishReason from Gemini candidate: $candidate")
+        "unknown"
+      }
+
+      val parts = try {
+        candidate("content")("parts").arr.toSeq
+      } catch {
+        case ex: Exception =>
+          System.err.println(s"WARNING: Could not extract content parts from Gemini response: ${ex.getMessage}")
+          Seq.empty
+      }
+
+      // Separate thinking parts from regular text parts
+      val thinkingParts = parts.filter(p => scala.util.Try(p("thought").bool).getOrElse(false))
+      val textParts = parts.filter(p => !scala.util.Try(p("thought").bool).getOrElse(false))
+
+      val text = if (textParts.nonEmpty) {
+        textParts.flatMap { p =>
+          scala.util.Try(p("text").str).toOption.orElse {
+            System.err.println(s"WARNING: Could not extract text from Gemini text part: $p")
+            None
+          }
+        }.mkString
+      } else if (parts.nonEmpty) {
+        parts.flatMap { p =>
+          scala.util.Try(p("text").str).toOption.orElse {
+            System.err.println(s"WARNING: Could not extract text from Gemini part: $p")
+            None
+          }
+        }.mkString
+      } else {
+        s"[No content - $finishReason]"
+      }
+
+      val thinking = if (thinkingParts.nonEmpty) {
+        val texts = thinkingParts.flatMap { p =>
+          scala.util.Try(p("text").str).toOption.orElse {
+            System.err.println(s"WARNING: Could not extract text from Gemini thinking part: $p")
+            None
+          }
+        }
+        Some(texts.mkString("\n")).filter(_.nonEmpty)
+      } else None
 
       val choices = Array(
         org.nlogo.extensions.llm.models.Choice(
@@ -155,10 +211,11 @@ class GeminiProvider(implicit ec: ExecutionContext) extends BaseHttpProvider {
         )
       )
 
-      ChatResponse(s"gemini-${System.currentTimeMillis()}", System.currentTimeMillis() / 1000, model, choices)
+      ChatResponse(s"gemini-${System.currentTimeMillis()}", System.currentTimeMillis() / 1000, model, choices, thinking = thinking)
     } catch {
+      case e: RuntimeException => throw new RuntimeException(e.getMessage, e)
       case e: Exception =>
-        throw new RuntimeException(s"Failed to parse Gemini response: ${e.getMessage}\nResponse: $responseBody")
+        throw new RuntimeException(s"Failed to parse Gemini response: ${e.getMessage}\nResponse: $responseBody", e)
     }
   }
 }

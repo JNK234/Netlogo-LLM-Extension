@@ -1,0 +1,7 @@
+# Topology Tournament LLM settings
+provider=ollama
+model=llama3.2:3b
+base_url=http://localhost:11434
+temperature=0.3
+max_tokens=120
+timeout_seconds=30
