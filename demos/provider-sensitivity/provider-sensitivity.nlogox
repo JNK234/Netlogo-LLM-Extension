@@ -17,6 +17,7 @@ turtles-own [
   processed?          ;; has this turtle completed its paraphrase?
   error?              ;; did this turtle's LLM call fail?
   thinking-trace      ;; thinking text (only for thinking-mode chain)
+  base-hue            ;; unique hue per provider chain [0-360]
 ]
 
 globals [
@@ -82,10 +83,14 @@ to setup
   let x-end max-pxcor - 1
   let x-spacing (x-end - x-start) / max (list 1 (chain-length - 1))
 
+  ;; Distinct hues for up to 6 providers (well-separated on the color wheel)
+  let hue-list (list 120 210 30 270 0 60)  ;; green, blue, orange, violet, red, yellow
+
   let chain-idx 0
   foreach ready-providers-list [ prov ->
     let chain-y max-pycor - (y-spacing * (chain-idx + 1))
     let base-col item (chain-idx mod length provider-colors) provider-colors
+    let hue item (chain-idx mod length hue-list) hue-list
 
     ;; Paint a subtle lane for this chain
     ask patches with [pycor >= chain-y - 1 and pycor <= chain-y + 1] [
@@ -108,16 +113,17 @@ to setup
         set thinking-trace ""
         set size 2.5
         set label-color white
+        set base-hue hue
 
         ;; Seed turtle gets the original message
         ifelse pos = 0 [
           set current-message seed-message
           set processed? true
-          set color green + 1
+          set color hsb hue 200 230
         ] [
           set current-message ""
           set processed? false
-          set color gray - 1
+          set color hsb hue 30 120
         ]
 
         ;; Star shape for thinking-mode chain
@@ -130,7 +136,7 @@ to setup
         ;; Link from previous turtle
         if prev-turtle != nobody [
           create-chain-link-from prev-turtle [
-            set color base-col + 2
+            set color hsb hue 80 160
             set thickness 0.3
           ]
         ]
@@ -293,13 +299,14 @@ to update-all-visuals
       ifelse error? [
         set color red + 1
       ] [
-        ;; Green (low drift) -> Yellow -> Red (high drift)
-        let r-val min (list 255 (round (255 * drift-score)))
-        let g-val min (list 255 (round (255 * (1 - drift-score))))
-        set color rgb r-val g-val 0
+        ;; High saturation + bright when low drift, desaturated + dark when high drift
+        ;; This keeps each provider's distinct hue visible
+        let sat round (255 - 180 * drift-score)    ;; 255 (vivid) -> 75 (washed out)
+        let bri round (240 - 120 * drift-score)    ;; 240 (bright) -> 120 (dim)
+        set color hsb base-hue sat bri
       ]
     ] [
-      set color gray - 1
+      set color hsb base-hue 30 120
     ]
 
     ;; Labels: show provider name on seed, drift score on others
@@ -318,7 +325,7 @@ to update-all-visuals
     ]
   ]
 
-  ;; Update link colors to match drift gradient
+  ;; Update link colors to match provider hue + drift
   ask chain-links [
     let target-turtle end2
     ifelse [processed?] of target-turtle [
@@ -326,12 +333,12 @@ to update-all-visuals
         set color red - 2
       ] [
         let d [drift-score] of target-turtle
-        let r-val min (list 255 (round (200 * d)))
-        let g-val min (list 255 (round (200 * (1 - d))))
-        set color rgb r-val g-val 50
+        let h [base-hue] of target-turtle
+        set color hsb h (round (200 - 120 * d)) (round (200 - 80 * d))
       ]
     ] [
-      set color gray
+      let h [base-hue] of end1
+      set color hsb h 80 160
     ]
   ]
 end
