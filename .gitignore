@@ -50,6 +50,7 @@ commands/
 config.txt
 config-*.txt
 !demos/provider-sensitivity/config-multi-provider.txt
+!demos/social-deduction-game/config.txt
 *.env
 *.env.*
 *.secrets*
