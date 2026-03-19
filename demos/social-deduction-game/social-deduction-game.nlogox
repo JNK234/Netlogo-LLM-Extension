@@ -506,9 +506,9 @@ end
     <button x="120" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="100" display="Go">go</button>
     <button x="10" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="Step">step-round</button>
     <button x="120" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="New Game">new-game</button>
-    <slider x="10" step="1" y="120" max="8" width="230" display="num-players" height="50" min="4" direction="Horizontal" default="8.0" variable="num-players"></slider>
+    <slider x="10" step="1" y="120" max="8" width="230" display="num-players" height="50" min="4" direction="Horizontal" default="6.0" variable="num-players"></slider>
     <slider x="10" step="1" y="175" max="10" width="230" display="max-rounds" height="50" min="3" direction="Horizontal" default="6.0" variable="max-rounds"></slider>
-    <chooser x="10" y="235" height="60" variable="difficulty-level" current="1" width="230" display="difficulty-level">
+    <chooser x="10" y="235" height="60" variable="difficulty-level" current="2" width="230" display="difficulty-level">
       <choice type="string" value="low"></choice>
       <choice type="string" value="medium"></choice>
       <choice type="string" value="high"></choice>
