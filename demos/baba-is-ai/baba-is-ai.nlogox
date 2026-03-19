@@ -57,13 +57,16 @@ to setup
   ask babas [
     llm:set-history (list
       (list "system" (word
-        "You are playing Baba Is AI, a puzzle game on a 9x9 grid. "
+        "You are playing Baba Is AI, a puzzle game on a 9x9 grid (0-8). "
         "You move one square per turn: up, down, left, or right. "
-        "Word-blocks form rules when 3 align: [NOUN] IS [PROPERTY]. "
-        "WALL IS STOP means walls block you. FLAG IS WIN means reaching the flag wins. "
-        "You can PUSH word-blocks by walking into them to break rules. "
-        "If walls block your path, push the STOP word-block away to break WALL IS STOP. "
-        "Always move toward the FLAG. If blocked, push word-blocks to change the rules."
+        "Word-blocks on the grid form rules when 3 align horizontally: [NOUN] IS [PROPERTY]. "
+        "Example: WALL IS STOP means walls block movement. FLAG IS WIN means touching the flag wins. "
+        "PUSHING: When you walk into a word-block, it slides one square in your direction. "
+        "If you push a word-block out of a 3-block alignment, that rule BREAKS. "
+        "STRATEGY: If walls block your path to the flag, find the [STOP] word-block on the grid. "
+        "Walk to it and push it away from [WALL] and [IS] — this breaks WALL IS STOP and walls become passable. "
+        "Then walk through the walls to reach the flag. "
+        "PRIORITY: 1) If blocked by walls, go break the STOP block first. 2) Then head to the flag."
       ))
     )
   ]
@@ -130,9 +133,9 @@ to setup-level-2
     set last-action-succeeded? true
   ]
 
-  ;; Wall column at x=5
-  let wall-y 2
-  while [wall-y <= 6] [
+  ;; Wall column at x=5, floor to row 7 — no way around
+  let wall-y 0
+  while [wall-y <= 7] [
     create-walls 1 [
       setxy 5 wall-y
       set shape "square"
@@ -181,8 +184,8 @@ to setup-level-3
   create-rocks 1 [ setxy 3 3  set shape "circle" set color orange set size 0.9 ]
   create-rocks 1 [ setxy 3 2  set shape "circle" set color orange set size 0.9 ]
 
-  ;; Wall column at x=5
-  let wall-y 1
+  ;; Wall column at x=5, floor to row 7 — no way around
+  let wall-y 0
   while [wall-y <= 7] [
     create-walls 1 [
       setxy 5 wall-y
@@ -403,6 +406,12 @@ to go
 
   ask babas [
     if has-property? "BABA" "YOU" [
+      ;; Cap history to system message + last 10 exchanges to avoid token bloat
+      let hist llm:history
+      if length hist > 21 [
+        llm:set-history (sentence (list item 0 hist) (sublist hist (length hist - 20) (length hist)))
+      ]
+
       let obs build-observation
       if show-observations? [ output-print obs ]
 
@@ -414,6 +423,12 @@ to go
         set move-history lput action move-history
         try-move action
       ] [
+        ;; Rate limit: wait and retry next tick
+        if member? "rate_limit" error-message [
+          output-print "Rate limited — waiting 2s..."
+          wait 2
+          stop
+        ]
         output-print (word "LLM error: " error-message)
       ]
     ]
@@ -479,7 +494,16 @@ to-report build-observation
     set obs (word obs "- " r "\n")
   ]
   if has-property? "WALL" "STOP" [
-    set obs (word obs "(Walls block movement. Push the STOP word-block away to break this rule.)\n")
+    ;; Find the STOP block and tell the agent exactly where it is
+    let stop-block one-of word-blocks with [word-text = "STOP"]
+    ifelse stop-block != nobody [
+      let sx [xcor] of stop-block
+      let sy [ycor] of stop-block
+      set obs (word obs "!! WALLS BLOCK YOU. The [STOP] block is at (" sx ", " sy "). "
+        "Go to it and push it away to break WALL IS STOP, then walls become passable.\n")
+    ] [
+      set obs (word obs "(Walls block movement. Push the STOP word-block away to break this rule.)\n")
+    ]
   ]
   set obs (word obs "\n")
 
@@ -669,7 +693,7 @@ end
         <update>plot total-llm-calls</update>
       </pen>
     </plot>
-    <output x="620" y="360" height="100" fontSize="10" width="280"></output>
+    <output x="620" y="360" height="416" fontSize="10" width="1006"></output>
   </widgets>
   <info>## Baba Is AI
 
