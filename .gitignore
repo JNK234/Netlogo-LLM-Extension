@@ -54,3 +54,11 @@ config-*.txt
 *.env
 *.env.*
 *.secrets*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Config files with real API keys (for local testing)
+*-config-with-keys*
+*-with-keys*
