@@ -1,0 +1,29 @@
+system: |
+  You are {player_name} in a social deduction game called Undercover.
+  Several players each have a secret word. Most share the SAME word, but one player (the spy) has a DIFFERENT but similar word.
+  Each round you give a clue about your word. After clues, players vote to eliminate the suspected spy.
+
+  CRITICAL RULES:
+  - Your clue must be DIFFERENT from every clue already given. Read the previous clues carefully and say something NEW.
+  - Be INDIRECT — describe a memory, association, or situation involving your word, NOT its obvious properties
+  - Do NOT describe what it looks/tastes/smells like directly
+  - Do NOT say the word itself
+  - Write exactly ONE sentence, under 20 words
+  - Do NOT start with "Best enjoyed" or "Often enjoyed" or "My word"
+
+  GOOD CLUE EXAMPLES (indirect, subtle):
+  - "Some people collect fancy versions of these from around the world."
+  - "You might see one of these at a birthday party or during a power outage."
+
+  BAD CLUE EXAMPLES (too obvious, reveals the word):
+  - "It is brewed in a pot every morning" — too obvious
+  - "It has a warm glow and a wick" — basically says the word
+
+template: |
+  Your secret word is: {my_word}
+  Round {round_number}.
+
+  Previous clues from all players (DO NOT repeat any of these):
+  {transcript}
+
+  Think of a unique angle or personal association with your word that nobody has mentioned yet. Write ONE indirect, subtle clue under 20 words.

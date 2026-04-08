@@ -1,0 +1,661 @@
+<?xml version="1.0" encoding="utf-8"?>
+<model version="NetLogo 7.0.3" snapToGrid="false">
+  <code><![CDATA[
+;; ABOUTME: Social Deduction Game (Undercover / Spy Words) demo for the LLM extension.
+;; ABOUTME: LLM agents play a word-guessing social deduction game with description and voting phases.
+
+extensions [llm]
+
+breed [players player]
+breed [indicators indicator]
+directed-link-breed [vote-arrows vote-arrow]
+
+players-own [
+  player-name
+  my-word
+  is-spy?
+  alive?
+  my-description
+  my-vote
+  vote-count
+  total-votes-received
+  elimination-round
+  base-color
+  home-x
+  home-y
+]
+
+globals [
+  current-round
+  current-phase
+  game-over?
+  winner
+  regular-word
+  spy-word
+  full-transcript
+  total-llm-calls
+  spy-detected?
+  rounds-to-detection
+  total-games-played
+  total-spy-wins
+  total-regular-wins
+  llm-config-loaded?
+
+  ;; word pair lists (each sublist: [regular-word spy-word])
+  high-difficulty-pairs
+  medium-difficulty-pairs
+  low-difficulty-pairs
+]
+
+;;; ========== SETUP ==========
+
+to setup
+  ;; Preserve cumulative stats across games
+  let prev-games total-games-played
+  let prev-spy-wins total-spy-wins
+  let prev-regular-wins total-regular-wins
+
+  clear-all
+
+  set total-games-played prev-games
+  set total-spy-wins prev-spy-wins
+  set total-regular-wins prev-regular-wins
+
+  ;; Load LLM config
+  carefully [
+    llm:load-config "config.txt"
+    set llm-config-loaded? true
+  ] [
+    print (word "Config error: " error-message)
+    set llm-config-loaded? false
+  ]
+
+  ;; Initialize word pairs
+  init-word-pairs
+
+  ;; Select a random pair for this game
+  let pairs get-pairs-for-difficulty
+  let pair one-of pairs
+  set regular-word first pair
+  set spy-word last pair
+
+  ;; Initialize game state
+  set current-round 0
+  set current-phase "setup"
+  set game-over? false
+  set winner ""
+  set full-transcript ""
+  set total-llm-calls 0
+  set spy-detected? false
+  set rounds-to-detection -1
+
+  ;; Draw noir background and table
+  draw-background
+
+  ;; Color palette for up to 8 players
+  let palette (list 15 105 55 25 125 85 45 65)
+
+  ;; Create players in a circle
+  set-default-shape players "person"
+  create-players num-players [
+    set size 4.0
+    let idx who
+    set base-color item idx palette
+    set color base-color
+    set player-name (word "Player " (idx + 1))
+    set is-spy? false
+    set alive? true
+    set my-description ""
+    set my-vote ""
+    set vote-count 0
+    set total-votes-received 0
+    set elimination-round -1
+
+    ;; Arrange in circle — radius 10, starting at 12 o'clock (-90 offset)
+    let angle -90 + (360 / num-players) * idx
+    set home-x (10 * cos angle)
+    set home-y (10 * sin angle)
+    setxy home-x home-y
+    set label player-name
+    set label-color base-color + 2
+  ]
+
+  ;; Assign one random spy
+  ask one-of players [
+    set is-spy? true
+  ]
+
+  ;; Assign words
+  ask players [
+    ifelse is-spy?
+      [ set my-word spy-word ]
+      [ set my-word regular-word ]
+  ]
+
+  ;; Create center phase indicator
+  create-indicators 1 [
+    setxy 0 0
+    set size 0.1
+    set shape "default"
+    set color black
+    set label (word "ROUND " current-round)
+    set label-color white
+  ]
+
+  reset-ticks
+end
+
+to init-word-pairs
+  set high-difficulty-pairs (list
+    (list "apple" "pear")
+    (list "guitar" "ukulele")
+    (list "coffee" "tea")
+    (list "pillow" "cushion")
+    (list "ocean" "lake")
+  )
+  set medium-difficulty-pairs (list
+    (list "bicycle" "motorcycle")
+    (list "painting" "photograph")
+    (list "castle" "mansion")
+    (list "penguin" "duck")
+    (list "candle" "flashlight")
+  )
+  set low-difficulty-pairs (list
+    (list "airplane" "submarine")
+    (list "forest" "desert")
+    (list "piano" "drums")
+    (list "book" "television")
+    (list "snowflake" "raindrop")
+  )
+end
+
+to-report get-pairs-for-difficulty
+  if difficulty-level = "high" [ report high-difficulty-pairs ]
+  if difficulty-level = "medium" [ report medium-difficulty-pairs ]
+  report low-difficulty-pairs
+end
+
+;;; ========== MAIN GAME LOOP ==========
+
+to go
+  if game-over? [ stop ]
+  if not llm-config-loaded? [
+    print "LLM config not loaded. Check config.txt."
+    stop
+  ]
+  step-round
+end
+
+to step-round
+  if game-over? [ stop ]
+  if not llm-config-loaded? [
+    print "LLM config not loaded. Check config.txt."
+    stop
+  ]
+
+  set current-round current-round + 1
+  print (word "===== Round " current-round " =====")
+
+  ;; Description phase
+  run-description-phase
+
+  ;; Voting phase
+  run-voting-phase
+
+  ;; Elimination
+  run-elimination
+
+  ;; Win check
+  check-win-condition
+
+  tick
+end
+
+;;; ========== DESCRIPTION PHASE ==========
+
+to run-description-phase
+  set current-phase "describing"
+
+  ;; Clear vote arrows from previous round
+  ask vote-arrows [ die ]
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "ROUND " current-round " — DESCRIBING...")
+    set label-color white
+  ]
+
+  let transcript-text full-transcript
+  if transcript-text = "" [ set transcript-text "No descriptions yet." ]
+
+  ;; Each alive player generates a description
+  let alive-players sort-on [who] players with [alive?]
+  foreach alive-players [ p ->
+    ask p [
+      llm:clear-history
+      let desc ""
+      carefully [
+        set desc llm:chat-with-template "description-template.yaml" (list
+          (list "player_name" player-name)
+          (list "my_word" my-word)
+          (list "round_number" (word current-round))
+          (list "transcript" transcript-text))
+        set total-llm-calls total-llm-calls + 1
+      ] [
+        set desc "My word relates to something common and familiar."
+        print (word player-name " description error: " error-message)
+      ]
+
+      ;; Word leak check: if description contains the actual word, replace
+      if member? my-word desc [
+        set desc "My word relates to something common and familiar."
+      ]
+
+      set my-description desc
+
+      ;; Update transcript
+      set full-transcript (word full-transcript "Round " current-round " - " player-name ": " desc "\n")
+
+      ;; Update label
+      if show-descriptions? [
+        set label (word player-name ": " truncate-string desc 40)
+      ]
+
+      if show-descriptions? [
+        print (word player-name ": " desc)
+      ]
+    ]
+  ]
+end
+
+;;; ========== VOTING PHASE ==========
+
+to run-voting-phase
+  set current-phase "voting"
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "ROUND " current-round " — VOTING...")
+    set label-color white
+  ]
+
+  ;; Reset vote counts
+  ask players with [alive?] [
+    set vote-count 0
+  ]
+
+  let alive-players sort-on [who] players with [alive?]
+  foreach alive-players [ p ->
+    ask p [
+      ;; Build list of other alive player names
+      let others-names map [q -> [player-name] of q] filter [q -> q != self] alive-players
+      let others-str reduce [[ a b ] -> (word a ", " b)] others-names
+
+      ;; Vote via template — LLM picks from constrained list
+      llm:clear-history
+      let vote-name ""
+
+      ;; Step 1: Try template-based vote
+      carefully [
+        let raw-vote llm:chat-with-template "vote-template.yaml" (list
+          (list "player_name" player-name)
+          (list "my_word" my-word)
+          (list "transcript" full-transcript)
+          (list "other_players" others-str))
+        set total-llm-calls total-llm-calls + 1
+        ;; Match response against valid player names (others only)
+        foreach others-names [ n ->
+          if member? n raw-vote and vote-name = "" [
+            set vote-name n
+          ]
+        ]
+      ] [
+        print (word player-name " template vote error: " error-message)
+      ]
+
+      ;; Step 2: Fallback to llm:choose if template didn't yield a valid name
+      if vote-name = "" [
+        carefully [
+          llm:clear-history
+          set vote-name llm:choose
+            (word "You are " player-name ". Pick the most suspicious player from: " others-str ". You CANNOT pick yourself.")
+            others-names
+          set total-llm-calls total-llm-calls + 1
+        ] [
+          set vote-name one-of others-names
+          print (word player-name " vote fallback error: " error-message)
+        ]
+      ]
+
+      set my-vote vote-name
+
+      ;; Increment the target's vote count
+      let target one-of players with [player-name = vote-name and alive?]
+      if target != nobody [
+        ask target [
+          set vote-count vote-count + 1
+          set total-votes-received total-votes-received + 1
+        ]
+      ]
+
+      ;; Draw vote arrow from voter to target
+      if target != nobody [
+        create-vote-arrow-to target [
+          set color [base-color] of myself
+          set thickness 0.3
+        ]
+      ]
+
+      if show-votes? [
+        set label (word player-name " -> " vote-name)
+        print (word player-name " votes for " vote-name)
+      ]
+    ]
+  ]
+end
+
+;;; ========== ELIMINATION ==========
+
+to run-elimination
+  set current-phase "elimination"
+
+  let alive-players players with [alive?]
+  let max-votes max [vote-count] of alive-players
+
+  ;; Find all players with max votes
+  let candidates alive-players with [vote-count = max-votes]
+
+  ;; Tie-breaking: highest total historical votes, then random
+  let eliminated-player max-one-of candidates [total-votes-received]
+
+  ask eliminated-player [
+    set alive? false
+    set elimination-round current-round
+    set color base-color - 4
+    set size 2.0
+    set label (word player-name " [OUT R" current-round "]")
+    set label-color base-color - 4
+
+    print (word ">>> " player-name " eliminated in round " current-round
+      " with " vote-count " votes"
+      (ifelse-value is-spy? [" (SPY!)"] [" (regular)"]))
+  ]
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "ELIMINATED: " [player-name] of eliminated-player)
+    set label-color 15
+  ]
+end
+
+;;; ========== WIN CONDITION ==========
+
+to check-win-condition
+  let alive-count count players with [alive?]
+  let spy-alive? any? players with [alive? and is-spy?]
+
+  ;; Spy eliminated -> regulars win
+  if not spy-alive? [
+    set game-over? true
+    set winner "regulars"
+    set spy-detected? true
+    set rounds-to-detection current-round
+    set total-games-played total-games-played + 1
+    set total-regular-wins total-regular-wins + 1
+    print "*** REGULARS WIN! The spy has been eliminated. ***"
+    ask indicators [ set label "REGULARS WIN!" set label-color 55 ]
+    if auto-reveal? [ reveal-spy ]
+    stop
+  ]
+
+  ;; 2 or fewer alive -> spy wins
+  if alive-count <= 2 [
+    set game-over? true
+    set winner "spy"
+    set spy-detected? false
+    set total-games-played total-games-played + 1
+    set total-spy-wins total-spy-wins + 1
+    print "*** SPY WINS! Too few players remain. ***"
+    ask indicators [ set label "SPY WINS!" set label-color 15 ]
+    if auto-reveal? [ reveal-spy ]
+    stop
+  ]
+
+  ;; Max rounds reached -> spy wins
+  if current-round >= max-rounds [
+    set game-over? true
+    set winner "spy"
+    set spy-detected? false
+    set total-games-played total-games-played + 1
+    set total-spy-wins total-spy-wins + 1
+    print "*** SPY WINS! Max rounds reached. ***"
+    ask indicators [ set label "SPY WINS!" set label-color 15 ]
+    if auto-reveal? [ reveal-spy ]
+    stop
+  ]
+end
+
+;;; ========== REVEAL & UTILITIES ==========
+
+to reveal-spy
+  let the-spy one-of players with [is-spy?]
+  let spy-name [player-name] of the-spy
+
+  ask the-spy [
+    set color 15
+    set size 5.0
+    set label (word "SPY: " my-word)
+    set label-color 15
+  ]
+
+  ask players with [not is-spy?] [
+    ifelse alive? [
+      set label (word player-name " [" my-word "]")
+      set label-color base-color + 2
+    ] [
+      set label (word "[OUT R" elimination-round "] " my-word)
+      set label-color base-color - 4
+    ]
+  ]
+
+  ;; Update center indicator
+  ask indicators [
+    set label (word "SPY WAS " spy-name "!")
+    set label-color 15
+  ]
+
+  print (word "Regular word: " regular-word " | Spy word: " spy-word)
+end
+
+to draw-background
+  ;; Dark navy/charcoal gradient — lighter near center
+  ask patches [
+    let dist distancexy 0 0
+    set pcolor scale-color 3 dist 25 0
+  ]
+
+  ;; Circular table: ring at distance 5-6 from center
+  ask patches with [distancexy 0 0 >= 5 and distancexy 0 0 <= 6] [
+    set pcolor 13
+  ]
+  ;; Inner table fill
+  ask patches with [distancexy 0 0 < 5] [
+    set pcolor 12
+  ]
+end
+
+to new-game
+  setup
+end
+
+to-report truncate-string [str max-len]
+  ifelse length str > max-len
+    [ report (word substring str 0 max-len "...") ]
+    [ report str ]
+end
+
+to-report detection-rate
+  ifelse total-games-played > 0
+    [ report precision (total-regular-wins / total-games-played * 100) 1 ]
+    [ report 0 ]
+end
+  ]]></code>
+  <widgets>
+    <view x="285" wrappingAllowedX="false" y="29" frameRate="30.0" minPycor="-16" height="824" showTickCounter="true" patchSize="24.85" fontSize="10" wrappingAllowedY="false" width="824" tickCounterLabel="ticks" maxPycor="16" updateMode="1" maxPxcor="16" minPxcor="-16"></view>
+    <button x="10" y="10" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="Setup">setup</button>
+    <button x="120" y="10" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="100" display="Go">go</button>
+    <button x="10" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="Step">step-round</button>
+    <button x="120" y="60" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="100" display="New Game">new-game</button>
+    <slider x="10" step="1" y="120" max="8" width="230" display="num-players" height="50" min="4" direction="Horizontal" default="6.0" variable="num-players"></slider>
+    <slider x="10" step="1" y="175" max="10" width="230" display="max-rounds" height="50" min="3" direction="Horizontal" default="6.0" variable="max-rounds"></slider>
+    <chooser x="10" y="235" height="60" variable="difficulty-level" current="2" width="230" display="difficulty-level">
+      <choice type="string" value="low"></choice>
+      <choice type="string" value="medium"></choice>
+      <choice type="string" value="high"></choice>
+    </chooser>
+    <switch x="10" y="300" height="40" on="true" variable="show-descriptions?" width="230" display="show-descriptions?"></switch>
+    <switch x="10" y="345" height="40" on="true" variable="show-votes?" width="230" display="show-votes?"></switch>
+    <switch x="10" y="390" height="40" on="true" variable="auto-reveal?" width="230" display="auto-reveal?"></switch>
+    <monitor x="10" precision="17" y="709" height="60" fontSize="11" width="230" display="Regular Word">regular-word</monitor>
+    <monitor x="12" precision="17" y="644" height="60" fontSize="11" width="110" display="Regular Wins">total-regular-wins</monitor>
+    <monitor x="128" precision="17" y="644" height="60" fontSize="11" width="110" display="Spy Wins">total-spy-wins</monitor>
+    <monitor x="12" precision="17" y="580" height="60" fontSize="11" width="110" display="Games Played">total-games-played</monitor>
+    <monitor x="12" precision="17" y="515" height="60" fontSize="11" width="110" display="Winner">winner</monitor>
+    <monitor x="128" precision="17" y="515" height="60" fontSize="11" width="110" display="LLM Calls">total-llm-calls</monitor>
+    <monitor x="127" precision="17" y="579" height="60" fontSize="11" width="110" display="Detection %">detection-rate</monitor>
+    <monitor x="128" precision="17" y="452" height="60" fontSize="11" width="110" display="Phase">current-phase</monitor>
+    <monitor x="12" precision="17" y="450" height="60" fontSize="11" width="110" display="Round">current-round</monitor>
+    <monitor x="8" precision="17" y="776" height="60" fontSize="11" width="230" display="Spy Word">ifelse-value game-over? [spy-word] ["(hidden)"]</monitor>
+    <plot x="1141" autoPlotX="true" yMax="5.0" autoPlotY="true" yAxis="Votes" y="29" xMin="0.0" height="339" legend="false" xMax="10.0" yMin="0.0" width="575" xAxis="Round" display="Votes Per Round">
+      <setup></setup>
+      <update>
+        let alive-players players with [alive? or elimination-round = current-round]
+        ask alive-players [
+          create-temporary-plot-pen player-name
+          set-current-plot-pen player-name
+          set-plot-pen-color base-color
+          plotxy current-round vote-count
+        ]
+      </update>
+    </plot>
+    <plot x="1142" autoPlotX="true" yMax="100.0" autoPlotY="true" yAxis="% Detected" y="384" xMin="0.0" height="409" legend="false" xMax="10.0" yMin="0.0" width="579" xAxis="Game" display="Detection Rate">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="Rate" color="-2674135" legend="true">
+        <setup></setup>
+        <update><![CDATA[if total-games-played > 0 and game-over? [ plotxy total-games-played detection-rate ]]]></update>
+      </pen>
+    </plot>
+  </widgets>
+  <info>## WHAT IS IT?
+
+A social deduction game (Undercover / Spy Words) where LLM agents try to identify a hidden spy among them. Each player receives a secret word — most players share the same word (regulars), but one player has a different but similar word (the spy). Players describe their words and vote to eliminate the suspected spy.
+
+## HOW IT WORKS
+
+1. **Setup**: Players are arranged in a circle. One random player is assigned the spy word; the rest get the regular word.
+2. **Description Phase**: Each alive player uses the LLM to generate a 1-2 sentence description of their word without saying it.
+3. **Voting Phase**: Each alive player uses `llm:chat-with-template` to vote for the most suspicious player based on all descriptions so far.
+4. **Elimination**: The player with the most votes is eliminated. Ties broken by historical vote totals.
+5. **Win Check**: Regulars win if the spy is eliminated. The spy wins if 2 or fewer players remain or max rounds are reached.
+
+## HOW TO USE IT
+
+1. Set **num-players** (4-8), **max-rounds**, and **difficulty-level**
+2. Click **Setup** to initialize the game
+3. Click **Go** for continuous play or **Step** for one round at a time
+4. Watch descriptions and votes in the Command Center and on player labels
+5. Click **New Game** to start fresh (cumulative stats are preserved)
+
+## THINGS TO NOTICE
+
+- Do spy descriptions seem subtly different from regular players?
+- Do regulars converge on voting for the spy, or do they scatter votes?
+- How does difficulty level affect detection rate?
+- Does the spy get caught faster with more obviously different words (low difficulty)?
+
+## THINGS TO TRY
+
+- Compare detection rates across difficulty levels
+- Try with 4 players (harder for regulars) vs 8 players (more data points)
+- Change the LLM provider/model in config.txt and compare performance
+- Watch how vote patterns evolve across rounds
+
+## EXTENDING THE MODEL
+
+- Add a "guess the word" phase where the spy tries to guess the regular word before being eliminated
+- Implement multiple spies
+- Add inter-player discussion/messaging between description and voting phases
+- Track which specific descriptions led to correct/incorrect identifications
+
+## CREDITS AND REFERENCES
+
+Inspired by the Undercover (Who Is Spy?) party game and LLMArena (ACL 2024) — social deduction games as an evaluation framework for LLM reasoning.
+
+Built using the NetLogo LLM Extension.
+  </info>
+  <turtleShapes>
+    <shape name="default" rotatable="true" editableColorIndex="0">
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="150" y="5"></point>
+        <point x="40" y="250"></point>
+        <point x="150" y="205"></point>
+        <point x="260" y="250"></point>
+      </polygon>
+    </shape>
+    <shape name="person" rotatable="false" editableColorIndex="0">
+      <circle x="110" y="5" marked="true" color="-1920102913" diameter="80" filled="true"></circle>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="105" y="90"></point>
+        <point x="120" y="195"></point>
+        <point x="90" y="285"></point>
+        <point x="105" y="300"></point>
+        <point x="135" y="300"></point>
+        <point x="150" y="225"></point>
+        <point x="165" y="300"></point>
+        <point x="195" y="300"></point>
+        <point x="210" y="285"></point>
+        <point x="180" y="195"></point>
+        <point x="195" y="90"></point>
+      </polygon>
+      <rectangle endX="172" startY="79" marked="true" color="-1920102913" endY="94" startX="127" filled="true"></rectangle>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="195" y="90"></point>
+        <point x="240" y="150"></point>
+        <point x="225" y="180"></point>
+        <point x="165" y="105"></point>
+      </polygon>
+      <polygon color="-1920102913" filled="true" marked="true">
+        <point x="105" y="90"></point>
+        <point x="60" y="150"></point>
+        <point x="75" y="180"></point>
+        <point x="135" y="105"></point>
+      </polygon>
+    </shape>
+  </turtleShapes>
+  <linkShapes>
+    <shape name="default" curviness="0.0">
+      <lines>
+        <line x="-0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+        <line x="0.0" visible="true">
+          <dash value="1.0"></dash>
+          <dash value="0.0"></dash>
+        </line>
+        <line x="0.2" visible="false">
+          <dash value="0.0"></dash>
+          <dash value="1.0"></dash>
+        </line>
+      </lines>
+      <indicator>
+        <shape name="link direction" rotatable="true" editableColorIndex="0">
+          <line endX="90" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+          <line endX="210" startY="150" marked="true" color="-1920102913" endY="180" startX="150"></line>
+        </shape>
+      </indicator>
+    </shape>
+  </linkShapes>
+  <previewCommands>setup repeat 75 [ go ]</previewCommands>
+</model>

@@ -50,6 +50,15 @@ commands/
 config.txt
 config-*.txt
 !demos/provider-sensitivity/config-multi-provider.txt
+!demos/social-deduction-game/config.txt
 *.env
 *.env.*
 *.secrets*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Config files with real API keys (for local testing)
+*-config-with-keys*
+*-with-keys*

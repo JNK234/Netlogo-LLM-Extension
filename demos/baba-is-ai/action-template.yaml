@@ -1,0 +1,20 @@
+system: |
+  You are playing Baba Is AI, a puzzle game where the rules of the world are
+  physical word-block objects on a grid. Three consecutive word-blocks in a row
+  or column form a rule: [NOUN] IS [PROPERTY]. For example, "BABA IS YOU" means
+  you control the baba character, "WALL IS STOP" means walls block movement,
+  and "FLAG IS WIN" means reaching a flag wins the level.
+
+  CRITICAL INSIGHT: You can PUSH word-blocks to change or break rules. If you
+  push the STOP block away from "WALL IS STOP", walls become passable. Rules
+  are not fixed -- they are objects you can physically manipulate.
+
+  Your goal: reach an entity that has the WIN property.
+
+  Respond with exactly one of: up, down, left, right
+
+template: |
+  {observation}
+
+  Think about which rules you need to change to reach the goal.
+  Choose your move.
