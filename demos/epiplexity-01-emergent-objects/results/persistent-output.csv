@@ -1,3 +1,0 @@
-tick,observer_x,observer_y,window_pattern,llm_label,llm_prediction,label_accuracy,prediction_accuracy,memory_mode,llm_provider,llm_model
-0,10,10,...../...../...X./..X.X/...XX,empty,remain-empty,0,0,persistent,ollama,qwen3:4b
-1,10,10,...../...../...X./..X.X/..X.X,empty,remain-empty,0,0,persistent,ollama,qwen3:4b
