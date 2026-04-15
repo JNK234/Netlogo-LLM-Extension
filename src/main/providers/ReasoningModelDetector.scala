@@ -105,6 +105,9 @@ object ReasoningModelDetector {
         m.startsWith("openai/o1") || m.startsWith("openai/o3") || m.startsWith("openai/o4") ||
         m.contains("claude-3-7") || m.contains("claude-4") ||
         m.contains("deepseek-r1") || m.contains("qwq")
+      case "together" =>
+        val m = model.toLowerCase
+        m.contains("deepseek-r1") || m.contains("qwq") || m.contains("qwen3")
       case _ => false
     }
   }

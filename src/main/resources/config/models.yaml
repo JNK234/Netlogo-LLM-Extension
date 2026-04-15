@@ -101,6 +101,27 @@ openrouter:
   # Qwen models via OpenRouter
   - qwen/qwen-max
 
+together:
+  # Meta Llama
+  - meta-llama/Llama-3.3-70B-Instruct-Turbo
+  - meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo
+  - meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo
+  - meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo
+
+  # DeepSeek
+  - deepseek-ai/DeepSeek-R1
+  - deepseek-ai/DeepSeek-V3
+
+  # Qwen
+  - Qwen/Qwen2.5-72B-Instruct-Turbo
+  - Qwen/Qwen2.5-7B-Instruct-Turbo
+
+  # Google Gemma
+  - google/gemma-3-27b-it
+
+  # Mistral
+  - mistralai/Mistral-Small-24B-Instruct-2501
+
 ollama:
   # Top reasoning models
   - deepseek-r1:70b

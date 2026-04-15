@@ -170,5 +170,40 @@ object ProviderRegistrations {
           |Browse 200+ models: https://openrouter.ai/models""".stripMargin,
       factory = ec => new OpenRouterProvider()(using ec)
     ))
+
+    ProviderRegistry.register(ProviderDescriptor(
+      name = "together",
+      displayName = "Together AI",
+      apiKeyConfigKey = "together_api_key",
+      baseUrlConfigKey = "together_base_url",
+      defaultBaseUrl = "https://api.together.xyz/v1",
+      defaultModel = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      defaultMaxTokens = "1000",
+      requiresApiKey = true,
+      apiKeyPrefix = None,
+      readinessCheck = ReadinessCheck.ApiKey,
+      exposesThinking = true,
+      helpText =
+        """Together AI Setup Instructions:
+          |
+          |1. Get an API key:
+          |   - Visit https://api.together.ai/settings/api-keys
+          |   - Create a new API key
+          |
+          |2. Set the key:
+          |   - In config file: together_api_key=your-key-here
+          |   - Or at runtime: llm:set-api-key "your-key-here"
+          |
+          |3. Set a model (vendor-prefixed):
+          |   - llm:set-model "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+          |   - llm:set-model "deepseek-ai/DeepSeek-R1"
+          |   - llm:set-model "Qwen/Qwen2.5-72B-Instruct-Turbo"
+          |
+          |4. Verify:
+          |   - Check llm:provider-status for "has-key: true"
+          |
+          |Browse models: https://api.together.ai/models""".stripMargin,
+      factory = ec => new TogetherProvider()(using ec)
+    ))
   }
 }

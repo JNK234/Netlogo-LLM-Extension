@@ -17,7 +17,7 @@ This allows you to:
 ## Immediate Validation
 Starting from this version, configuration is validated immediately:
 - When you call `llm:load-config` or `llm:set-provider`, the extension checks if the provider is ready
-- **Cloud providers** (OpenAI, Anthropic, Gemini, OpenRouter) require API keys
+- **Cloud providers** (OpenAI, Anthropic, Gemini, OpenRouter, Together AI) require API keys
 - **Ollama** requires the server to be running and reachable
 - If validation fails, you get a clear error message with setup instructions
 - Use `print llm:provider-help "provider-name"` to get detailed setup guidance
@@ -28,8 +28,8 @@ Starting from this version, configuration is validated immediately:
 - No quotes required; avoid trailing spaces around `=`.
 - **Supported keys**:
   - Common: `provider`, `model`, `temperature`, `max_tokens`, `timeout_seconds`
-  - Provider-specific API keys: `openai_api_key`, `anthropic_api_key`, `gemini_api_key`, `openrouter_api_key`
-  - Provider-specific base URLs: `openai_base_url`, `anthropic_base_url`, `gemini_base_url`, `ollama_base_url`, `openrouter_base_url`
+  - Provider-specific API keys: `openai_api_key`, `anthropic_api_key`, `gemini_api_key`, `openrouter_api_key`, `together_api_key`
+  - Provider-specific base URLs: `openai_base_url`, `anthropic_base_url`, `gemini_base_url`, `ollama_base_url`, `openrouter_base_url`, `together_base_url`
   - Legacy (still supported): `api_key`, `base_url` (applies to current provider)
 
 ## Where to Save the File
@@ -85,6 +85,16 @@ max_tokens=1000
 timeout_seconds=30
 ```
 
+### Together AI (open-source models)
+```
+provider=together
+together_api_key=REPLACE_ME
+model=meta-llama/Llama-3.3-70B-Instruct-Turbo
+temperature=0.7
+max_tokens=1000
+timeout_seconds=30
+```
+
 ### Local (Ollama, no API key)
 ```
 provider=ollama
@@ -103,6 +113,7 @@ openai_api_key=sk-REPLACE_ME
 anthropic_api_key=sk-ant-REPLACE_ME
 gemini_api_key=REPLACE_ME
 openrouter_api_key=sk-or-REPLACE_ME
+together_api_key=REPLACE_ME
 
 # Set the active provider
 provider=openai

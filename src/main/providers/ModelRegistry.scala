@@ -36,7 +36,8 @@ object ModelRegistry {
     ), isCustom = false),
     "gemini" -> ProviderModels(Set("gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"), isCustom = false),
     "ollama" -> ProviderModels(Set("llama3.2", "llama3.1", "mistral", "phi4"), isCustom = false),
-    "openrouter" -> ProviderModels(Set("openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1"), isCustom = false)
+    "openrouter" -> ProviderModels(Set("openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1"), isCustom = false),
+    "together" -> ProviderModels(Set("meta-llama/Llama-3.3-70B-Instruct-Turbo", "deepseek-ai/DeepSeek-R1", "Qwen/Qwen2.5-72B-Instruct-Turbo"), isCustom = false)
   )
 
   /**
