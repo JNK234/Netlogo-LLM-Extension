@@ -10,17 +10,18 @@ LLMConfigPrimitives
 
 LLMProvidersAll
   extensions [llm]
-  length llm:providers-all => 4
+  length llm:providers-all => 5
   member? "openai" llm:providers-all => true
   member? "anthropic" llm:providers-all => true
   member? "gemini" llm:providers-all => true
   member? "ollama" llm:providers-all => true
+  member? "openrouter" llm:providers-all => true
 
 LLMProviderStatus
   extensions [llm]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
-  length llm:provider-status => 4
+  length llm:provider-status => 5
 
 LLMListModels
   extensions [llm]
@@ -247,6 +248,16 @@ LLMMultiAgentChat
   is-string? [agent-result] of turtle 1 => true
   empty? [agent-result] of turtle 0 => false
   empty? [agent-result] of turtle 1 => false
+
+LLMOpenRouterProvider
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openrouter"
+  item 0 llm:active => "openrouter"
+  item 1 llm:active => "openai/gpt-4o-mini"
+  empty? (llm:provider-help "openrouter") => false
+  O> llm:set-model "openai/gpt-4o"
+  item 1 llm:active => "openai/gpt-4o"
 
 LLMConfigLoading
   extensions [llm]

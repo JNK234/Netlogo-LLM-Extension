@@ -35,7 +35,8 @@ object ModelRegistry {
       "claude-3-5-haiku-20241022", "claude-3-5-haiku-latest"
     ), isCustom = false),
     "gemini" -> ProviderModels(Set("gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"), isCustom = false),
-    "ollama" -> ProviderModels(Set("llama3.2", "llama3.1", "mistral", "phi4"), isCustom = false)
+    "ollama" -> ProviderModels(Set("llama3.2", "llama3.1", "mistral", "phi4"), isCustom = false),
+    "openrouter" -> ProviderModels(Set("openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1"), isCustom = false)
   )
 
   /**
@@ -201,23 +202,16 @@ object ModelRegistry {
   }
 
   /**
-   * Get default model for a provider
+   * Get default model for a provider.
    *
-   * These defaults are hardcoded as they represent stable, recommended models.
-   * They do not change based on YAML configuration.
+   * Delegates to ProviderRegistry so defaults are defined in one place
+   * (ProviderRegistrations.scala) rather than duplicated here.
    *
    * @param providerName Provider name (case-insensitive)
    * @return Default model name
    */
-  def defaultModel(providerName: String): String = {
-    providerName.toLowerCase.trim match {
-      case "openai" => "gpt-4o-mini"
-      case "anthropic" => "claude-3-5-haiku-latest"
-      case "gemini" => "gemini-1.5-flash"
-      case "ollama" => "llama3.2"
-      case _ => throw new IllegalArgumentException(s"Unknown provider: $providerName")
-    }
-  }
+  def defaultModel(providerName: String): String =
+    ProviderRegistry.defaultModel(providerName)
 
   /**
    * Check if a model is valid for a provider

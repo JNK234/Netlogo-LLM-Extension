@@ -236,6 +236,71 @@ candidate_count=1  # Default (recommended)
 # Higher values increase cost but may improve quality
 ```
 
+## OpenRouter Configuration
+
+### API Setup
+
+1. **Get API Key**: Visit [openrouter.ai/keys](https://openrouter.ai/keys)
+2. **Check Usage**: Monitor credits at [openrouter.ai/credits](https://openrouter.ai/credits)
+3. **Browse Models**: Explore 200+ models at [openrouter.ai/models](https://openrouter.ai/models)
+
+### Configuration Parameters
+
+```ini
+# Required Parameters
+provider=openrouter
+openrouter_api_key=sk-or-your-openrouter-key-here
+model=openai/gpt-4o-mini
+
+# Optional Parameters
+openrouter_base_url=https://openrouter.ai/api/v1
+temperature=0.7
+max_tokens=1000
+timeout_seconds=30
+```
+
+### Available Models
+
+Model names use vendor prefixes (`vendor/model-name`):
+
+| Model | Description | Context |
+|-------|-------------|---------|
+| `openai/gpt-4o` | OpenAI GPT-4o via OpenRouter | 128K |
+| `openai/gpt-4o-mini` | Fast, cost-effective GPT-4 | 128K |
+| `openai/o3-mini` | OpenAI reasoning model | 128K |
+| `anthropic/claude-3.5-sonnet` | Anthropic Claude 3.5 Sonnet | 200K |
+| `anthropic/claude-sonnet-4-20250514` | Latest Claude Sonnet 4 | 200K |
+| `google/gemini-2.5-flash` | Google Gemini Flash | 1M |
+| `google/gemini-2.5-pro` | Google Gemini Pro | 1M |
+| `meta-llama/llama-3.3-70b-instruct` | Meta Llama 3.3 70B | 128K |
+| `deepseek/deepseek-r1` | DeepSeek reasoning model | 64K |
+| `deepseek/deepseek-chat-v3-0324` | DeepSeek Chat V3 | 64K |
+
+**Recommended for NetLogo**: `openai/gpt-4o-mini` (fast, cheap, capable)
+
+### Why OpenRouter?
+
+- **One API key** for 200+ models from OpenAI, Anthropic, Google, Meta, DeepSeek, and more
+- **Automatic fallback**: if one provider is down, OpenRouter routes to another
+- **Pay-per-use credits** across all providers
+- **Easy model comparison**: switch between vendors without managing separate API keys
+
+### Hyperparameters
+
+Same as OpenAI: `temperature`, `max_tokens`, `top_p`. OpenRouter passes these through to the underlying provider.
+
+### Thinking/Reasoning Models
+
+OpenRouter supports reasoning across vendors. Set thinking mode and the extension
+translates automatically:
+
+```netlogo
+llm:set-provider "openrouter"
+llm:set-model "deepseek/deepseek-r1"
+llm:set-thinking true
+llm:set-reasoning-effort "high"
+```
+
 ## Ollama (Local) Configuration
 
 ### Setup Requirements

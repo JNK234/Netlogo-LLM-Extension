@@ -62,3 +62,4 @@ __pycache__/
 # Config files with real API keys (for local testing)
 *-config-with-keys*
 *-with-keys*
+.rocketride/

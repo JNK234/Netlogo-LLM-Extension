@@ -202,49 +202,23 @@ object ConfigStore {
   }
   
   /**
-   * Get the provider-specific API key constant name
-   * 
-   * @param provider Provider name
-   * @return API key config constant
+   * Get the provider-specific API key constant name.
+   * Delegates to ProviderRegistry for registered providers, falls back to generic API_KEY.
    */
-  def getProviderApiKeyName(provider: String): String = {
-    provider.toLowerCase.trim match {
-      case "openai" => OPENAI_API_KEY
-      case "anthropic" => ANTHROPIC_API_KEY
-      case "gemini" => GEMINI_API_KEY
-      case _ => API_KEY
-    }
-  }
-  
+  def getProviderApiKeyName(provider: String): String =
+    org.nlogo.extensions.llm.providers.ProviderRegistry.apiKeyConfigKey(provider)
+
   /**
-   * Get the provider-specific base URL constant name
-   * 
-   * @param provider Provider name
-   * @return Base URL config constant
+   * Get the provider-specific base URL constant name.
+   * Delegates to ProviderRegistry for registered providers, falls back to generic BASE_URL.
    */
-  def getProviderBaseUrlName(provider: String): String = {
-    provider.toLowerCase.trim match {
-      case "openai" => OPENAI_BASE_URL
-      case "anthropic" => ANTHROPIC_BASE_URL
-      case "gemini" => GEMINI_BASE_URL
-      case "ollama" => OLLAMA_BASE_URL
-      case _ => BASE_URL
-    }
-  }
-  
+  def getProviderBaseUrlName(provider: String): String =
+    org.nlogo.extensions.llm.providers.ProviderRegistry.baseUrlConfigKey(provider)
+
   /**
-   * Get default base URL for a provider
-   * 
-   * @param provider Provider name
-   * @return Default base URL
+   * Get default base URL for a provider.
+   * Delegates to ProviderRegistry for registered providers.
    */
-  def getDefaultBaseUrl(provider: String): String = {
-    provider.toLowerCase.trim match {
-      case "openai" => DEFAULT_OPENAI_BASE_URL
-      case "anthropic" => DEFAULT_ANTHROPIC_BASE_URL
-      case "gemini" => DEFAULT_GEMINI_BASE_URL
-      case "ollama" => DEFAULT_OLLAMA_BASE_URL
-      case _ => ""
-    }
-  }
+  def getDefaultBaseUrl(provider: String): String =
+    org.nlogo.extensions.llm.providers.ProviderRegistry.defaultBaseUrl(provider)
 }
