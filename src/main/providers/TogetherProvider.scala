@@ -71,10 +71,26 @@ class TogetherProvider(implicit ec: ExecutionContext) extends OpenAICompatiblePr
     // Path 2: parse <think>...</think> tags from content (DeepSeek-R1)
     try {
       val content = message("content").str
-      val thinkPattern = """(?s)<think>(.*?)</think>""".r
-      thinkPattern.findFirstMatchIn(content).map(_.group(1).trim).filter(_.nonEmpty)
+      TogetherProvider.ThinkTagPattern.findFirstMatchIn(content)
+        .map(_.group(1).trim)
+        .filter(_.nonEmpty)
     } catch {
       case _: Exception => None
     }
   }
+
+  /**
+   * Strip <think>...</think> blocks from the assistant content so the answer
+   * slot of llm:chat-with-thinking doesn't duplicate the thinking slot.
+   * Applies to DeepSeek-R1 responses; no-op for other Together models.
+   */
+  override protected def cleanContent(content: String, message: ujson.Value): String = {
+    val stripped = TogetherProvider.ThinkTagPattern.replaceAllIn(content, "").trim
+    if (stripped.isEmpty) content else stripped
+  }
+}
+
+object TogetherProvider {
+  // (?s) = dot matches newlines; non-greedy to support multiple <think> blocks.
+  private val ThinkTagPattern = """(?s)<think>(.*?)</think>""".r
 }

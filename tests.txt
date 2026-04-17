@@ -275,3 +275,10 @@ LLMConfigLoading
   O> llm:load-config "demos/config"
   item 0 llm:active => "openai"
   member? "openai" llm:providers => true
+
+LLMLoadConfigRejectsUnknownProvider
+  extensions [llm]
+  globals [err]
+  O> carefully [llm:load-config "demos/test-config-bad-provider"] [set err error-message]
+  is-string? err => true
+  (position "opanai" err) != false => true

@@ -377,26 +377,30 @@ class LLMExtension extends DefaultClassManager {
           }
 
 
-          // Validate provider after loading config using descriptor
+          // Validate provider after loading config using descriptor.
+          // Unknown provider names fail fast — typos shouldn't defer errors to first chat.
           val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
-          ProviderRegistry.get(providerName.toLowerCase.trim).foreach { desc =>
-            desc.readinessCheck match {
-              case ReadinessCheck.ServerReachable =>
-                if (!isOllamaReachable) {
-                  val baseUrl = configStore.get(desc.baseUrlConfigKey)
-                    .orElse(configStore.get(ConfigStore.BASE_URL))
-                    .getOrElse(desc.defaultBaseUrl)
-                  throw new ExtensionException(
-                    s"Config loaded but ${desc.displayName} not reachable at $baseUrl. Please start the server or change ${desc.baseUrlConfigKey} in config. For help: print llm:provider-help \"${desc.name}\""
-                  )
-                }
-              case ReadinessCheck.ApiKey =>
-                if (!hasApiKey(providerName)) {
-                  throw new ExtensionException(
-                    s"Config loaded but ${desc.displayName} provider requires an API key. Set '${desc.apiKeyConfigKey}' in config. For help: print llm:provider-help \"${desc.name}\""
-                  )
-                }
-            }
+          val desc = ProviderRegistry.get(providerName.toLowerCase.trim).getOrElse {
+            throw new ExtensionException(
+              s"Unknown provider '$providerName' in config. Supported: ${ProviderRegistry.allNames.toList.sorted.mkString(", ")}"
+            )
+          }
+          desc.readinessCheck match {
+            case ReadinessCheck.ServerReachable =>
+              if (!isOllamaReachable) {
+                val baseUrl = configStore.get(desc.baseUrlConfigKey)
+                  .orElse(configStore.get(ConfigStore.BASE_URL))
+                  .getOrElse(desc.defaultBaseUrl)
+                throw new ExtensionException(
+                  s"Config loaded but ${desc.displayName} not reachable at $baseUrl. Please start the server or change ${desc.baseUrlConfigKey} in config. For help: print llm:provider-help \"${desc.name}\""
+                )
+              }
+            case ReadinessCheck.ApiKey =>
+              if (!hasApiKey(providerName)) {
+                throw new ExtensionException(
+                  s"Config loaded but ${desc.displayName} provider requires an API key. Set '${desc.apiKeyConfigKey}' in config. For help: print llm:provider-help \"${desc.name}\""
+                )
+              }
           }
           
           currentProvider = None // Force re-initialization with new config
