@@ -42,16 +42,6 @@ abstract class OpenAICompatibleProvider(implicit ec: ExecutionContext) extends B
    */
   protected def extractThinking(message: ujson.Value): Option[String] = None
 
-  /**
-   * Clean the assistant response content before returning it to the user.
-   * Default is identity — no transformation.
-   *
-   * Together AI's DeepSeek-R1 embeds reasoning inside <think>...</think>
-   * tags in the content field; TogetherProvider overrides this hook to
-   * strip those tags so the answer slot doesn't duplicate the thinking slot.
-   */
-  protected def cleanContent(content: String, message: ujson.Value): String = content
-
   override protected def buildApiUrl(baseUrl: String): Uri =
     uri"$baseUrl/chat/completions"
 
@@ -109,13 +99,12 @@ abstract class OpenAICompatibleProvider(implicit ec: ExecutionContext) extends B
       val choices = parsed("choices").arr.zipWithIndex.map { case (choice, index) =>
         val message = choice("message")
         val role = message("role").str
-        val rawContent = message("content").str
-        val cleaned = cleanContent(rawContent, message)
+        val content = message("content").str
         val finishReason = choice("finish_reason").str
 
         Choice(
           index = index,
-          message = ChatMessage(role, cleaned),
+          message = ChatMessage(role, content),
           finishReason = finishReason
         )
       }.toArray
