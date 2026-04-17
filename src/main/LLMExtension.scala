@@ -3,7 +3,7 @@ package org.nlogo.extensions.llm
 import org.nlogo.api._
 import org.nlogo.core.{LogoList, Syntax}
 import org.nlogo.extensions.llm.config.{ConfigLoader, ConfigStore}
-import org.nlogo.extensions.llm.providers.{LLMProvider, ProviderFactory, ModelRegistry, OllamaProvider}
+import org.nlogo.extensions.llm.providers.{LLMProvider, ProviderFactory, ProviderRegistry, ProviderRegistrations, ModelRegistry, OllamaProvider, ReadinessCheck}
 import org.nlogo.extensions.llm.models.{ChatMessage, ChatResponse}
 import scala.collection.mutable.{ArrayBuffer, WeakHashMap}
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -82,6 +82,9 @@ class LLMExtension extends DefaultClassManager {
    * Called when the extension is loaded to register primitives
    */
   override def load(manager: PrimitiveManager): Unit = {
+    // Initialize provider registry before anything else
+    ProviderRegistrations.registerAll()
+
     // Configuration primitives
     manager.addPrimitive("set-provider", SetProviderCommand)
     manager.addPrimitive("set-api-key", SetApiKeyCommand)
@@ -189,13 +192,16 @@ class LLMExtension extends DefaultClassManager {
   }
   
   /**
-   * Check if a provider is ready to use
+   * Check if a provider is ready to use.
+   * Uses the readinessCheck from the provider's descriptor.
    */
   private def isProviderReady(providerName: String): Boolean = {
-    providerName.toLowerCase.trim match {
-      case "ollama" => isOllamaReachable
-      case "openai" | "anthropic" | "gemini" => hasApiKey(providerName)
-      case _ => false
+    ProviderRegistry.get(providerName) match {
+      case Some(desc) => desc.readinessCheck match {
+        case ReadinessCheck.ServerReachable => isOllamaReachable
+        case ReadinessCheck.ApiKey => hasApiKey(providerName)
+      }
+      case None => false
     }
   }
   
@@ -287,24 +293,25 @@ class LLMExtension extends DefaultClassManager {
       // Set provider
       configStore.set(ConfigStore.PROVIDER, providerName)
       
-      // Validate immediately
-      providerName match {
-        case "ollama" =>
-          if (!isOllamaReachable) {
-            val baseUrl = configStore.get(ConfigStore.OLLAMA_BASE_URL)
-              .orElse(configStore.get(ConfigStore.BASE_URL))
-              .getOrElse(ConfigStore.DEFAULT_OLLAMA_BASE_URL)
-            throw new ExtensionException(
-              s"Ollama not reachable at $baseUrl. Please start Ollama server or change ollama_base_url. For help: print llm:provider-help \"ollama\""
-            )
-          }
-        case _ =>
-          if (!hasApiKey(providerName)) {
-            val keyName = ConfigStore.getProviderApiKeyName(providerName)
-            throw new ExtensionException(
-              s"$providerName provider requires an API key. Set '$keyName' in config or call llm:set-api-key. For help: print llm:provider-help \"$providerName\""
-            )
-          }
+      // Validate immediately using descriptor
+      ProviderRegistry.get(providerName).foreach { desc =>
+        desc.readinessCheck match {
+          case ReadinessCheck.ServerReachable =>
+            if (!isOllamaReachable) {
+              val baseUrl = configStore.get(desc.baseUrlConfigKey)
+                .orElse(configStore.get(ConfigStore.BASE_URL))
+                .getOrElse(desc.defaultBaseUrl)
+              throw new ExtensionException(
+                s"${desc.displayName} not reachable at $baseUrl. Please start the server or change ${desc.baseUrlConfigKey}. For help: print llm:provider-help \"$providerName\""
+              )
+            }
+          case ReadinessCheck.ApiKey =>
+            if (!hasApiKey(providerName)) {
+              throw new ExtensionException(
+                s"${desc.displayName} provider requires an API key. Set '${desc.apiKeyConfigKey}' in config or call llm:set-api-key. For help: print llm:provider-help \"$providerName\""
+              )
+            }
+        }
       }
       
       // Force re-initialization with new provider
@@ -359,8 +366,18 @@ class LLMExtension extends DefaultClassManager {
 
       ConfigLoader.loadFromFile(filename, modelDir) match {
         case Success(config) =>
-          configStore.loadFromMap(config)
+          // Validate the provider name against the raw config BEFORE mutating
+          // configStore, so a rejected load leaves the session state unchanged.
+          val providerName = config.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
+          val desc = ProviderRegistry.get(providerName.toLowerCase.trim).getOrElse {
+            throw new ExtensionException(
+              s"Unknown provider '$providerName' in config. Supported: ${ProviderRegistry.allNames.toList.sorted.mkString(", ")}"
+            )
+          }
 
+          // Snapshot old config so we can roll back on readiness-check failure.
+          val previousConfig = configStore.toMap
+          configStore.loadFromMap(config)
 
           // Load model override file if available
           modelDir.foreach { dir =>
@@ -369,28 +386,32 @@ class LLMExtension extends DefaultClassManager {
             }
           }
 
-
-          // Validate provider after loading config
-          val providerName = configStore.getOrElse(ConfigStore.PROVIDER, ConfigStore.DEFAULT_PROVIDER)
-          providerName.toLowerCase.trim match {
-            case "ollama" =>
-              if (!isOllamaReachable) {
-                val baseUrl = configStore.get(ConfigStore.OLLAMA_BASE_URL)
-                  .orElse(configStore.get(ConfigStore.BASE_URL))
-                  .getOrElse(ConfigStore.DEFAULT_OLLAMA_BASE_URL)
-                throw new ExtensionException(
-                  s"Config loaded but Ollama not reachable at $baseUrl. Please start Ollama server or change ollama_base_url in config. For help: print llm:provider-help \"ollama\""
-                )
-              }
-            case _ =>
-              if (!hasApiKey(providerName)) {
-                val keyName = ConfigStore.getProviderApiKeyName(providerName)
-                throw new ExtensionException(
-                  s"Config loaded but $providerName provider requires an API key. Set '$keyName' in config. For help: print llm:provider-help \"$providerName\""
-                )
-              }
+          // Readiness check uses the now-loaded config (needs apiKeyConfigKey lookup).
+          // Roll back on failure so llm:active and friends keep the prior state.
+          try {
+            desc.readinessCheck match {
+              case ReadinessCheck.ServerReachable =>
+                if (!isOllamaReachable) {
+                  val baseUrl = configStore.get(desc.baseUrlConfigKey)
+                    .orElse(configStore.get(ConfigStore.BASE_URL))
+                    .getOrElse(desc.defaultBaseUrl)
+                  throw new ExtensionException(
+                    s"Config loaded but ${desc.displayName} not reachable at $baseUrl. Please start the server or change ${desc.baseUrlConfigKey} in config. For help: print llm:provider-help \"${desc.name}\""
+                  )
+                }
+              case ReadinessCheck.ApiKey =>
+                if (!hasApiKey(providerName)) {
+                  throw new ExtensionException(
+                    s"Config loaded but ${desc.displayName} provider requires an API key. Set '${desc.apiKeyConfigKey}' in config. For help: print llm:provider-help \"${desc.name}\""
+                  )
+                }
+            }
+          } catch {
+            case e: ExtensionException =>
+              configStore.loadFromMap(previousConfig)
+              throw e
           }
-          
+
           currentProvider = None // Force re-initialization with new config
         case Failure(e) =>
           throw new ExtensionException(s"Failed to load configuration from '$filename': ${e.getMessage}")
@@ -803,80 +824,10 @@ class LLMExtension extends DefaultClassManager {
       right = List(Syntax.StringType),
       ret = Syntax.StringType
     )
-    
+
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val providerName = args(0).getString.toLowerCase.trim
-      
-      providerName match {
-        case "ollama" =>
-          """Ollama Setup Instructions:
-            |
-            |1. Install Ollama:
-            |   - Visit https://ollama.ai/download
-            |   - Download and install for your platform
-            |
-            |2. Start Ollama server:
-            |   - Open terminal and run: ollama serve
-            |   - Or start Ollama app (it runs in background)
-            |
-            |3. Pull a model:
-            |   - Run: ollama pull llama3.2
-            |   - Or try: ollama pull deepseek-r1:1.5b (smaller)
-            |
-            |4. Verify installation:
-            |   - Check llm:provider-status for "reachable: true"
-            |
-            |5. Custom server URL:
-            |   - In config: ollama_base_url=http://your-server:11434
-            |   - Default: http://localhost:11434
-            |
-            |For more models: ollama.ai/library""".stripMargin
-        
-        case "openai" =>
-          s"""OpenAI Setup Instructions:
-            |
-            |1. Get an API key:
-            |   - Visit https://platform.openai.com/api-keys
-            |   - Create a new API key
-            |
-            |2. Set the key:
-            |   - In config file: ${ConfigStore.OPENAI_API_KEY}=sk-your-key-here
-            |   - Or at runtime: llm:set-api-key "sk-your-key-here"
-            |
-            |3. Verify:
-            |   - Check llm:provider-status for "has-key: true"""".stripMargin
-        
-        case "anthropic" =>
-          s"""Anthropic (Claude) Setup Instructions:
-            |
-            |1. Get an API key:
-            |   - Visit https://console.anthropic.com/
-            |   - Create a new API key
-            |
-            |2. Set the key:
-            |   - In config file: ${ConfigStore.ANTHROPIC_API_KEY}=sk-ant-your-key-here
-            |   - Or at runtime: llm:set-api-key "sk-ant-your-key-here"
-            |
-            |3. Verify:
-            |   - Check llm:provider-status for "has-key: true"""".stripMargin
-        
-        case "gemini" =>
-          s"""Google Gemini Setup Instructions:
-            |
-            |1. Get an API key:
-            |   - Visit https://makersuite.google.com/app/apikey
-            |   - Create a new API key
-            |
-            |2. Set the key:
-            |   - In config file: ${ConfigStore.GEMINI_API_KEY}=your-key-here
-            |   - Or at runtime: llm:set-api-key "your-key-here"
-            |
-            |3. Verify:
-            |   - Check llm:provider-status for "has-key: true"""".stripMargin
-        
-        case _ =>
-          s"Unknown provider: $providerName. Supported providers: ${ProviderFactory.getSupportedProviders.mkString(", ")}"
-      }
+      ProviderRegistry.helpText(providerName)
     }
   }
   
