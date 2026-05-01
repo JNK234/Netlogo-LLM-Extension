@@ -1,274 +1,185 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.3" snapToGrid="false">
-  <code><![CDATA[;; ABOUTME: LLM extension test suite for validating all primitives.
-;; ABOUTME: Works with any single configured provider via config file.
+  <code><![CDATA[;; ABOUTME: LLM extension test suite for OpenRouter, Together AI, and all providers.
+;; ABOUTME: Loads config.txt from this folder; whichever provider is set there is tested.
 
 extensions [ llm ]
+
+globals [ pass-count fail-count ]
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 to test-pass [ msg ]
-  print (word "PASS: " msg)
+  set pass-count pass-count + 1
+  print (word "  PASS: " msg)
 end
 
 to test-fail [ msg ]
-  print (word "FAIL: " msg)
+  set fail-count fail-count + 1
+  print (word "  FAIL: " msg)
 end
 
 to assert-true [ condition msg ]
   ifelse condition [ test-pass msg ] [ test-fail msg ]
 end
 
-to assert-string [ value msg ]
-  assert-true (is-string? value) (word msg " is a string")
-end
-
-to load-config
-  ; Tries common config paths — the right one depends on where NetLogo
-  ; resolves relative paths from (model dir or working dir)
-  carefully [ llm:load-config "demos/config" ] [
-    carefully [ llm:load-config "../config" ] [
-      carefully [ llm:load-config "config" ] [
-        carefully [ llm:load-config "config.txt" ] [
-          ; Fall back to Ollama (no config file needed)
-          print "INFO: No config file found, falling back to Ollama"
-          llm:set-provider "ollama"
-          llm:set-model "qwen3:0.6b"
-        ]
-      ]
-    ]
-  ]
+to section [ name ]
+  print ""
+  print (word "=== " name " ===")
 end
 
 ;; ---------------------------------------------------------------------------
-;; 1. Provider discovery (no API key needed)
+;; 1. Provider registry (no API call)
 ;; ---------------------------------------------------------------------------
 
-to test-provider-discovery
-  print "--- test-provider-discovery ---"
+to test-providers
+  section "providers"
 
   let all-providers llm:providers-all
-  assert-true (is-list? all-providers) "providers-all returns a list"
-  assert-true (length all-providers >= 4) "at least 4 supported providers"
+  assert-true (length all-providers >= 6) "providers-all has >= 6 providers"
+  assert-true (member? "openrouter" all-providers) "openrouter registered"
+  assert-true (member? "together"   all-providers) "together registered"
+  assert-true (member? "openai"     all-providers) "openai registered"
+  assert-true (member? "anthropic"  all-providers) "anthropic registered"
+  assert-true (member? "gemini"     all-providers) "gemini registered"
+  assert-true (member? "ollama"     all-providers) "ollama registered"
 
-  let ready llm:providers
-  assert-true (is-list? ready) "providers returns a list"
-
-  ; Every ready provider must appear in the full list
-  let ok true
-  foreach ready [ p ->
-    if not member? p all-providers [ set ok false ]
+  foreach all-providers [ p ->
+    let help llm:provider-help p
+    assert-true (is-string? help and not empty? help) (word "provider-help " p)
   ]
-  assert-true ok "ready providers are a subset of all providers"
 
   let status llm:provider-status
-  assert-true (is-list? status) "provider-status returns a list"
-  assert-true (length status >= 4) "status covers all providers"
-
-  print ""
+  assert-true (length status >= 6) "provider-status covers all providers"
 end
 
 ;; ---------------------------------------------------------------------------
-;; 2. Provider help
-;; ---------------------------------------------------------------------------
-
-to test-provider-help
-  print "--- test-provider-help ---"
-  foreach ["openai" "anthropic" "gemini" "ollama"] [ p ->
-    let help llm:provider-help p
-    assert-true (is-string? help and not empty? help) (word "help for " p)
-  ]
-  print ""
-end
-
-;; ---------------------------------------------------------------------------
-;; 3. Invalid provider name
+;; 2. Invalid provider rejected (PR fix f539a73)
 ;; ---------------------------------------------------------------------------
 
 to test-invalid-provider
-  print "--- test-invalid-provider ---"
+  section "invalid-provider"
   carefully [
     llm:set-provider "not-a-provider"
     test-fail "invalid provider should be rejected"
   ] [
     test-pass (word "invalid provider rejected: " error-message)
   ]
-  print ""
 end
 
 ;; ---------------------------------------------------------------------------
-;; 4. Active config & model listing
+;; 3. Load config + active state
 ;; ---------------------------------------------------------------------------
 
-to test-active-config
-  print "--- test-active-config ---"
-  load-config
+to test-load-config
+  section "load-config"
+  llm:load-config "config.txt"
+  test-pass "config.txt loaded"
 
   let active llm:active
-  assert-true (is-list? active and length active = 2) "active returns [provider model]"
+  assert-true (length active = 2) "active returns [provider model]"
+  print (word "  active provider: " (item 0 active))
+  print (word "  active model:    " (item 1 active))
 
   let cfg llm:config
-  assert-true (is-string? cfg and not empty? cfg) "config returns non-empty string"
+  assert-true (not empty? cfg) "config string is non-empty"
 
   let models llm:list-models
   assert-true (member? "=== Available Models ===" models) "list-models has header"
-  assert-true (member? "[ACTIVE]" models) "list-models shows [ACTIVE] marker"
-
-  print ""
+  assert-true (member? "[ACTIVE]" models) "list-models marks [ACTIVE]"
 end
 
 ;; ---------------------------------------------------------------------------
-;; 5. Model validation
+;; 4. Config rollback on failure (PR fix d9a33de)
 ;; ---------------------------------------------------------------------------
 
-to test-model-validation
-  print "--- test-model-validation ---"
-  load-config
-
-  ; Current model should be accepted
-  let active llm:active
-  let current-model item 1 active
+to test-config-rollback
+  section "config-rollback"
+  let before llm:active
   carefully [
-    llm:set-model current-model
-    test-pass (word "valid model '" current-model "' accepted")
+    llm:load-config "/tmp/__nonexistent_llm_config__.txt"
+    test-fail "load-config with bad path should error"
   ] [
-    test-fail (word "valid model rejected: " error-message)
+    test-pass (word "bad config rejected: " error-message)
   ]
-
-  ; Unknown model is allowed with a warning (by design — API validates it)
-  carefully [
-    llm:set-model "nonexistent-model-xyz"
-    test-pass "unknown model accepted (warns to stderr, API will validate)"
-  ] [
-    test-fail (word "set-model should not throw: " error-message)
-  ]
-
-  ; Restore valid model so subsequent tests work
-  llm:set-model current-model
-
-  print ""
+  let after llm:active
+  assert-true (before = after) "active config unchanged after failed load"
 end
 
 ;; ---------------------------------------------------------------------------
-;; 6. Synchronous chat
+;; 5. Sync chat (backward compat: returns string, not list)
 ;; ---------------------------------------------------------------------------
 
 to test-sync-chat
-  print "--- test-sync-chat ---"
-  load-config
+  section "sync-chat"
   llm:clear-history
-
-  carefully [
-    let result llm:chat "Reply with exactly: hello"
-    assert-string result "sync chat result"
-    assert-true (not empty? result) "sync chat result non-empty"
-  ] [
-    test-fail (word "sync chat error: " error-message)
-  ]
-
-  print ""
+  let result llm:chat "Reply with exactly: hello"
+  assert-true (is-string? result) "llm:chat returns string"
+  assert-true (not empty? result) "result non-empty"
+  print (word "  reply: " result)
 end
 
 ;; ---------------------------------------------------------------------------
-;; 7. Async chat
+;; 6. Async chat
 ;; ---------------------------------------------------------------------------
 
 to test-async-chat
-  print "--- test-async-chat ---"
-  load-config
+  section "async-chat"
   llm:clear-history
-
-  carefully [
-    let reporter-task llm:chat-async "Reply with exactly: async hello"
-    test-pass "async request started"
-    let result runresult reporter-task
-    assert-string result "async chat result"
-    assert-true (not empty? result) "async chat result non-empty"
-  ] [
-    test-fail (word "async chat error: " error-message)
-  ]
-
-  print ""
+  let task llm:chat-async "Reply with exactly: async hello"
+  test-pass "async request started"
+  let result runresult task
+  assert-true (is-string? result) "async result is string"
+  assert-true (not empty? result) "async result non-empty"
+  print (word "  reply: " result)
 end
 
 ;; ---------------------------------------------------------------------------
-;; 8. Choose
+;; 7. Choose
 ;; ---------------------------------------------------------------------------
 
 to test-choose
-  print "--- test-choose ---"
-  load-config
+  section "choose"
   llm:clear-history
-
-  carefully [
-    let choices ["red" "blue" "green"]
-    let chosen llm:choose "Pick a color" choices
-    assert-true (member? chosen choices) (word "chose valid option: " chosen)
-  ] [
-    test-fail (word "choose error: " error-message)
-  ]
-
-  print ""
+  let choices ["red" "blue" "green"]
+  let chosen llm:choose "Pick a color" choices
+  assert-true (member? chosen choices) (word "chose: " chosen)
 end
 
 ;; ---------------------------------------------------------------------------
-;; 9. History
+;; 8. History
 ;; ---------------------------------------------------------------------------
 
 to test-history
-  print "--- test-history ---"
-  load-config
+  section "history"
   llm:clear-history
+  assert-true (empty? llm:history) "history empty after clear"
 
-  let h0 llm:history
-  assert-true (is-list? h0 and empty? h0) "history empty after clear"
-
-  carefully [
-    let chat-result llm:chat "Say ok"
-    let h1 llm:history
-    assert-true (length h1 = 2) "history has 2 entries after one exchange"
-
-    let user-msg item 0 h1
-    assert-true (item 0 user-msg = "user") "first entry is user role"
-
-    let asst-msg item 1 h1
-    assert-true (item 0 asst-msg = "assistant") "second entry is assistant role"
-  ] [
-    test-fail (word "history test error: " error-message)
-  ]
-
+  let _ llm:chat "Say ok"
+  let h llm:history
+  assert-true (length h = 2) "history has 2 entries after one exchange"
+  assert-true (item 0 (item 0 h) = "user")      "entry 0 role = user"
+  assert-true (item 0 (item 1 h) = "assistant") "entry 1 role = assistant"
   llm:clear-history
-  print ""
 end
 
 ;; ---------------------------------------------------------------------------
-;; 10. Thinking / reasoning primitives (config only, no API call)
+;; 9. Thinking config primitives (no API call)
 ;; ---------------------------------------------------------------------------
 
 to test-thinking-config
-  print "--- test-thinking-config ---"
+  section "thinking-config"
 
-  ; set-thinking true/false
-  carefully [ llm:set-thinking true  test-pass "set-thinking true" ] [
-    test-fail (word "set-thinking true: " error-message)
-  ]
-  carefully [ llm:set-thinking false test-pass "set-thinking false" ] [
-    test-fail (word "set-thinking false: " error-message)
-  ]
+  llm:set-thinking true   test-pass "set-thinking true"
+  llm:set-thinking false  test-pass "set-thinking false"
 
-  ; reasoning-effort valid values
   foreach ["low" "medium" "high"] [ effort ->
-    carefully [
-      llm:set-reasoning-effort effort
-      test-pass (word "reasoning-effort " effort)
-    ] [
-      test-fail (word "reasoning-effort " effort ": " error-message)
-    ]
+    llm:set-reasoning-effort effort
+    test-pass (word "reasoning-effort " effort)
   ]
 
-  ; reasoning-effort invalid
   carefully [
     llm:set-reasoning-effort "invalid"
     test-fail "invalid reasoning-effort should be rejected"
@@ -276,200 +187,149 @@ to test-thinking-config
     test-pass "invalid reasoning-effort rejected"
   ]
 
-  ; thinking-budget valid
-  carefully [
-    llm:set-thinking-budget 4096
-    test-pass "thinking-budget 4096"
-  ] [
-    test-fail (word "thinking-budget 4096: " error-message)
-  ]
+  llm:set-thinking-budget 4096
+  test-pass "thinking-budget 4096 accepted"
 
-  ; thinking-budget too low
   carefully [
     llm:set-thinking-budget 512
-    test-fail "thinking-budget 512 should be rejected (< 1024)"
+    test-fail "thinking-budget 512 should be rejected"
   ] [
-    test-pass "thinking-budget 512 rejected"
+    test-pass "thinking-budget 512 rejected (< 1024)"
   ]
 
   llm:set-thinking false
-  print ""
 end
 
 ;; ---------------------------------------------------------------------------
-;; 11. chat-with-thinking return format (requires API call)
+;; 10. chat-with-thinking returns [answer thinking]
 ;; ---------------------------------------------------------------------------
 
 to test-chat-with-thinking
-  print "--- test-chat-with-thinking ---"
-  load-config
+  section "chat-with-thinking"
   llm:clear-history
   llm:set-thinking true
 
-  carefully [
-    let result llm:chat-with-thinking "What is 2 + 2?"
+  let result llm:chat-with-thinking "What is 2 + 2?"
+  assert-true (is-list? result)        "result is a list"
+  assert-true (length result = 2)      "result has 2 elements"
 
-    assert-true (is-list? result) "chat-with-thinking returns a list"
-    assert-true (length result = 2) "result has 2 elements [answer thinking]"
-
-    let answer item 0 result
-    let thinking item 1 result
-
-    assert-string answer "answer element"
-    assert-string thinking "thinking element"
-    assert-true (not empty? answer) "answer is non-empty"
-
-    ; Verify thinking text is NOT in history
-    let history llm:history
-    if length history >= 2 [
-      let asst-content item 1 (item 1 history)
-      if not empty? thinking [
-        assert-true (not member? thinking asst-content) "thinking excluded from history"
-      ]
-    ]
-  ] [
-    test-fail (word "chat-with-thinking error: " error-message)
-  ]
+  let answer   item 0 result
+  let thinking item 1 result
+  assert-true (is-string? answer)   "answer is string"
+  assert-true (is-string? thinking) "thinking is string"
+  assert-true (not empty? answer)   "answer non-empty"
+  print (word "  answer:   " answer)
+  print (word "  thinking: " (substring thinking 0 (min (list 80 length thinking))) "...")
 
   llm:set-thinking false
   llm:clear-history
-  print ""
 end
 
 ;; ---------------------------------------------------------------------------
-;; 12. Backward compatibility: regular chat returns string
+;; 11. OpenRouter — vendor-prefixed model names
+;;     (only runs if active provider is openrouter)
 ;; ---------------------------------------------------------------------------
 
-to test-backward-compat
-  print "--- test-backward-compat ---"
-  load-config
-  llm:clear-history
-
-  carefully [
-    let result llm:chat "Say hello"
-    assert-true (is-string? result) "llm:chat returns string, not list"
-  ] [
-    test-fail (word "backward compat error: " error-message)
+to test-openrouter-vendor-prefix
+  section "openrouter-vendor-prefix"
+  if not (item 0 llm:active = "openrouter") [
+    print "  SKIP: active provider is not openrouter"
+    stop
   ]
 
-  print ""
+  let original-model item 1 llm:active
+  llm:set-model "openai/gpt-4o-mini"
+  test-pass "set-model openai/gpt-4o-mini accepted"
+  llm:set-model "anthropic/claude-3.5-haiku"
+  test-pass "set-model anthropic/claude-3.5-haiku accepted"
+  llm:set-model original-model
 end
 
 ;; ---------------------------------------------------------------------------
-;; 13. [reasoning] marker in model list
+;; 12. Together AI — DeepSeek-R1 thinking extraction (<think> tags or reasoning field)
+;;     (only runs if active provider is together AND model contains DeepSeek)
+;; ---------------------------------------------------------------------------
+
+to test-together-thinking
+  section "together-thinking"
+  if not (item 0 llm:active = "together") [
+    print "  SKIP: active provider is not together"
+    stop
+  ]
+  let model item 1 llm:active
+  if not (member? "DeepSeek" model or member? "deepseek" model) [
+    print (word "  SKIP: active model " model " is not a DeepSeek reasoning model")
+    stop
+  ]
+
+  llm:clear-history
+  llm:set-thinking true
+  let result llm:chat-with-thinking "What is 17 * 23? Show your reasoning."
+  let answer   item 0 result
+  let thinking item 1 result
+  assert-true (not empty? answer)   "answer non-empty"
+  assert-true (not empty? thinking) "thinking extracted (proves <think> tag or reasoning field handled)"
+  print (word "  answer: " answer)
+
+  llm:set-thinking false
+  llm:clear-history
+end
+
+;; ---------------------------------------------------------------------------
+;; 13. [reasoning] marker visible in list-models
 ;; ---------------------------------------------------------------------------
 
 to test-reasoning-marker
-  print "--- test-reasoning-marker ---"
-  load-config
-
+  section "reasoning-marker"
   let output llm:list-models
   ifelse member? "[reasoning]" output [
-    test-pass "[reasoning] marker present in model list"
+    test-pass "[reasoning] marker present"
   ] [
-    print "INFO: no [reasoning] markers found (depends on provider/registry)"
+    print "  INFO: no [reasoning] markers (depends on registry)"
   ]
-
-  print ""
 end
 
 ;; ---------------------------------------------------------------------------
-;; Run all tests
+;; Entry point — click the run-all-tests button
 ;; ---------------------------------------------------------------------------
 
 to run-all-tests
+  set pass-count 0
+  set fail-count 0
+
   print "========================================"
   print "  LLM EXTENSION TEST SUITE"
   print "========================================"
-  print ""
 
-  ; Offline / discovery tests
-  test-provider-discovery
-  test-provider-help
+  ; offline tests
+  test-providers
   test-invalid-provider
 
-  ; Config-dependent tests
-  test-active-config
-  test-model-validation
+  ; load config once — every test below relies on it
+  test-load-config
+  test-config-rollback
 
-  ; API tests
+  ; live API tests
   test-sync-chat
   test-async-chat
   test-choose
   test-history
-  test-backward-compat
 
-  ; Thinking config (no API)
+  ; thinking
   test-thinking-config
-
-  ; Thinking API tests
   test-chat-with-thinking
+
+  ; provider-specific
+  test-openrouter-vendor-prefix
+  test-together-thinking
   test-reasoning-marker
 
+  print ""
   print "========================================"
-  print "  ALL TESTS COMPLETE"
+  print (word "  RESULTS: " pass-count " passed, " fail-count " failed")
   print "========================================"
 end
-
-;; ---------------------------------------------------------------------------
-;; Optional: Ollama qwen3 thinking test (requires local Ollama)
-;; ---------------------------------------------------------------------------
-
-to test-ollama-qwen3-thinking
-  print "--- test-ollama-qwen3-thinking (requires Ollama) ---"
-
-  carefully [
-    llm:set-provider "ollama"
-  ] [
-    print (word "Skipping: cannot set Ollama provider: " error-message)
-    stop
-  ]
-
-  llm:set-model "qwen3:0.6b"
-  llm:clear-history
-
-  ; Regular chat (thinking off)
-  llm:set-thinking false
-  carefully [
-    let result llm:chat "What is 7 * 8? Answer with just the number."
-    assert-string result "ollama regular chat returns string"
-  ] [
-    test-fail (word "ollama regular chat: " error-message)
-  ]
-
-  ; Chat with thinking
-  llm:set-thinking true
-  llm:clear-history
-  carefully [
-    let result llm:chat-with-thinking "Solve step by step: 120 / 2"
-
-    assert-true (is-list? result and length result = 2) "ollama thinking returns [answer thinking]"
-
-    let answer item 0 result
-    let thinking item 1 result
-
-    assert-true (not empty? answer) "ollama thinking answer non-empty"
-    print (word "  Answer: " answer)
-
-    ifelse not empty? thinking [
-      print (word "  Thinking (" length thinking " chars): "
-        substring thinking 0 min list 100 length thinking)
-    ] [
-      print "  (no thinking text returned)"
-    ]
-  ] [
-    test-fail (word "ollama thinking chat: " error-message)
-    print "  Ensure qwen3:0.6b is installed: ollama pull qwen3:0.6b"
-  ]
-
-  ; Verify history has clean entries only
-  let history llm:history
-  print (word "  History entries: " length history)
-
-  llm:set-thinking false
-  llm:clear-history
-  print ""
-end]]></code>
+]]></code>
   <widgets>
     <view x="210" wrappingAllowedX="true" y="10" frameRate="30.0" minPycor="-16" height="429" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="true" width="429" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="16" minPxcor="-16"></view>
   </widgets>

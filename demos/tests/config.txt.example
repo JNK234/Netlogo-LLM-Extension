@@ -1,0 +1,47 @@
+# NetLogo LLM Extension — Test Configuration (Template)
+#
+# Copy this file to `config.txt` in the same directory and fill in
+# the API key for whichever provider you want to test:
+#
+#     cp config.txt.example config.txt
+#
+# `config.txt` is gitignored so your real key stays local.
+#
+# To switch providers: change `provider=` and `model=` below, then
+# uncomment the matching api_key line. Only one provider runs at a time.
+
+provider=openrouter
+model=openai/gpt-4o-mini
+
+temperature=0.7
+max_tokens=200
+timeout_seconds=60
+
+# --- OpenRouter (https://openrouter.ai/keys) ---
+openrouter_api_key=REPLACE_ME
+# Sample models:
+#   openai/gpt-4o-mini
+#   anthropic/claude-3.5-haiku
+#   deepseek/deepseek-r1
+
+# --- Together AI (https://api.together.ai/settings/api-keys) ---
+# together_api_key=REPLACE_ME
+# Sample models:
+#   meta-llama/Llama-3.3-70B-Instruct-Turbo
+#   deepseek-ai/DeepSeek-R1
+
+# --- OpenAI ---
+# openai_api_key=sk-REPLACE_ME
+# model: gpt-4o-mini
+
+# --- Anthropic (Claude) ---
+# anthropic_api_key=sk-ant-REPLACE_ME
+# model: claude-3-5-haiku-latest
+
+# --- Google Gemini ---
+# gemini_api_key=REPLACE_ME
+# model: gemini-1.5-flash
+
+# --- Ollama (local) ---
+# ollama_base_url=http://localhost:11434
+# model: llama3.2
