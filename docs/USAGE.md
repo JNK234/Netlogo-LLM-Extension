@@ -35,7 +35,7 @@ llm:set-model "gpt-4o-mini"
 extensions [ llm ]
 llm:load-config "config.txt"
 ```
-  - See full instructions and templates in `docs/CONFIGURATION.md` (OpenAI, Anthropic, Gemini, and Ollama).
+  - See full instructions and templates in `docs/CONFIGURATION.md` (OpenAI, Anthropic, Gemini, Ollama, OpenRouter, Together AI).
 
 ### Using Ollama (no API key)
 - Start Ollama and pull a model (see quick start in `docs/CONFIGURATION.md`).
@@ -56,7 +56,7 @@ show llm:chat "List two agent-based modeling use cases."
 All primitives are under the `llm:` namespace.
 
 - Configuration
-  - `llm:set-provider "openai|anthropic|gemini|ollama"`
+  - `llm:set-provider "openai|anthropic|gemini|ollama|openrouter|together"`
   - `llm:set-api-key "..."`
   - `llm:set-model "model-name"`
   - `llm:load-config "path/to/config.txt"`
@@ -104,9 +104,25 @@ Each agent (observer/turtles/patches) maintains its own conversation state.
 
 - Discovery
 ```
-show llm:providers      ;; available providers
+show llm:providers      ;; ready providers (with key/server)
+show llm:providers-all  ;; all 6 supported providers
+show llm:provider-status ;; detailed readiness per provider
+show llm:provider-help "openrouter" ;; setup instructions for any provider
 show llm:list-models    ;; models supported by current provider
+show llm:active         ;; [provider model] currently active
 ```
+
+- Reasoning / thinking models
+```
+llm:set-thinking true                 ;; turn on reasoning for models that support it
+llm:set-reasoning-effort "high"       ;; "low" | "medium" | "high"
+llm:set-thinking-budget 4096          ;; min 1024, used by Anthropic + Gemini
+let r llm:chat-with-thinking "What is 17 * 23?"
+print item 0 r  ;; final answer
+print item 1 r  ;; reasoning text (empty for providers that hide thinking, e.g. OpenAI)
+```
+Thinking is exposed by Anthropic, Gemini, Ollama, OpenRouter, and Together AI.
+OpenAI o-series uses internal reasoning that the API does not return.
 
 ## Common Patterns
 - Per‑turtle conversations

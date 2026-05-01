@@ -10,17 +10,19 @@ LLMConfigPrimitives
 
 LLMProvidersAll
   extensions [llm]
-  length llm:providers-all => 4
+  length llm:providers-all => 6
   member? "openai" llm:providers-all => true
   member? "anthropic" llm:providers-all => true
   member? "gemini" llm:providers-all => true
   member? "ollama" llm:providers-all => true
+  member? "openrouter" llm:providers-all => true
+  member? "together" llm:providers-all => true
 
 LLMProviderStatus
   extensions [llm]
   O> llm:set-api-key "test-key"
   O> llm:set-provider "openai"
-  length llm:provider-status => 4
+  length llm:provider-status => 6
 
 LLMListModels
   extensions [llm]
@@ -248,8 +250,35 @@ LLMMultiAgentChat
   empty? [agent-result] of turtle 0 => false
   empty? [agent-result] of turtle 1 => false
 
+LLMOpenRouterProvider
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "openrouter"
+  item 0 llm:active => "openrouter"
+  item 1 llm:active => "openai/gpt-4o-mini"
+  empty? (llm:provider-help "openrouter") => false
+  O> llm:set-model "openai/gpt-4o"
+  item 1 llm:active => "openai/gpt-4o"
+
+LLMTogetherProvider
+  extensions [llm]
+  O> llm:set-api-key "test-key"
+  O> llm:set-provider "together"
+  item 0 llm:active => "together"
+  item 1 llm:active => "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  empty? (llm:provider-help "together") => false
+  O> llm:set-model "deepseek-ai/DeepSeek-R1"
+  item 1 llm:active => "deepseek-ai/DeepSeek-R1"
+
 LLMConfigLoading
   extensions [llm]
   O> llm:load-config "demos/config"
   item 0 llm:active => "openai"
   member? "openai" llm:providers => true
+
+LLMLoadConfigRejectsUnknownProvider
+  extensions [llm]
+  globals [err]
+  O> carefully [llm:load-config "demos/test-config-bad-provider"] [set err error-message]
+  is-string? err => true
+  (position "opanai" err) != false => true

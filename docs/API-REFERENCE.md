@@ -11,12 +11,16 @@ The NetLogo Multi-LLM Extension provides a unified interface for multiple Large 
 | `llm:chat text`                    | Chat          | Send synchronous chat message, returns response            |
 | `llm:chat-async text`              | Chat          | Send asynchronous chat message, returns awaitable reporter |
 | `llm:chat-with-template file vars` | Chat          | Send templated prompt with variable substitution           |
+| `llm:chat-with-thinking text`      | Chat          | Returns `[answer thinking]` for reasoning-capable models   |
 | `llm:choose prompt choices`        | Chat          | Force selection from provided options                      |
+| `llm:set-thinking bool`            | Reasoning     | Enable/disable reasoning mode for current provider         |
+| `llm:set-reasoning-effort level`   | Reasoning     | Set effort: `"low"`, `"medium"`, `"high"`                  |
+| `llm:set-thinking-budget n`        | Reasoning     | Token budget for thinking (min 1024; Anthropic + Gemini)   |
 | `llm:history`                      | History       | Get current agent's conversation history                   |
 | `llm:set-history list`             | History       | Set conversation history for current agent                 |
 | `llm:clear-history`                | History       | Clear conversation history for current agent               |
 | `llm:load-config filename`         | Configuration | Load settings from file                                    |
-| `llm:set-provider name`            | Configuration | Set active provider (openai, anthropic, gemini, ollama)    |
+| `llm:set-provider name`            | Configuration | Set active provider (openai, anthropic, gemini, ollama, openrouter, together) |
 | `llm:set-api-key key`              | Configuration | Set API key for current provider                           |
 | `llm:set-model name`               | Configuration | Set model to use for current provider                      |
 | `llm:providers`                    | Discovery     | List ready providers with configured keys/servers          |
@@ -70,6 +74,8 @@ llm:load-config "models/gpt4-config.txt"
 - `"anthropic"` - Anthropic Claude models
 - `"gemini"` - Google Gemini models
 - `"ollama"` - Local Ollama models
+- `"openrouter"` - OpenRouter (200+ models from many vendors via one API key)
+- `"together"` - Together AI (fast open-source model inference)
 
 **Example**:
 
@@ -229,6 +235,65 @@ set color read-from-string color-choice
 - Useful for agent decision-making in models
 - Maintains conversation context
 
+## Reasoning / Thinking Primitives
+
+For models that expose intermediate reasoning (Anthropic Claude, Google Gemini, Ollama qwen3/deepseek-r1, OpenRouter, Together AI). OpenAI o-series uses internal reasoning that the API does not return.
+
+### llm:chat-with-thinking
+
+**Syntax**: `llm:chat-with-thinking text`
+
+**Description**: Same as `llm:chat`, but returns both the final answer and the model's reasoning text as a 2-element list.
+
+**Returns**: `[answer thinking]` — both strings. `thinking` will be `""` if the provider/model does not expose reasoning tokens.
+
+**Example**:
+
+```netlogo
+llm:set-thinking true
+let result llm:chat-with-thinking "What is 17 * 23?"
+let answer   item 0 result
+let thinking item 1 result
+print (word "Answer: " answer)
+print (word "Reasoning: " thinking)
+```
+
+**Notes**:
+
+- Only the final answer is added to conversation history (not the thinking text).
+- For DeepSeek-R1 on Together AI, thinking is parsed from `<think>...</think>` tags in the content.
+- For Anthropic, OpenRouter, and Gemini, thinking comes from a dedicated reasoning field in the API response.
+
+### llm:set-thinking
+
+**Syntax**: `llm:set-thinking enabled?`
+
+**Description**: Enable or disable reasoning mode for the current provider. When enabled, the request includes provider-specific reasoning fields.
+
+**Parameters**:
+
+- `enabled?` (boolean): `true` to enable, `false` to disable
+
+### llm:set-reasoning-effort
+
+**Syntax**: `llm:set-reasoning-effort level`
+
+**Description**: Set the reasoning effort hint for models that support it (OpenAI o-series, OpenRouter, Together AI hybrid models).
+
+**Parameters**:
+
+- `level` (string): `"low"`, `"medium"`, or `"high"`
+
+### llm:set-thinking-budget
+
+**Syntax**: `llm:set-thinking-budget tokens`
+
+**Description**: Maximum tokens the model may spend on reasoning before producing the final answer. Used by Anthropic and Gemini.
+
+**Parameters**:
+
+- `tokens` (number): Minimum 1024. For Anthropic, the value is clamped to `[1024, max_tokens-1]`.
+
 ## History Management
 
 ### llm:history
@@ -320,12 +385,14 @@ if member? "ollama" llm:providers [
 
 **Readiness Checks**:
 
-| Provider  | Check Performed                                     |
-| --------- | --------------------------------------------------- |
-| OpenAI    | Has `openai_api_key` or `api_key` configured        |
-| Anthropic | Has `anthropic_api_key` or `api_key` configured     |
-| Gemini    | Has `gemini_api_key` or `api_key` configured        |
-| Ollama    | Server reachable at `ollama_base_url` (1s timeout)  |
+| Provider    | Check Performed                                       |
+| ----------- | ----------------------------------------------------- |
+| OpenAI      | Has `openai_api_key` or `api_key` configured          |
+| Anthropic   | Has `anthropic_api_key` or `api_key` configured       |
+| Gemini      | Has `gemini_api_key` or `api_key` configured          |
+| Ollama      | Server reachable at `ollama_base_url` (1s timeout)    |
+| OpenRouter  | Has `openrouter_api_key` configured                   |
+| Together AI | Has `together_api_key` configured                     |
 
 ### llm:providers-all
 
@@ -339,7 +406,7 @@ if member? "ollama" llm:providers [
 
 ```netlogo
 let all-providers llm:providers-all
-print all-providers  ; ["openai" "anthropic" "gemini" "ollama"]
+print all-providers  ; ["openai" "anthropic" "gemini" "ollama" "openrouter" "together"]
 ```
 
 ### llm:provider-status
@@ -359,7 +426,9 @@ print status
 ; [["openai" ["ready" true] ["has-key" true]]
 ;  ["anthropic" ["ready" false] ["has-key" false]]
 ;  ["gemini" ["ready" false] ["has-key" false]]
-;  ["ollama" ["ready" true] ["reachable" true] ["base-url" "http://localhost:11434"]]]
+;  ["ollama" ["ready" true] ["reachable" true] ["base-url" "http://localhost:11434"]]
+;  ["openrouter" ["ready" false] ["has-key" false]]
+;  ["together" ["ready" false] ["has-key" false]]]
 
 ; Check specific provider status
 foreach llm:provider-status [ provider-info ->
@@ -394,7 +463,7 @@ foreach llm:provider-status [ provider-info ->
 
 **Parameters**:
 
-- `provider-name` (string): Provider to get help for (`openai`, `anthropic`, `gemini`, `ollama`)
+- `provider-name` (string): Provider to get help for (`openai`, `anthropic`, `gemini`, `ollama`, `openrouter`, `together`)
 
 **Returns**: String - Multi-line setup instructions
 

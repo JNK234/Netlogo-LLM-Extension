@@ -82,8 +82,30 @@ These tests are **excluded from default `sbt test`** and from CI.
 Use `demos/tests/tests.nlogox` when you want to verify real providers end-to-end.
 
 These tests do require:
-- valid provider credentials for cloud providers, or
+- valid provider credentials for cloud providers (OpenAI, Anthropic, Gemini, OpenRouter, Together AI), or
 - a running Ollama server for local provider tests
+
+### Test setup
+
+1. Copy the template: `cp demos/tests/config.txt.example demos/tests/config.txt`
+2. Edit `config.txt`: set `provider=` to your chosen provider and replace the matching `*_api_key=REPLACE_ME` line with a real key. `config.txt` is gitignored, so the key stays local.
+3. Open `demos/tests/tests.nlogox` in NetLogo.
+4. In the Command Center: `run-all-tests`
+
+### What the suite covers
+
+The suite runs the same 13 test procedures regardless of provider, plus two provider-specific procedures that auto-skip if not applicable:
+
+- `test-providers` — registry has all 6 providers and `provider-help` returns text for each
+- `test-invalid-provider` — bogus provider name is rejected
+- `test-load-config` / `test-config-rollback` — config file loads cleanly and rolls back on failure
+- `test-sync-chat`, `test-async-chat`, `test-choose`, `test-history` — core chat flow
+- `test-thinking-config`, `test-chat-with-thinking` — reasoning primitives and `[answer thinking]` return shape
+- `test-openrouter-vendor-prefix` — vendor-prefixed model names (skips unless `provider=openrouter`)
+- `test-together-thinking` — DeepSeek-R1 `<think>` tag extraction (skips unless `provider=together` AND model contains "DeepSeek")
+- `test-reasoning-marker` — `[reasoning]` marker visible in `llm:list-models`
+
+To exercise everything, run the suite twice — once with `provider=openrouter`, once with `provider=together` (use `model=deepseek-ai/DeepSeek-R1` and `max_tokens=2000+` for the Together reasoning test).
 
 Suggested usage:
 - run automated tests first (`sbt test`)
@@ -125,5 +147,5 @@ For cloud-provider smoke tests you will need real API keys in CI secrets.
 
 Typical setup later:
 - separate workflow (manual trigger and/or nightly schedule)
-- secrets like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
+- secrets like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`
 - not required for normal PR merges (to avoid flaky/costly gating)

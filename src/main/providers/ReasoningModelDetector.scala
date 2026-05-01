@@ -29,6 +29,13 @@ object ReasoningModelDetector {
       case "openai" =>
         val m = model.toLowerCase
         m.startsWith("o1") || m.startsWith("o3") || m.startsWith("o4")
+      case "openrouter" =>
+        // Vendor-prefixed: check if the model after the prefix is an OpenAI o-series
+        val m = model.toLowerCase
+        if (m.startsWith("openai/")) {
+          val modelName = m.stripPrefix("openai/")
+          modelName.startsWith("o1") || modelName.startsWith("o3") || modelName.startsWith("o4")
+        } else false
       case _ => false
     }
   }
@@ -69,15 +76,11 @@ object ReasoningModelDetector {
   /**
    * Whether a provider exposes thinking text in its API response.
    *
-   * OpenAI Chat Completions API hides reasoning tokens — thinking text is not
-   * returned. Other providers (Anthropic, Gemini, Ollama) expose it.
+   * Delegates to ProviderRegistry.exposesThinking() so this knowledge
+   * is defined once per provider in the descriptor.
    */
-  def providerExposesThinking(provider: String): Boolean = {
-    provider.toLowerCase.trim match {
-      case "openai" => false
-      case _ => true
-    }
-  }
+  def providerExposesThinking(provider: String): Boolean =
+    ProviderRegistry.exposesThinking(provider)
 
   /**
    * Check if a model is a known reasoning model (for display purposes).
@@ -96,6 +99,15 @@ object ReasoningModelDetector {
       case "ollama" =>
         val m = model.toLowerCase
         m.contains("deepseek-r1") || m.contains("qwen3") || m.contains("qwq")
+      case "openrouter" =>
+        // Vendor-prefixed model names: detect reasoning models across vendors
+        val m = model.toLowerCase
+        m.startsWith("openai/o1") || m.startsWith("openai/o3") || m.startsWith("openai/o4") ||
+        m.contains("claude-3-7") || m.contains("claude-4") ||
+        m.contains("deepseek-r1") || m.contains("qwq")
+      case "together" =>
+        val m = model.toLowerCase
+        m.contains("deepseek-r1") || m.contains("qwq") || m.contains("qwen3")
       case _ => false
     }
   }

@@ -1,0 +1,4 @@
+# Test fixture: unknown provider name should raise an error on load.
+provider=opanai
+openai_api_key=test-key
+model=gpt-4o-mini

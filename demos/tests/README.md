@@ -15,12 +15,17 @@ This suite is not part of default `sbt test`.
 ## Files
 
 - `tests.nlogox` - Manual test model
-- `config.txt` - Local config used by the model
+- `config.txt.example` - Template with placeholders for all 6 providers
+- `config.txt` - Local config used by the model (gitignored, create from template)
 
 ## Prerequisites
 
 1. Build and install the extension
-2. Configure valid credentials in `config.txt` for cloud providers, or run Ollama locally
+2. Create a local config from the template:
+   ```
+   cp config.txt.example config.txt
+   ```
+   Then edit `config.txt`, set `provider=` to your chosen provider, and replace the matching `*_api_key=REPLACE_ME` line with a real key. Or run Ollama locally for a no-key option.
 3. Ensure network access for cloud providers
 
 ## How To Run

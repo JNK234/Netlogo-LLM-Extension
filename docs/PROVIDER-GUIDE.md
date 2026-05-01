@@ -236,6 +236,130 @@ candidate_count=1  # Default (recommended)
 # Higher values increase cost but may improve quality
 ```
 
+## OpenRouter Configuration
+
+### API Setup
+
+1. **Get API Key**: Visit [openrouter.ai/keys](https://openrouter.ai/keys)
+2. **Check Usage**: Monitor credits at [openrouter.ai/credits](https://openrouter.ai/credits)
+3. **Browse Models**: Explore 200+ models at [openrouter.ai/models](https://openrouter.ai/models)
+
+### Configuration Parameters
+
+```ini
+# Required Parameters
+provider=openrouter
+openrouter_api_key=sk-or-your-openrouter-key-here
+model=openai/gpt-4o-mini
+
+# Optional Parameters
+openrouter_base_url=https://openrouter.ai/api/v1
+temperature=0.7
+max_tokens=1000
+timeout_seconds=30
+```
+
+### Available Models
+
+Model names use vendor prefixes (`vendor/model-name`):
+
+| Model | Description | Context |
+|-------|-------------|---------|
+| `openai/gpt-4o` | OpenAI GPT-4o via OpenRouter | 128K |
+| `openai/gpt-4o-mini` | Fast, cost-effective GPT-4 | 128K |
+| `openai/o3-mini` | OpenAI reasoning model | 128K |
+| `anthropic/claude-3.5-sonnet` | Anthropic Claude 3.5 Sonnet | 200K |
+| `anthropic/claude-sonnet-4-20250514` | Latest Claude Sonnet 4 | 200K |
+| `google/gemini-2.5-flash` | Google Gemini Flash | 1M |
+| `google/gemini-2.5-pro` | Google Gemini Pro | 1M |
+| `meta-llama/llama-3.3-70b-instruct` | Meta Llama 3.3 70B | 128K |
+| `deepseek/deepseek-r1` | DeepSeek reasoning model | 64K |
+| `deepseek/deepseek-chat-v3-0324` | DeepSeek Chat V3 | 64K |
+
+**Recommended for NetLogo**: `openai/gpt-4o-mini` (fast, cheap, capable)
+
+### Why OpenRouter?
+
+- **One API key** for 200+ models from OpenAI, Anthropic, Google, Meta, DeepSeek, and more
+- **Automatic fallback**: if one provider is down, OpenRouter routes to another
+- **Pay-per-use credits** across all providers
+- **Easy model comparison**: switch between vendors without managing separate API keys
+
+### Hyperparameters
+
+Same as OpenAI: `temperature`, `max_tokens`, `top_p`. OpenRouter passes these through to the underlying provider.
+
+### Thinking/Reasoning Models
+
+OpenRouter supports reasoning across vendors. Set thinking mode and the extension
+translates automatically:
+
+```netlogo
+llm:set-provider "openrouter"
+llm:set-model "deepseek/deepseek-r1"
+llm:set-thinking true
+llm:set-reasoning-effort "high"
+```
+
+## Together AI Configuration
+
+### API Setup
+
+1. **Get API Key**: Visit [api.together.ai/settings/api-keys](https://api.together.ai/settings/api-keys)
+2. **Check Usage**: Monitor at [api.together.ai/settings/billing](https://api.together.ai/settings/billing)
+3. **Browse Models**: Explore at [api.together.ai/models](https://api.together.ai/models)
+
+### Configuration Parameters
+
+```ini
+# Required Parameters
+provider=together
+together_api_key=your-together-key-here
+model=meta-llama/Llama-3.3-70B-Instruct-Turbo
+
+# Optional Parameters
+together_base_url=https://api.together.xyz/v1
+temperature=0.7
+max_tokens=1000
+timeout_seconds=30
+```
+
+### Available Models
+
+Model names use vendor prefixes (`vendor/model-name`):
+
+| Model | Description | Context |
+|-------|-------------|---------|
+| `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Fast Llama 3.3 70B | 128K |
+| `meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo` | Largest Llama | 128K |
+| `meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo` | Small, fast Llama | 128K |
+| `deepseek-ai/DeepSeek-R1` | DeepSeek reasoning model | 64K |
+| `deepseek-ai/DeepSeek-V3` | DeepSeek V3 chat | 64K |
+| `Qwen/Qwen2.5-72B-Instruct-Turbo` | Qwen 2.5 72B | 128K |
+| `google/gemma-3-27b-it` | Google Gemma 3 | 128K |
+| `mistralai/Mistral-Small-24B-Instruct-2501` | Mistral Small | 32K |
+
+**Recommended for NetLogo**: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (fast, capable, good value)
+
+### Why Together AI?
+
+- **Fast inference** on popular open-source models
+- **Pay-per-token** pricing, often cheaper than proprietary APIs
+- **Open-source models** — Llama, DeepSeek, Qwen, Gemma, Mistral
+- **Reasoning support** — DeepSeek-R1 with thinking output
+
+### Thinking/Reasoning Models
+
+Together AI supports reasoning models like DeepSeek-R1:
+
+```netlogo
+llm:set-provider "together"
+llm:set-model "deepseek-ai/DeepSeek-R1"
+llm:set-thinking true
+let result llm:chat-with-thinking "What is 15 * 17?"
+; result is [answer thinking-text]
+```
+
 ## Ollama (Local) Configuration
 
 ### Setup Requirements
