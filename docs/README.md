@@ -1,6 +1,6 @@
 # NetLogo Multi-LLM Extension
 
-Unified LLM capabilities for NetLogo with multi-provider support (OpenAI, Anthropic/Claude, Google/Gemini, and local Ollama), per‑agent memory, async requests, and simple configuration.
+Unified LLM capabilities for NetLogo with multi-provider support — OpenAI, Anthropic/Claude, Google/Gemini, local Ollama, OpenRouter (200+ models via one key), and Together AI (fast open-source inference) — plus per‑agent memory, async requests, reasoning/thinking models, and simple configuration.
 
 ## Quick Links
 - Usage Guide: `docs/USAGE.md`
@@ -20,7 +20,7 @@ extensions [ llm ]
 ```
 llm:load-config "config.txt"
 ```
-See `docs/CONFIGURATION.md` for ready-to-copy examples (OpenAI, Anthropic, Gemini, Ollama). For inline setup:
+See `docs/CONFIGURATION.md` for ready-to-copy examples (OpenAI, Anthropic, Gemini, Ollama, OpenRouter, Together AI). For inline setup:
 ```
 llm:set-provider "openai"
 llm:set-api-key "sk-REPLACE_ME"

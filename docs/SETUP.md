@@ -101,13 +101,63 @@ timeout_seconds=60
 
 **Pull command**: `ollama pull [model-name]`
 
+### OpenRouter (200+ models via one key)
+
+OpenRouter routes requests to many model vendors (OpenAI, Anthropic, Google, Meta, DeepSeek, etc.) through a single API.
+
+1. **Get API Key**: Visit [openrouter.ai/keys](https://openrouter.ai/keys)
+2. **Create config.txt**:
+```
+provider=openrouter
+model=openai/gpt-4o-mini
+openrouter_api_key=sk-or-your-key-here
+temperature=0.7
+max_tokens=1000
+```
+
+**Available Models** (vendor-prefixed):
+- `openai/gpt-4o-mini` - Fast, cost-effective (recommended)
+- `openai/gpt-4o` - GPT-4o through OpenRouter
+- `anthropic/claude-3.5-sonnet` - Claude 3.5 Sonnet
+- `anthropic/claude-3.5-haiku` - Fast Claude
+- `google/gemini-2.0-flash-exp` - Latest Gemini
+- `meta-llama/llama-3.3-70b-instruct` - Llama 3.3 70B
+- `deepseek/deepseek-r1` - Reasoning model
+
+Browse the full catalog: [openrouter.ai/models](https://openrouter.ai/models)
+
+### Together AI (open-source models)
+
+Together AI provides fast inference for open-source models (Llama, DeepSeek, Qwen, Mistral, Gemma) via an OpenAI-compatible API.
+
+1. **Get API Key**: Visit [api.together.ai/settings/api-keys](https://api.together.ai/settings/api-keys)
+2. **Create config.txt**:
+```
+provider=together
+model=meta-llama/Llama-3.3-70B-Instruct-Turbo
+together_api_key=your-together-key-here
+temperature=0.7
+max_tokens=1000
+```
+
+**Available Models** (vendor-prefixed):
+- `meta-llama/Llama-3.3-70B-Instruct-Turbo` - Fast Llama 3.3 (recommended)
+- `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo` - Llama 3.1 70B
+- `deepseek-ai/DeepSeek-R1` - Reasoning model with `<think>` tag output
+- `Qwen/Qwen2.5-72B-Instruct-Turbo` - Qwen 2.5 72B
+- `mistralai/Mixtral-8x22B-Instruct-v0.1` - Mistral mixture-of-experts
+
+Browse the full catalog: [api.together.ai/models](https://api.together.ai/models)
+
+**Reasoning model note:** DeepSeek-R1 emits its thinking inside `<think>...</think>` tags (sometimes filling the entire response). Use `llm:chat-with-thinking` to get the answer and reasoning split out, and bump `max_tokens` to 2000+ so the model has room to finish its answer after thinking.
+
 ## Configuration Parameters
 
 ### Core Settings
 
 | Parameter | Description | Required | Default |
 |-----------|-------------|----------|---------|
-| `provider` | LLM provider (`openai`, `anthropic`, `gemini`, `ollama`) | Yes | - |
+| `provider` | LLM provider (`openai`, `anthropic`, `gemini`, `ollama`, `openrouter`, `together`) | Yes | - |
 | `model` | Model identifier | Yes | Provider-specific |
 | `api_key` | API authentication key | Yes* | - |
 | `temperature` | Response randomness (0.0-1.0) | No | 0.7 |
@@ -141,6 +191,16 @@ timeout_seconds=60
 - `max_tokens`: 2048
 - `timeout_seconds`: 60
 
+**OpenRouter**:
+- `base_url`: `https://openrouter.ai/api/v1`
+- `max_tokens`: 1000
+- API key config field: `openrouter_api_key`
+
+**Together AI**:
+- `base_url`: `https://api.together.xyz/v1`
+- `max_tokens`: 1000
+- API key config field: `together_api_key`
+
 ## Testing Your Setup
 
 1. **Create Test Model**:
@@ -173,7 +233,7 @@ end
 
 **"Provider not found"**
 - Check `provider=` line in config.txt
-- Verify spelling: `openai`, `anthropic`, `gemini`, `ollama`
+- Verify spelling: `openai`, `anthropic`, `gemini`, `ollama`, `openrouter`, `together`
 
 **"API key invalid"**
 - Verify API key is correct and active

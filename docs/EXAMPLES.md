@@ -306,7 +306,7 @@ extensions [llm]
 globals [providers-list current-question]
 
 to setup
-  set providers-list ["openai" "anthropic" "gemini"]
+  set providers-list ["openai" "anthropic" "gemini" "openrouter" "together"]
   set current-question ""
 end
 
@@ -478,6 +478,56 @@ end
 ```
 
 ## Advanced Usage Examples
+
+### Reasoning Models — Show the Model's Work
+
+Use `llm:chat-with-thinking` to get both the final answer and the model's intermediate reasoning. Works with Anthropic Claude, Gemini 2.x, Ollama qwen3 / deepseek-r1, OpenRouter reasoning models, and Together AI's DeepSeek-R1.
+
+```netlogo
+extensions [llm]
+
+to setup-reasoning
+  llm:load-config "config.txt"        ;; e.g. provider=together, model=deepseek-ai/DeepSeek-R1
+  llm:set-thinking true
+  llm:set-reasoning-effort "high"     ;; OpenAI o-series + OpenRouter + Together hybrid
+  llm:set-thinking-budget 4096        ;; Anthropic + Gemini
+end
+
+to ask-with-reasoning [ question ]
+  let result llm:chat-with-thinking question
+  let answer   item 0 result
+  let thinking item 1 result
+  print (word "Q: " question)
+  print (word "Reasoning: " thinking)
+  print (word "Answer: " answer)
+end
+
+;; ask-with-reasoning "If a train leaves Chicago at 3pm going 60 mph, ..."
+```
+
+Note: bump `max_tokens` to 2000+ in your config for reasoning models; they often spend most of their token budget on the thinking phase before producing the final answer.
+
+### OpenRouter — One Key, Many Models
+
+Switch between vendors without juggling separate API keys:
+
+```netlogo
+extensions [llm]
+
+to setup
+  llm:set-provider "openrouter"
+  llm:set-api-key "sk-or-your-key"
+end
+
+to compare-vendors-via-openrouter
+  let prompt "Summarize agent-based modeling in one sentence."
+  foreach ["openai/gpt-4o-mini" "anthropic/claude-3.5-haiku" "meta-llama/llama-3.3-70b-instruct"] [ m ->
+    llm:set-model m
+    print (word m ": " llm:chat prompt)
+    llm:clear-history
+  ]
+end
+```
 
 ### Async Processing with Multiple Requests
 
